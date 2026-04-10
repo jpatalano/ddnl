@@ -1,0 +1,943 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FCC Analytics</title>
+  <script src="https://cdn.jsdelivr.net/npm/ag-grid-community@31.3.2/dist/ag-grid-community.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --navy:       #003366;
+      --navy-light: #0a4080;
+      --navy-dark:  #001f40;
+      --teal:       #00BFA5;
+      --teal-dim:   #009e88;
+      --bg:         #eaf0f6;
+      --surface:    #ffffff;
+      --surface2:   #f4f7fa;
+      --border:     #d3dce8;
+      --text:       #1a2633;
+      --text-muted: #5f7a96;
+      --green:      #22c55e;
+      --red:        #ef4444;
+      --amber:      #f59e0b;
+      --blue-pill:  #e8f0fb;
+      --radius:     10px;
+      --shadow:     0 2px 12px rgba(0,51,102,.10);
+      --shadow-lg:  0 8px 32px rgba(0,51,102,.14);
+    }
+    html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); font-size: 14px; }
+
+    /* ── Top Bar ── */
+    #topbar {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      height: 54px; background: var(--navy); display: flex; align-items: center;
+      padding: 0 24px; gap: 16px; box-shadow: 0 2px 8px rgba(0,0,0,.25);
+    }
+    .brand { font-size: 15px; font-weight: 700; color: #fff; letter-spacing: .03em; display: flex; align-items: center; gap: 8px; }
+    .brand span { color: var(--teal); }
+    .brand-sep { width: 1px; height: 22px; background: rgba(255,255,255,.2); margin: 0 8px; }
+    .subnav { display: flex; gap: 6px; flex: 1; }
+    .subnav button {
+      background: transparent; border: 1.5px solid rgba(255,255,255,.25);
+      color: rgba(255,255,255,.75); border-radius: 20px; padding: 4px 14px;
+      font-size: 12.5px; font-weight: 500; cursor: pointer; transition: all .15s;
+    }
+    .subnav button:hover { border-color: var(--teal); color: var(--teal); }
+    .subnav button.active { background: var(--teal); border-color: var(--teal); color: #fff; font-weight: 600; }
+    .topbar-right { display: flex; align-items: center; gap: 12px; }
+    .save-btn {
+      background: rgba(255,255,255,.12); border: 1.5px solid rgba(255,255,255,.25);
+      color: #fff; border-radius: 20px; padding: 4px 14px; font-size: 12.5px; cursor: pointer; transition: all .15s;
+    }
+    .save-btn:hover { background: rgba(255,255,255,.22); }
+    .run-btn {
+      background: var(--teal); border: none; color: #fff;
+      border-radius: 20px; padding: 5px 18px; font-size: 13px; font-weight: 600;
+      cursor: pointer; transition: background .15s;
+    }
+    .run-btn:hover { background: var(--teal-dim); }
+    .run-btn:disabled { background: #6ba3c4; cursor: not-allowed; }
+
+    /* ── Layout ── */
+    #app { display: flex; height: 100vh; padding-top: 54px; }
+
+    /* ── Builder Panel ── */
+    #builder-panel {
+      width: 300px; min-width: 300px; background: var(--surface);
+      border-right: 1px solid var(--border); overflow-y: auto;
+      display: flex; flex-direction: column; transition: width .2s;
+    }
+    #builder-panel.collapsed { width: 0; min-width: 0; overflow: hidden; }
+    .panel-section { border-bottom: 1px solid var(--border); }
+    .panel-section-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 16px; background: var(--surface2); cursor: pointer; user-select: none;
+    }
+    .panel-section-header h4 { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--navy); }
+    .panel-section-header .badge { background: var(--navy); color: #fff; border-radius: 10px; padding: 1px 7px; font-size: 10px; font-weight: 600; }
+    .panel-section-body { padding: 10px 14px; }
+    #dataset-select-wrap { padding: 14px 16px; border-bottom: 1px solid var(--border); }
+    #dataset-select-wrap label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--text-muted); display: block; margin-bottom: 6px; }
+    #dataset-select {
+      width: 100%; padding: 8px 10px; border: 1.5px solid var(--border);
+      border-radius: 7px; font-size: 13px; background: var(--surface2); color: var(--text); appearance: none; cursor: pointer;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%235f7a96' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 10px center;
+    }
+    #dataset-select:focus { outline: none; border-color: var(--teal); }
+    .field-list { display: flex; flex-direction: column; gap: 4px; max-height: 220px; overflow-y: auto; }
+    .field-item {
+      display: flex; align-items: center; gap: 8px; padding: 6px 8px;
+      border-radius: 6px; cursor: pointer; transition: background .12s; border: 1.5px solid transparent;
+    }
+    .field-item:hover { background: var(--blue-pill); }
+    .field-item.selected { background: #e6f7f5; border-color: var(--teal); }
+    .field-icon { width: 20px; height: 20px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; flex-shrink: 0; }
+    .field-icon.type-string { background: #dbeafe; color: #1d4ed8; }
+    .field-icon.type-date   { background: #fef3c7; color: #92400e; }
+    .field-icon.type-number { background: #d1fae5; color: #065f46; }
+    .field-icon.type-metric { background: #ede9fe; color: #6b21a8; }
+    .field-item .field-name { font-size: 12.5px; font-weight: 500; flex: 1; }
+    .field-item .field-cat  { font-size: 10px; color: var(--text-muted); }
+    .field-item .check { width: 14px; height: 14px; border-radius: 3px; border: 1.5px solid var(--border); flex-shrink: 0; }
+    .field-item.selected .check { background: var(--teal); border-color: var(--teal); display: flex; align-items: center; justify-content: center; }
+    .field-item.selected .check::after { content: '✓'; color: #fff; font-size: 9px; font-weight: 900; }
+    .agg-select { font-size: 10px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); color: var(--text-muted); padding: 1px 4px; cursor: pointer; }
+    .filter-list { display: flex; flex-direction: column; gap: 8px; }
+    .filter-row { background: var(--surface2); border-radius: 7px; padding: 8px 10px; border: 1px solid var(--border); }
+    .filter-row-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+    .filter-row-header span { font-size: 11px; font-weight: 600; color: var(--navy); }
+    .filter-row-header button { background: none; border: none; color: var(--red); cursor: pointer; font-size: 13px; padding: 0 2px; }
+    .filter-inputs { display: flex; flex-direction: column; gap: 4px; }
+    .filter-inputs select, .filter-inputs input { width: 100%; padding: 5px 8px; border: 1px solid var(--border); border-radius: 5px; font-size: 12px; background: var(--surface); color: var(--text); }
+    .add-filter-btn { margin-top: 8px; width: 100%; padding: 7px; border: 1.5px dashed var(--border); background: transparent; border-radius: 7px; color: var(--text-muted); font-size: 12px; cursor: pointer; transition: all .15s; }
+    .add-filter-btn:hover { border-color: var(--teal); color: var(--teal); }
+    .small-row { display: flex; gap: 6px; }
+    .small-row select, .small-row input { flex: 1; padding: 6px 8px; border: 1.5px solid var(--border); border-radius: 6px; font-size: 12px; background: var(--surface2); color: var(--text); }
+
+    /* ── Main Content ── */
+    #main-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+
+    /* ════════════════════════════════════════════════════════════════
+       DASHBOARD SCREEN
+    ════════════════════════════════════════════════════════════════ */
+    #dashboard-screen { flex: 1; overflow-y: auto; padding: 20px 24px; display: none; flex-direction: column; gap: 20px; }
+
+    /* Filter bar */
+    .dash-filter-bar {
+      background: var(--surface); border-radius: var(--radius); border: 1px solid var(--border);
+      padding: 14px 18px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+      box-shadow: var(--shadow);
+    }
+    .dash-filter-bar label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--text-muted); }
+    .dash-filter-group { display: flex; align-items: center; gap: 8px; }
+    .dash-filter-bar input[type=date], .dash-filter-bar select {
+      padding: 6px 10px; border: 1.5px solid var(--border); border-radius: 7px;
+      font-size: 12.5px; background: var(--surface2); color: var(--text); cursor: pointer;
+    }
+    .dash-filter-bar input[type=date]:focus, .dash-filter-bar select:focus { outline: none; border-color: var(--teal); }
+    .dash-sep { width: 1px; height: 28px; background: var(--border); }
+    .dash-apply-btn {
+      background: var(--teal); border: none; color: #fff; border-radius: 8px;
+      padding: 7px 18px; font-size: 13px; font-weight: 600; cursor: pointer; transition: background .15s;
+    }
+    .dash-apply-btn:hover { background: var(--teal-dim); }
+    .dash-reset-btn {
+      background: var(--surface2); border: 1.5px solid var(--border); color: var(--text-muted);
+      border-radius: 8px; padding: 7px 14px; font-size: 13px; cursor: pointer;
+    }
+
+    /* KPI row */
+    #dash-kpi-row { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; }
+    .dash-kpi-tile {
+      background: var(--surface); border-radius: var(--radius); border: 1px solid var(--border);
+      padding: 14px 16px; display: flex; align-items: center; gap: 12px; box-shadow: var(--shadow);
+    }
+    .dkt-icon { width: 38px; height: 38px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 17px; flex-shrink: 0; }
+    .dkt-label { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--text-muted); margin-bottom: 3px; }
+    .dkt-value { font-size: 20px; font-weight: 800; line-height: 1; }
+
+    /* Chart grid */
+    .dash-chart-row { display: grid; gap: 16px; }
+    .dash-chart-row.two-col { grid-template-columns: 1fr 1fr; }
+    .dash-chart-row.three-col { grid-template-columns: 2fr 1fr; }
+    .chart-card {
+      background: var(--surface); border-radius: var(--radius); border: 1px solid var(--border);
+      padding: 18px 20px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 12px;
+    }
+    .chart-card-header { display: flex; align-items: center; justify-content: space-between; }
+    .chart-card-title { font-size: 13.5px; font-weight: 700; color: var(--navy); }
+    .chart-card-sub { font-size: 11px; color: var(--text-muted); }
+    .chart-canvas-wrap { position: relative; }
+    .chart-canvas-wrap.tall { height: 280px; }
+    .chart-canvas-wrap.medium { height: 220px; }
+    .chart-canvas-wrap.short  { height: 180px; }
+
+    /* Status chips */
+    #status-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+    .status-chip {
+      display: flex; align-items: center; gap: 6px; background: var(--surface2);
+      border: 1px solid var(--border); border-radius: 8px; padding: 5px 10px; font-size: 12px;
+    }
+    .status-chip strong { color: var(--navy); }
+
+    /* Salesperson performance table */
+    .perf-table { width: 100%; border-collapse: collapse; }
+    .perf-table thead tr { background: var(--navy); }
+    .perf-table thead th { color: #fff; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; padding: 10px 12px; text-align: left; }
+    .perf-table thead th.num { text-align: right; }
+    .perf-table tbody tr { border-bottom: 1px solid var(--border); transition: background .1s; }
+    .perf-table tbody tr:hover { background: var(--blue-pill); }
+    .perf-table tbody tr:nth-child(even) { background: var(--surface2); }
+    .perf-table tbody tr:nth-child(even):hover { background: var(--blue-pill); }
+    .perf-table td { padding: 9px 12px; font-size: 12.5px; }
+    .num-cell { text-align: right; font-family: 'Courier New', monospace; font-size: 12px; }
+    .positive { color: #16a34a; font-weight: 600; }
+    .negative { color: var(--red); font-weight: 600; }
+
+    /* Progress bar */
+    .progress-cell { display: flex; align-items: center; gap: 6px; }
+    .progress-bar-wrap { flex: 1; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; min-width: 60px; }
+    .progress-bar-fill { height: 100%; background: var(--teal); border-radius: 3px; }
+    .progress-val { font-size: 11px; font-weight: 700; min-width: 42px; text-align: right; }
+    .progress-val.neg { color: var(--red); }
+
+    /* Dashboard loading overlay */
+    #dash-loading {
+      position: absolute; inset: 54px 0 0 0; background: rgba(234,240,246,.85);
+      display: none; align-items: center; justify-content: center; flex-direction: column;
+      gap: 12px; z-index: 50;
+    }
+
+    /* ════════════════════════════════════════════════════════════════
+       HOME SCREEN
+    ════════════════════════════════════════════════════════════════ */
+    #home-screen { flex: 1; overflow-y: auto; padding: 28px 32px; display: none; }
+    #home-screen h2 { font-size: 22px; font-weight: 700; color: var(--navy); margin-bottom: 6px; }
+    #home-screen p { color: var(--text-muted); font-size: 13.5px; margin-bottom: 24px; }
+    .dataset-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+    .dataset-card {
+      background: var(--surface); border-radius: var(--radius); border: 1.5px solid var(--border);
+      padding: 18px 20px; cursor: pointer; transition: all .18s; display: flex; flex-direction: column; gap: 8px;
+    }
+    .dataset-card:hover { border-color: var(--teal); box-shadow: var(--shadow); transform: translateY(-1px); }
+    .dc-header { display: flex; align-items: flex-start; justify-content: space-between; }
+    .dc-name { font-size: 14px; font-weight: 700; color: var(--navy); line-height: 1.3; }
+    .dc-icon { width: 36px; height: 36px; background: var(--navy); border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 16px; }
+    .dc-desc { font-size: 12px; color: var(--text-muted); line-height: 1.5; }
+    .dc-meta { display: flex; gap: 10px; margin-top: 4px; }
+    .dc-pill { background: var(--blue-pill); color: var(--navy); border-radius: 10px; padding: 2px 9px; font-size: 11px; font-weight: 600; }
+    .dc-pill.metric { background: #ede9fe; color: #6b21a8; }
+
+    /* ════════════════════════════════════════════════════════════════
+       REPORT BUILDER
+    ════════════════════════════════════════════════════════════════ */
+    #results-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; display: none; }
+    #kpi-bar { padding: 16px 24px; background: var(--surface); border-bottom: 1px solid var(--border); display: flex; gap: 14px; flex-wrap: wrap; }
+    .kpi-tile { flex: 1; min-width: 140px; background: var(--surface2); border-radius: var(--radius); border: 1.5px solid var(--border); padding: 14px 16px; }
+    .kpi-tile .kpi-label { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--text-muted); margin-bottom: 4px; }
+    .kpi-tile .kpi-value { font-size: 22px; font-weight: 800; color: var(--navy); line-height: 1; }
+    .kpi-tile .kpi-value.positive { color: #16a34a; }
+    .kpi-tile .kpi-value.negative { color: var(--red); }
+    #grid-toolbar { padding: 10px 24px; background: var(--surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
+    .result-info { font-size: 12px; color: var(--text-muted); flex: 1; }
+    .toolbar-btn { background: var(--surface2); border: 1.5px solid var(--border); border-radius: 7px; padding: 5px 12px; font-size: 12px; color: var(--text); cursor: pointer; transition: all .15s; }
+    .toolbar-btn:hover { border-color: var(--navy); color: var(--navy); }
+    #grid-wrap { flex: 1; overflow: hidden; }
+    #myGrid { width: 100%; height: 100%; }
+
+    /* States */
+    .state-box { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--text-muted); }
+    .state-icon { font-size: 48px; opacity: .4; }
+    .state-box h3 { font-size: 16px; font-weight: 600; color: var(--navy); }
+    .state-box p { font-size: 13px; text-align: center; max-width: 320px; }
+    .spinner { width: 36px; height: 36px; border: 3px solid var(--border); border-top-color: var(--teal); border-radius: 50%; animation: spin .7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Drilldown Drawer */
+    #drilldown-drawer {
+      position: fixed; right: 0; top: 54px; bottom: 0; width: 480px;
+      background: var(--surface); border-left: 1px solid var(--border);
+      box-shadow: var(--shadow-lg); display: flex; flex-direction: column;
+      transform: translateX(100%); transition: transform .22s ease; z-index: 90;
+    }
+    #drilldown-drawer.open { transform: translateX(0); }
+    #drilldown-header { padding: 16px 20px; background: var(--navy); color: #fff; display: flex; align-items: center; justify-content: space-between; }
+    #drilldown-header h3 { font-size: 14px; font-weight: 700; }
+    #drilldown-header button { background: none; border: none; color: rgba(255,255,255,.7); cursor: pointer; font-size: 18px; }
+    #drilldown-body { flex: 1; overflow-y: auto; padding: 16px 20px; }
+    .dd-section { margin-bottom: 20px; }
+    .dd-section h4 { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--text-muted); margin-bottom: 8px; border-bottom: 1px solid var(--border); padding-bottom: 4px; }
+    .dd-table { width: 100%; border-collapse: collapse; }
+    .dd-table td { padding: 6px 8px; border-bottom: 1px solid var(--border); font-size: 12.5px; }
+    .dd-table td:first-child { color: var(--text-muted); font-weight: 500; width: 45%; }
+    .dd-table td:last-child { font-weight: 600; text-align: right; }
+
+    /* Save Modal */
+    #modal-overlay { position: fixed; inset: 0; background: rgba(0,31,64,.45); z-index: 200; display: none; align-items: center; justify-content: center; }
+    #modal-overlay.open { display: flex; }
+    #modal-box { background: var(--surface); border-radius: 14px; width: 440px; box-shadow: var(--shadow-lg); overflow: hidden; }
+    .modal-header { background: var(--navy); padding: 16px 20px; color: #fff; display: flex; align-items: center; justify-content: space-between; }
+    .modal-header h3 { font-size: 15px; font-weight: 700; }
+    .modal-header button { background: none; border: none; color: rgba(255,255,255,.7); cursor: pointer; font-size: 18px; }
+    .modal-body { padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+    .form-group label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--text-muted); display: block; margin-bottom: 5px; }
+    .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 8px 10px; border: 1.5px solid var(--border); border-radius: 7px; font-size: 13px; color: var(--text); background: var(--surface2); }
+    .modal-footer { padding: 14px 20px; display: flex; gap: 10px; justify-content: flex-end; border-top: 1px solid var(--border); }
+    .btn-secondary { background: var(--surface2); border: 1.5px solid var(--border); color: var(--text); border-radius: 8px; padding: 7px 18px; font-size: 13px; cursor: pointer; }
+    .btn-primary { background: var(--teal); border: none; color: #fff; border-radius: 8px; padding: 7px 18px; font-size: 13px; font-weight: 600; cursor: pointer; }
+    .btn-primary:hover { background: var(--teal-dim); }
+
+    /* Saved screen */
+    #saved-screen { flex: 1; overflow-y: auto; padding: 28px 32px; display: none; }
+    #saved-screen h2 { font-size: 22px; font-weight: 700; color: var(--navy); margin-bottom: 6px; }
+    #saved-screen > p { color: var(--text-muted); font-size: 13.5px; margin-bottom: 24px; }
+    .saved-list { display: flex; flex-direction: column; gap: 10px; }
+    .saved-card { background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius); padding: 14px 18px; display: flex; align-items: center; gap: 14px; }
+    .sc-info { flex: 1; }
+    .sc-name { font-size: 14px; font-weight: 700; color: var(--navy); }
+    .sc-meta { font-size: 11.5px; color: var(--text-muted); margin-top: 2px; }
+    .sc-actions { display: flex; gap: 6px; }
+    .sc-btn { padding: 5px 12px; border-radius: 7px; font-size: 12px; cursor: pointer; border: 1.5px solid var(--border); background: var(--surface2); color: var(--text); }
+    .sc-btn.primary { background: var(--teal); border-color: var(--teal); color: #fff; font-weight: 600; }
+    .sc-btn.danger { color: var(--red); }
+
+    /* AG Grid overrides */
+    .ag-theme-alpine {
+      --ag-header-background-color: var(--navy);
+      --ag-header-foreground-color: #ffffff;
+      --ag-header-cell-hover-background-color: var(--navy-light);
+      --ag-row-hover-color: #e8f5f3;
+      --ag-selected-row-background-color: #d0f0ea;
+      --ag-border-color: var(--border);
+      --ag-odd-row-background-color: var(--surface2);
+      --ag-font-size: 12.5px;
+      --ag-font-family: 'Segoe UI', system-ui, sans-serif;
+    }
+    .currency-cell { font-family: 'Courier New', monospace; font-size: 12px; }
+    .currency-cell.positive { color: #16a34a; }
+    .currency-cell.negative { color: var(--red); }
+
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    @media (max-width: 1200px) {
+      #dash-kpi-row { grid-template-columns: repeat(3, 1fr); }
+      .dash-chart-row.two-col { grid-template-columns: 1fr; }
+      .dash-chart-row.three-col { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Top Bar -->
+<div id="topbar">
+  <div class="brand">⬡ <span>FCC</span> Analytics</div>
+  <div class="brand-sep"></div>
+  <div class="subnav">
+    <button onclick="showView('dashboard')" id="nav-dashboard">Dashboard</button>
+    <button onclick="showView('home')"      id="nav-home">Datasets</button>
+    <button onclick="showView('builder')"   id="nav-builder">Report Builder</button>
+    <button onclick="showView('saved')"     id="nav-saved">Saved Reports</button>
+  </div>
+  <div class="topbar-right">
+    <button class="save-btn" onclick="openSaveModal()" id="save-btn" style="display:none">💾 Save Report</button>
+    <button class="run-btn"  onclick="runQuery()"      id="run-btn"  style="display:none" disabled>▶ Run</button>
+  </div>
+</div>
+
+<div id="app">
+  <!-- Builder Panel -->
+  <div id="builder-panel" class="collapsed">
+    <div id="dataset-select-wrap">
+      <label>Dataset</label>
+      <select id="dataset-select" onchange="onDatasetChange(this.value)">
+        <option value="">Loading...</option>
+      </select>
+    </div>
+    <div class="panel-section">
+      <div class="panel-section-header" onclick="toggleSection('seg-body')">
+        <h4>Group By <span id="seg-badge" class="badge">0</span></h4>
+        <span style="color:var(--text-muted);font-size:11px">▾</span>
+      </div>
+      <div class="panel-section-body" id="seg-body">
+        <div class="field-list" id="segment-list"><div style="color:var(--text-muted);font-size:12px">Select a dataset first</div></div>
+      </div>
+    </div>
+    <div class="panel-section">
+      <div class="panel-section-header" onclick="toggleSection('met-body')">
+        <h4>Metrics <span id="met-badge" class="badge">0</span></h4>
+        <span style="color:var(--text-muted);font-size:11px">▾</span>
+      </div>
+      <div class="panel-section-body" id="met-body">
+        <div class="field-list" id="metric-list"><div style="color:var(--text-muted);font-size:12px">Select a dataset first</div></div>
+      </div>
+    </div>
+    <div class="panel-section">
+      <div class="panel-section-header" onclick="toggleSection('flt-body')">
+        <h4>Filters <span id="flt-badge" class="badge">0</span></h4>
+        <span style="color:var(--text-muted);font-size:11px">▾</span>
+      </div>
+      <div class="panel-section-body" id="flt-body">
+        <div class="filter-list" id="filter-list"></div>
+        <button class="add-filter-btn" onclick="addFilter()">+ Add Filter</button>
+      </div>
+    </div>
+    <div class="panel-section">
+      <div class="panel-section-header" onclick="toggleSection('opt-body')">
+        <h4>Sort & Limit</h4>
+        <span style="color:var(--text-muted);font-size:11px">▾</span>
+      </div>
+      <div class="panel-section-body" id="opt-body">
+        <div style="margin-bottom:8px">
+          <label style="font-size:11px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">Sort By</label>
+          <div class="small-row">
+            <select id="sort-field"><option value="">None</option></select>
+            <select id="sort-dir"><option value="DESC">DESC</option><option value="ASC">ASC</option></select>
+          </div>
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">Row Limit</label>
+          <input type="number" id="row-limit" value="500" min="10" max="5000" style="width:100%;padding:6px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;background:var(--surface2)" />
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <div id="main-content">
+
+    <!-- ═══ DASHBOARD ═══ -->
+    <div id="dashboard-screen">
+      <!-- Filter Bar -->
+      <div class="dash-filter-bar">
+        <div class="dash-filter-group">
+          <label>Date Range</label>
+          <input type="date" id="dash-date-from" />
+          <span style="color:var(--text-muted);font-size:13px">→</span>
+          <input type="date" id="dash-date-to" />
+        </div>
+        <div class="dash-sep"></div>
+        <div class="dash-filter-group">
+          <label>Yard</label>
+          <select id="dash-yard"><option value="">All Yards</option></select>
+        </div>
+        <div class="dash-sep"></div>
+        <button class="dash-apply-btn" onclick="refreshDashboard()">Apply</button>
+        <button class="dash-reset-btn" onclick="resetDashFilters()">Reset</button>
+      </div>
+
+      <!-- KPI Tiles -->
+      <div id="dash-kpi-row">
+        <!-- populated by JS -->
+        <div class="dash-kpi-tile" style="grid-column:1/-1;justify-content:center"><div class="spinner"></div></div>
+      </div>
+
+      <!-- Row 1: Month chart + Status donut -->
+      <div class="dash-chart-row three-col">
+        <div class="chart-card">
+          <div class="chart-card-header">
+            <div>
+              <div class="chart-card-title">Revenue, Expenses &amp; Profit by Month</div>
+              <div class="chart-card-sub">Jobs P&amp;L dataset</div>
+            </div>
+          </div>
+          <div class="chart-canvas-wrap tall"><canvas id="month-chart"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-card-header">
+            <div>
+              <div class="chart-card-title">Jobs by Status</div>
+              <div class="chart-card-sub">Count breakdown</div>
+            </div>
+          </div>
+          <div class="chart-canvas-wrap medium"><canvas id="status-chart"></canvas></div>
+          <div id="status-chips"></div>
+        </div>
+      </div>
+
+      <!-- Row 2: Salesperson perf chart + table -->
+      <div class="dash-chart-row two-col">
+        <div class="chart-card">
+          <div class="chart-card-header">
+            <div>
+              <div class="chart-card-title">Revenue &amp; Profit by Salesperson</div>
+              <div class="chart-card-sub">Horizontal bar</div>
+            </div>
+          </div>
+          <div class="chart-canvas-wrap tall"><canvas id="perf-chart"></canvas></div>
+        </div>
+        <div class="chart-card" style="overflow:auto">
+          <div class="chart-card-header">
+            <div>
+              <div class="chart-card-title">Salesperson Performance</div>
+              <div class="chart-card-sub">Revenue · Expenses · Profit · Profit %</div>
+            </div>
+          </div>
+          <div style="overflow-x:auto">
+            <table class="perf-table">
+              <thead>
+                <tr>
+                  <th>Salesperson</th>
+                  <th class="num">Revenue</th>
+                  <th class="num">Expenses</th>
+                  <th class="num">Profit</th>
+                  <th>Profit %</th>
+                  <th class="num">Jobs</th>
+                </tr>
+              </thead>
+              <tbody id="perf-table-body">
+                <tr><td colspan="6" style="text-align:center;padding:20px"><div class="spinner" style="margin:auto"></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div><!-- /dashboard-screen -->
+
+    <!-- ═══ HOME ═══ -->
+    <div id="home-screen">
+      <h2>Business Intelligence</h2>
+      <p>Select a dataset to start building a report, or open the Dashboard for an overview.</p>
+      <div class="dataset-grid" id="dataset-grid">
+        <div class="state-box" style="grid-column:1/-1;padding:40px 0">
+          <div class="spinner"></div><p>Loading datasets...</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ BUILDER RESULTS ═══ -->
+    <div id="results-area">
+      <div id="kpi-bar"></div>
+      <div id="grid-toolbar">
+        <span class="result-info" id="result-info">—</span>
+        <button class="toolbar-btn" onclick="exportCsv()">⬇ Export CSV</button>
+        <button class="toolbar-btn" onclick="toggleDrilldown()">⤢ Drilldown</button>
+      </div>
+      <div id="grid-wrap">
+        <div id="myGrid" class="ag-theme-alpine"></div>
+      </div>
+    </div>
+
+    <!-- ═══ SAVED ═══ -->
+    <div id="saved-screen">
+      <h2>Saved Reports</h2>
+      <p>Your saved report configurations. Click Run to reload a report instantly.</p>
+      <div class="saved-list" id="saved-list"></div>
+    </div>
+
+    <!-- States -->
+    <div class="state-box" id="builder-empty" style="display:none">
+      <div class="state-icon">📊</div>
+      <h3>Configure your report</h3>
+      <p>Choose segments to group by, select metrics, add filters — then hit Run.</p>
+    </div>
+    <div class="state-box" id="loading-state" style="display:none">
+      <div class="spinner"></div>
+      <h3>Running query...</h3>
+      <p id="loading-msg">Fetching data</p>
+    </div>
+
+  </div><!-- /main-content -->
+</div><!-- /app -->
+
+<!-- Dashboard loading overlay -->
+<div id="dash-loading">
+  <div class="spinner"></div>
+  <span style="color:var(--navy);font-weight:600;font-size:14px">Loading dashboard...</span>
+</div>
+
+<!-- Drilldown Drawer -->
+<div id="drilldown-drawer">
+  <div id="drilldown-header">
+    <h3 id="dd-title">Row Detail</h3>
+    <button onclick="closeDrilldown()">✕</button>
+  </div>
+  <div id="drilldown-body"></div>
+</div>
+
+<!-- Save Modal -->
+<div id="modal-overlay">
+  <div id="modal-box">
+    <div class="modal-header">
+      <h3>Save Report</h3>
+      <button onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Report Name</label>
+        <input type="text" id="report-name-input" placeholder="e.g. Jobs P&L by Yard – This Year" />
+      </div>
+      <div class="form-group">
+        <label>Description (optional)</label>
+        <textarea id="report-desc-input" rows="2" placeholder="What does this report show?" style="resize:vertical"></textarea>
+      </div>
+      <div class="form-group">
+        <label>Schedule (optional)</label>
+        <select id="report-schedule">
+          <option value="">No schedule</option>
+          <option value="daily">Daily</option>
+          <option value="weekly">Weekly</option>
+          <option value="monthly">Monthly</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn-primary" onclick="saveReport()">Save Report</button>
+    </div>
+  </div>
+</div>
+
+<!-- Dashboard JS module -->
+<script src="dashboard.js"></script>
+
+<script>
+/* ═══════════════════════════════════════════════
+   FCC BI — App core
+═══════════════════════════════════════════════ */
+const BASE = 'https://saasanalytic.fleetcostcare.com/api';
+
+let allDatasets    = [];
+let currentDataset = null;
+let selectedSegs   = new Set();
+let selectedMets   = new Map();
+let filters        = [];
+let gridApi        = null;
+let lastRowData    = [];
+let savedReports   = [];
+
+const ICONS = {
+  Jobs_By_Status:'🔧', Quote_Revenue_Forecast:'📈', Quotes_By_Status:'📋',
+  jobs_profit_by_invoice:'🧾', quote_profit_forecast:'💰', jobs_profit_loss:'⚖️',
+  Job_Revenue_Forecast:'📊', Equipment_Profit_Loss:'🚛', Equipment_Utilization:'⚙️',
+  Preventive_Maintenance:'🔩', WO_Dashboard:'🗂️'
+};
+
+(async function init() {
+  await loadDatasets();
+  renderSavedList();
+  showView('dashboard');
+  initDashboard();
+})();
+
+async function loadDatasets() {
+  try {
+    const r = await fetch(`${BASE}/bi/datasets`);
+    const j = await r.json();
+    allDatasets = j.data.datasets;
+    renderDatasetGrid();
+    populateDatasetSelect();
+  } catch(e) {
+    document.getElementById('dataset-grid').innerHTML =
+      `<div class="state-box" style="grid-column:1/-1"><div class="state-icon">⚠️</div><h3>Could not load datasets</h3><p>${e.message}</p></div>`;
+  }
+}
+
+function renderDatasetGrid() {
+  document.getElementById('dataset-grid').innerHTML = allDatasets.map(ds => `
+    <div class="dataset-card" onclick="selectDatasetFromCard('${ds.name}')">
+      <div class="dc-header">
+        <div class="dc-name">${fmtName(ds.name)}</div>
+        <div class="dc-icon">${ICONS[ds.name]||'📦'}</div>
+      </div>
+      <div class="dc-desc">${ds.description}</div>
+      <div class="dc-meta">
+        <span class="dc-pill">${ds.segmentCount} segments</span>
+        <span class="dc-pill metric">${ds.metricCount} metrics</span>
+      </div>
+    </div>`).join('');
+}
+
+function populateDatasetSelect() {
+  document.getElementById('dataset-select').innerHTML =
+    `<option value="">— Select dataset —</option>` +
+    allDatasets.map(ds=>`<option value="${ds.name}">${fmtName(ds.name)}</option>`).join('');
+}
+
+function fmtName(n) { return n.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase()); }
+
+async function selectDatasetFromCard(name) {
+  showView('builder');
+  document.getElementById('dataset-select').value = name;
+  await onDatasetChange(name);
+}
+
+async function onDatasetChange(name) {
+  if (!name) return;
+  selectedSegs.clear(); selectedMets.clear(); filters = [];
+  document.getElementById('filter-list').innerHTML = '';
+  updateBadges();
+  try {
+    const r = await fetch(`${BASE}/bi/datasets/${name}`);
+    const j = await r.json();
+    currentDataset = j.data;
+    renderSegmentList(); renderMetricList(); populateSortField();
+    document.getElementById('run-btn').disabled = false;
+    document.getElementById('run-btn').style.display = '';
+    document.getElementById('save-btn').style.display = '';
+  } catch(e) { alert('Could not load dataset: '+e.message); }
+}
+
+function renderSegmentList() {
+  document.getElementById('segment-list').innerHTML = currentDataset.segments.map(s=>{
+    const t = s.segment.segmentType;
+    return `<div class="field-item ${selectedSegs.has(s.segment.segmentName)?'selected':''}" onclick="toggleSeg('${s.segment.segmentName}',this)">
+      <div class="field-icon type-${t}">${t==='date'?'📅':t==='number'?'#':'T'}</div>
+      <span class="field-name">${s.segment.segmentName}</span>
+      <span class="field-cat">${s.segment.category||''}</span>
+      <div class="check"></div></div>`;
+  }).join('');
+}
+
+function renderMetricList() {
+  document.getElementById('metric-list').innerHTML = currentDataset.metrics.map(m=>`
+    <div class="field-item ${selectedMets.has(m.metricName)?'selected':''}" onclick="toggleMet('${m.metricName}','${m.aggregationType}',this)">
+      <div class="field-icon type-metric">Σ</div>
+      <span class="field-name">${m.metricName}</span>
+      <select class="agg-select" onclick="event.stopPropagation()" onchange="setMetAgg('${m.metricName}',this.value)">
+        ${['SUM','COUNT','AVG','MIN','MAX','COUNT_DISTINCT'].map(a=>`<option value="${a}" ${a===m.aggregationType?'selected':''}>${a}</option>`).join('')}
+      </select>
+      <div class="check"></div></div>`).join('');
+}
+
+function populateSortField() {
+  document.getElementById('sort-field').innerHTML = '<option value="">None</option>' +
+    [...currentDataset.segments.map(s=>`<option value="${s.segment.segmentName}">${s.segment.segmentName}</option>`),
+     ...currentDataset.metrics.map(m=>`<option value="${m.metricName}">${m.metricName}</option>`)].join('');
+}
+
+function toggleSeg(name,el) { selectedSegs.has(name)?selectedSegs.delete(name):selectedSegs.add(name); el.classList.toggle('selected',selectedSegs.has(name)); updateBadges(); }
+function toggleMet(name,def,el) { selectedMets.has(name)?selectedMets.delete(name):selectedMets.set(name,def); el.classList.toggle('selected',selectedMets.has(name)); updateBadges(); }
+function setMetAgg(name,agg) { if(selectedMets.has(name)) selectedMets.set(name,agg); }
+function updateBadges() {
+  document.getElementById('seg-badge').textContent = selectedSegs.size;
+  document.getElementById('met-badge').textContent = selectedMets.size;
+  document.getElementById('flt-badge').textContent = filters.length;
+}
+
+function addFilter() {
+  if(!currentDataset) return;
+  filters.push({id:Date.now(),segmentName:'',operator:'eq',value:'',secondValue:''});
+  renderFilters();
+}
+function removeFilter(id) { filters=filters.filter(f=>f.id!==id); renderFilters(); updateBadges(); }
+
+const OPS = ['eq','neq','gt','gte','lt','lte','in','not_in','like','between','is_null','is_not_null','today','yesterday','this_week','last_week','last_month','this_year'];
+function renderFilters() {
+  document.getElementById('filter-list').innerHTML = filters.map(f=>`
+    <div class="filter-row">
+      <div class="filter-row-header"><span>Filter</span><button onclick="removeFilter(${f.id})">✕</button></div>
+      <div class="filter-inputs">
+        <select onchange="updateFilter(${f.id},'segmentName',this.value)">
+          <option value="">— Field —</option>
+          ${(currentDataset?.segments||[]).map(s=>`<option value="${s.segment.segmentName}" ${s.segment.segmentName===f.segmentName?'selected':''}>${s.segment.segmentName}</option>`).join('')}
+        </select>
+        <select onchange="updateFilter(${f.id},'operator',this.value)">
+          ${OPS.map(op=>`<option value="${op}" ${op===f.operator?'selected':''}>${op}</option>`).join('')}
+        </select>
+        <input type="text" placeholder="Value" value="${f.value}" oninput="updateFilter(${f.id},'value',this.value)" />
+        ${f.operator==='between'?`<input type="text" placeholder="Second value" value="${f.secondValue}" oninput="updateFilter(${f.id},'secondValue',this.value)" />`:''}
+      </div>
+    </div>`).join('');
+  updateBadges();
+}
+function updateFilter(id,key,val) { const f=filters.find(x=>x.id===id); if(f){f[key]=val;if(key==='operator')renderFilters();} }
+
+async function runQuery() {
+  if(!currentDataset) return;
+  const segs = [...selectedSegs];
+  const mets = [...selectedMets.entries()].map(([m,a])=>{
+    const def=currentDataset.metrics.find(x=>x.metricName===m);
+    return {metricName:m,aggregation:a,alias:m,displayFormat:def?.displayFormat,prefix:def?.prefix,suffix:def?.suffix};
+  });
+  const body = {
+    datasetName: currentDataset.dataset.name,
+    groupBySegments: segs,
+    metrics: mets,
+    filters: filters.filter(f=>f.segmentName).map(f=>{
+      const obj={segmentName:f.segmentName,operator:f.operator};
+      if(!['is_null','is_not_null','today','yesterday','this_week','last_week','last_month','this_year'].includes(f.operator)) obj.value=f.value;
+      if(f.operator==='between') obj.secondValue=f.secondValue;
+      return obj;
+    }),
+    orderBy: document.getElementById('sort-field').value?[{field:document.getElementById('sort-field').value,direction:document.getElementById('sort-dir').value}]:[],
+    pagination:{page:1,pageSize:parseInt(document.getElementById('row-limit').value)||500},
+    limit: parseInt(document.getElementById('row-limit').value)||500
+  };
+  showLoadingState(`Querying ${fmtName(currentDataset.dataset.name)}...`);
+  try {
+    const [qr,kr] = await Promise.all([
+      fetch(`${BASE}/bi/query`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}),
+      mets.length?fetch(`${BASE}/bi/kpis`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}):null
+    ]);
+    const qj=await qr.json(); const kj=kr?await kr.json():null;
+    if(!qj.success) throw new Error(qj.error?.message||'Query failed');
+    lastRowData=qj.data.rows||[];
+    renderGrid(lastRowData,mets);
+    if(kj?.success) renderKpis(kj.data,mets); else document.getElementById('kpi-bar').innerHTML='';
+    document.getElementById('result-info').textContent=`${lastRowData.length.toLocaleString()} rows · ${fmtName(currentDataset.dataset.name)}`;
+    showResultsArea();
+  } catch(e) { showBuilderEmpty(); alert('Query error: '+e.message); }
+}
+
+function renderKpis(data,mets) {
+  const bar=document.getElementById('kpi-bar');
+  const row=(data.rows||data.kpis||[])[0]||{};
+  bar.innerHTML=mets.map(m=>{
+    const raw=row[m.metricName]??row[m.alias];
+    const num=parseFloat(raw);
+    const cls=num<0?'negative':num>0?'positive':'';
+    return `<div class="kpi-tile"><div class="kpi-label">${m.metricName}</div><div class="kpi-value ${cls}">${formatCell(raw,m.displayFormat,m.prefix,m.suffix)}</div></div>`;
+  }).join('');
+}
+
+function renderGrid(rows,mets) {
+  if(!rows.length){document.getElementById('myGrid').innerHTML=`<div class="state-box" style="height:100%"><div class="state-icon">🔍</div><h3>No results</h3></div>`;return;}
+  const metNames=new Set(mets.map(m=>m.metricName));
+  const metMap={};mets.forEach(m=>metMap[m.metricName]=m);
+  const colDefs=Object.keys(rows[0]).map(key=>{
+    const isMet=metNames.has(key);
+    return {field:key,headerName:key.replace(/([A-Z])/g,' $1').trim(),flex:1,minWidth:110,sortable:true,resizable:true,filter:true,
+      cellRenderer:isMet?(p=>metCellRenderer(p.value,metMap[key])):undefined};
+  });
+  const el=document.getElementById('myGrid');
+  el.innerHTML='';
+  if(gridApi){try{gridApi.destroy();}catch(e){}gridApi=null;}
+  agGrid.createGrid(el,{columnDefs:colDefs,rowData:rows,defaultColDef:{sortable:true,resizable:true,filter:true},rowSelection:'single',animateRows:true,pagination:true,paginationPageSize:50,onRowClicked:e=>openDrilldown(e.data),onGridReady:p=>{gridApi=p.api;}});
+}
+
+function metCellRenderer(val,m) {
+  if(val==null||val==='') return '—';
+  const fmt=formatCell(val,m?.displayFormat,m?.prefix,m?.suffix);
+  const cls=parseFloat(val)<0?'negative':parseFloat(val)>0?'positive':'';
+  return `<span class="currency-cell ${cls}">${fmt}</span>`;
+}
+
+function openDrilldown(rowData) {
+  const firstSeg=[...selectedSegs][0];
+  document.getElementById('dd-title').textContent=firstSeg?`${firstSeg}: ${rowData[firstSeg]??'Detail'}`:'Row Detail';
+  const segs=Object.entries(rowData).filter(([k])=>!selectedMets.has(k));
+  const mets=Object.entries(rowData).filter(([k])=>selectedMets.has(k));
+  const metMap={};[...selectedMets.entries()].forEach(([name])=>{metMap[name]=currentDataset?.metrics?.find(x=>x.metricName===name);});
+  document.getElementById('drilldown-body').innerHTML=`
+    <div class="dd-section"><h4>Dimensions</h4><table class="dd-table">${segs.map(([k,v])=>`<tr><td>${k}</td><td>${v??'—'}</td></tr>`).join('')}</table></div>
+    <div class="dd-section"><h4>Metrics</h4><table class="dd-table">${mets.map(([k,v])=>`<tr><td>${k}</td><td>${formatCell(v,metMap[k]?.displayFormat,metMap[k]?.prefix,metMap[k]?.suffix)}</td></tr>`).join('')}</table></div>`;
+  document.getElementById('drilldown-drawer').classList.add('open');
+}
+function closeDrilldown() { document.getElementById('drilldown-drawer').classList.remove('open'); }
+function toggleDrilldown() { document.getElementById('drilldown-drawer').classList.toggle('open'); }
+
+function exportCsv() {
+  if(!lastRowData.length) return;
+  const keys=Object.keys(lastRowData[0]);
+  const csv=[keys.join(','),...lastRowData.map(r=>keys.map(k=>JSON.stringify(r[k]??'')).join(','))].join('\n');
+  const a=document.createElement('a');
+  a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
+  a.download=`${currentDataset?.dataset?.name||'report'}_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+}
+
+function formatCell(val,format,prefix,suffix) {
+  if(val==null||val==='') return '—';
+  const n=parseFloat(val);
+  if(format==='currency'){
+    const abs=Math.abs(n);let s;
+    if(abs>=1e9) s=(n/1e9).toFixed(2)+'B';
+    else if(abs>=1e6) s=(n/1e6).toFixed(2)+'M';
+    else if(abs>=1e3) s=(n/1e3).toFixed(1)+'K';
+    else s=n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+    return (prefix||'$')+s;
+  }
+  if(format==='percent') return n.toFixed(1)+'%';
+  if(format==='number'&&!isNaN(n)) return n.toLocaleString('en-US',{maximumFractionDigits:2})+(suffix||'');
+  return String(val)+(suffix||'');
+}
+
+function openSaveModal() { document.getElementById('modal-overlay').classList.add('open'); document.getElementById('report-name-input').value=`${fmtName(currentDataset?.dataset?.name||'')} — ${new Date().toLocaleDateString()}`; }
+function closeModal() { document.getElementById('modal-overlay').classList.remove('open'); }
+
+function saveReport() {
+  const name=document.getElementById('report-name-input').value.trim();
+  if(!name){alert('Please enter a report name');return;}
+  savedReports.unshift({id:Date.now(),name,description:document.getElementById('report-desc-input').value.trim(),schedule:document.getElementById('report-schedule').value,savedAt:new Date().toISOString(),
+    config:{datasetName:currentDataset.dataset.name,groupBySegments:[...selectedSegs],metrics:[...selectedMets.entries()].map(([m,a])=>({metricName:m,aggregation:a})),filters:filters.filter(f=>f.segmentName),sortField:document.getElementById('sort-field').value,sortDir:document.getElementById('sort-dir').value,limit:parseInt(document.getElementById('row-limit').value)||500}});
+  renderSavedList(); closeModal();
+}
+
+function renderSavedList() {
+  const list=document.getElementById('saved-list');
+  if(!savedReports.length){list.innerHTML=`<div class="state-box" style="padding:40px 0"><div class="state-icon">📂</div><h3>No saved reports</h3><p>Build a report and click Save Report.</p></div>`;return;}
+  list.innerHTML=savedReports.map(r=>`
+    <div class="saved-card">
+      <div class="sc-info"><div class="sc-name">${r.name}</div><div class="sc-meta">${fmtName(r.config.datasetName)} · ${r.config.groupBySegments.length} segments · ${r.config.metrics.length} metrics · ${new Date(r.savedAt).toLocaleDateString()}${r.schedule?' · 🕐 '+r.schedule:''}</div></div>
+      <div class="sc-actions"><button class="sc-btn primary" onclick="loadReport(${r.id})">▶ Run</button><button class="sc-btn danger" onclick="deleteReport(${r.id})">✕</button></div>
+    </div>`).join('');
+}
+
+async function loadReport(id) {
+  const r=savedReports.find(x=>x.id===id); if(!r) return;
+  const {config}=r;
+  showView('builder');
+  document.getElementById('dataset-select').value=config.datasetName;
+  await onDatasetChange(config.datasetName);
+  selectedSegs=new Set(config.groupBySegments);
+  selectedMets=new Map(config.metrics.map(m=>[m.metricName,m.aggregation]));
+  filters=config.filters.map(f=>({...f,id:Date.now()+Math.random()}));
+  if(config.sortField) document.getElementById('sort-field').value=config.sortField;
+  document.getElementById('sort-dir').value=config.sortDir||'DESC';
+  document.getElementById('row-limit').value=config.limit||500;
+  renderSegmentList(); renderMetricList(); renderFilters(); updateBadges();
+  await runQuery();
+}
+
+function deleteReport(id) {
+  if(!confirm('Delete this saved report?')) return;
+  savedReports=savedReports.filter(x=>x.id!==id); renderSavedList();
+}
+
+/* ── Dashboard filter helpers ── */
+function resetDashFilters() {
+  document.getElementById('dash-date-from').value='';
+  document.getElementById('dash-date-to').value='';
+  document.getElementById('dash-yard').value='';
+  refreshDashboard();
+}
+
+/* ── View management ── */
+function showView(view) {
+  ['dashboard','home','builder','saved'].forEach(v=>{
+    document.getElementById(`nav-${v}`)?.classList.toggle('active',v===view);
+  });
+  document.getElementById('dashboard-screen').style.display = view==='dashboard' ? 'flex' : 'none';
+  document.getElementById('home-screen').style.display      = view==='home'       ? ''     : 'none';
+  document.getElementById('saved-screen').style.display     = view==='saved'      ? ''     : 'none';
+  document.getElementById('builder-panel').classList.toggle('collapsed', view!=='builder');
+
+  if(view==='builder') {
+    document.getElementById('run-btn').style.display='';
+    document.getElementById('save-btn').style.display='';
+    if(!currentDataset) showBuilderEmpty();
+    else if(lastRowData.length) showResultsArea();
+    else showBuilderEmpty();
+  } else {
+    document.getElementById('run-btn').style.display='none';
+    document.getElementById('save-btn').style.display='none';
+    document.getElementById('results-area').style.display='none';
+    document.getElementById('builder-empty').style.display='none';
+    document.getElementById('loading-state').style.display='none';
+  }
+  if(view==='saved') renderSavedList();
+}
+
+function showResultsArea() { document.getElementById('results-area').style.display='flex'; document.getElementById('builder-empty').style.display='none'; document.getElementById('loading-state').style.display='none'; }
+function showBuilderEmpty() { document.getElementById('results-area').style.display='none'; document.getElementById('builder-empty').style.display='flex'; document.getElementById('loading-state').style.display='none'; }
+function showLoadingState(msg='Loading...') { document.getElementById('results-area').style.display='none'; document.getElementById('builder-empty').style.display='none'; document.getElementById('loading-state').style.display='flex'; document.getElementById('loading-msg').textContent=msg; }
+function toggleSection(id) { const el=document.getElementById(id); el.style.display=el.style.display==='none'?'':'none'; }
+</script>
+</body>
+</html>
