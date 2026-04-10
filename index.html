@@ -151,6 +151,24 @@
       border-radius: 8px; padding: 7px 14px; font-size: 13px; cursor: pointer;
     }
 
+    /* Sub-tabs (inside Jobs / Quotes) */
+    .dash-sub-tabs {
+      display: flex; gap: 2px; flex-wrap: wrap;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 5px 6px;
+      box-shadow: var(--shadow);
+    }
+    .dash-sub-tab, .dash-sub-tab-q {
+      background: none; border: none; border-radius: 7px;
+      padding: 6px 16px; font-size: 12.5px; font-weight: 600;
+      color: var(--text-muted); cursor: pointer; transition: background .12s, color .12s;
+      white-space: nowrap;
+    }
+    .dash-sub-tab:hover, .dash-sub-tab-q:hover { background: var(--surface2); color: var(--navy); }
+    .dash-sub-tab.active, .dash-sub-tab-q.active {
+      background: var(--navy); color: #fff;
+    }
+
     /* Dashboard type tabs (Jobs / Quotes) */
     .dash-type-tabs {
       display: flex; gap: 4px;
@@ -457,75 +475,199 @@
 
       <!-- ── JOBS CONTENT ── -->
       <div id="dash-jobs-content">
-        <!-- KPI Tiles -->
-        <div id="dash-kpi-row">
-          <div class="dash-kpi-tile" style="grid-column:1/-1;justify-content:center"><div class="spinner"></div></div>
+        <!-- Jobs sub-tabs -->
+        <div class="dash-sub-tabs">
+          <button class="dash-sub-tab active" onclick="switchJobTab('pl')">P/L Dashboard</button>
+          <button class="dash-sub-tab" onclick="switchJobTab('finish')">Finish Jobs</button>
+          <button class="dash-sub-tab" onclick="switchJobTab('profitloss')">Job Profit/Loss</button>
+          <button class="dash-sub-tab" onclick="switchJobTab('forecast')">Forecast</button>
+          <button class="dash-sub-tab" onclick="switchJobTab('revenue')">Revenue Report</button>
         </div>
-
-        <!-- Row 1: Month chart + Status donut -->
-        <div class="dash-chart-row three-col">
-          <div class="chart-card">
-            <div class="chart-card-header">
-              <div>
+        <!-- ═══ P/L DASHBOARD sub-panel ═══ -->
+        <div id="job-panel-pl" class="job-sub-panel">
+          <div id="dash-kpi-row">
+            <div class="dash-kpi-tile" style="grid-column:1/-1;justify-content:center"><div class="spinner"></div></div>
+          </div>
+          <div class="dash-chart-row three-col">
+            <div class="chart-card">
+              <div class="chart-card-header"><div>
                 <div class="chart-card-title">Revenue, Expenses &amp; Profit by Month</div>
                 <div class="chart-card-sub">Jobs P&amp;L dataset</div>
-              </div>
+              </div></div>
+              <div class="chart-canvas-wrap tall"><canvas id="month-chart"></canvas></div>
             </div>
-            <div class="chart-canvas-wrap tall"><canvas id="month-chart"></canvas></div>
-          </div>
-          <div class="chart-card">
-            <div class="chart-card-header">
-              <div>
+            <div class="chart-card">
+              <div class="chart-card-header"><div>
                 <div class="chart-card-title">Jobs by Status</div>
                 <div class="chart-card-sub">Count breakdown</div>
-              </div>
+              </div></div>
+              <div class="chart-canvas-wrap medium"><canvas id="status-chart"></canvas></div>
+              <div id="status-chips"></div>
             </div>
-            <div class="chart-canvas-wrap medium"><canvas id="status-chart"></canvas></div>
-            <div id="status-chips"></div>
           </div>
-        </div>
-
-        <!-- Row 2: Salesperson perf chart + table -->
-        <div class="dash-chart-row two-col">
-          <div class="chart-card">
-            <div class="chart-card-header">
-              <div>
+          <div class="dash-chart-row two-col">
+            <div class="chart-card">
+              <div class="chart-card-header"><div>
                 <div class="chart-card-title">Revenue &amp; Profit by Salesperson</div>
                 <div class="chart-card-sub">Horizontal bar</div>
-              </div>
+              </div></div>
+              <div class="chart-canvas-wrap tall"><canvas id="perf-chart"></canvas></div>
             </div>
-            <div class="chart-canvas-wrap tall"><canvas id="perf-chart"></canvas></div>
-          </div>
-          <div class="chart-card" style="overflow:auto">
-            <div class="chart-card-header">
-              <div>
+            <div class="chart-card" style="overflow:auto">
+              <div class="chart-card-header"><div>
                 <div class="chart-card-title">Salesperson Performance</div>
                 <div class="chart-card-sub">Revenue · Expenses · Profit · Profit %</div>
+              </div></div>
+              <div style="overflow-x:auto">
+                <table class="perf-table">
+                  <thead><tr>
+                    <th>Salesperson</th><th class="num">Revenue</th><th class="num">Expenses</th>
+                    <th class="num">Profit</th><th>Profit %</th><th class="num">Jobs</th>
+                  </tr></thead>
+                  <tbody id="perf-table-body"><tr><td colspan="6" style="text-align:center;padding:20px"><div class="spinner" style="margin:auto"></div></td></tr></tbody>
+                </table>
               </div>
             </div>
-            <div style="overflow-x:auto">
-              <table class="perf-table">
-                <thead>
-                  <tr>
-                    <th>Salesperson</th>
-                    <th class="num">Revenue</th>
-                    <th class="num">Expenses</th>
-                    <th class="num">Profit</th>
-                    <th>Profit %</th>
-                    <th class="num">Jobs</th>
-                  </tr>
-                </thead>
-                <tbody id="perf-table-body">
-                  <tr><td colspan="6" style="text-align:center;padding:20px"><div class="spinner" style="margin:auto"></div></td></tr>
-                </tbody>
-              </table>
+          </div>
+        </div><!-- /job-panel-pl -->
+
+        <!-- ═══ FINISH JOBS sub-panel ═══ -->
+        <div id="job-panel-finish" class="job-sub-panel" style="display:none">
+          <div id="finish-kpi-row">
+            <div class="dash-kpi-tile" style="grid-column:1/-1;justify-content:center"><div class="spinner"></div></div>
+          </div>
+          <div class="dash-chart-row three-col">
+            <div class="chart-card">
+              <div class="chart-card-header"><div>
+                <div class="chart-card-title">Jobs by Status</div>
+                <div class="chart-card-sub">Count &amp; estimated value</div>
+              </div></div>
+              <div class="chart-canvas-wrap tall"><canvas id="finish-status-chart"></canvas></div>
+              <div id="finish-status-chips"></div>
+            </div>
+            <div class="chart-card">
+              <div class="chart-card-header"><div>
+                <div class="chart-card-title">Jobs by Salesperson</div>
+                <div class="chart-card-sub">Count breakdown</div>
+              </div></div>
+              <div class="chart-canvas-wrap tall"><canvas id="finish-person-chart"></canvas></div>
             </div>
           </div>
-        </div>
+          <div class="dash-chart-row">
+            <div class="chart-card" style="width:100%">
+              <div class="chart-card-header"><div>
+                <div class="chart-card-title">Job Detail</div>
+                <div class="chart-card-sub">Salesperson · Status · Estimated Value</div>
+              </div></div>
+              <div style="overflow-x:auto">
+                <table class="perf-table">
+                  <thead><tr>
+                    <th>Salesperson</th><th class="num">Jobs</th><th class="num">Est. Value</th><th>Share</th>
+                  </tr></thead>
+                  <tbody id="finish-table-body"><tr><td colspan="4" style="text-align:center;padding:20px"><div class="spinner" style="margin:auto"></div></td></tr></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div><!-- /job-panel-finish -->
+
+        <!-- ═══ JOB PROFIT/LOSS sub-panel ═══ -->
+        <div id="job-panel-profitloss" class="job-sub-panel" style="display:none">
+          <div id="jpl-kpi-row">
+            <div class="dash-kpi-tile" style="grid-column:1/-1;justify-content:center"><div class="spinner"></div></div>
+          </div>
+          <div class="dash-chart-row two-col">
+            <div class="chart-card">
+              <div class="chart-card-header"><div>
+                <div class="chart-card-title">Revenue vs Labor by Salesperson</div>
+                <div class="chart-card-sub">jobs_profit_by_invoice</div>
+              </div></div>
+              <div class="chart-canvas-wrap tall"><canvas id="jpl-chart"></canvas></div>
+            </div>
+            <div class="chart-card" style="overflow:auto">
+              <div class="chart-card-header"><div>
+                <div class="chart-card-title">Profit/Loss by Salesperson</div>
+                <div class="chart-card-sub">Revenue · Labor · Materials</div>
+              </div></div>
+              <div style="overflow-x:auto">
+                <table class="perf-table">
+                  <thead><tr>
+                    <th>Salesperson</th><th class="num">Revenue</th><th class="num">Labor</th><th class="num">Materials</th><th class="num">Net</th>
+                  </tr></thead>
+                  <tbody id="jpl-table-body"><tr><td colspan="5" style="text-align:center;padding:20px"><div class="spinner" style="margin:auto"></div></td></tr></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div><!-- /job-panel-profitloss -->
+
+        <!-- ═══ FORECAST sub-panel ═══ -->
+        <div id="job-panel-forecast" class="job-sub-panel" style="display:none">
+          <div id="forecast-kpi-row">
+            <div class="dash-kpi-tile" style="grid-column:1/-1;justify-content:center"><div class="spinner"></div></div>
+          </div>
+          <div class="dash-chart-row three-col">
+            <div class="chart-card">
+              <div class="chart-card-header"><div>
+                <div class="chart-card-title">Estimated vs Actual Revenue by Month</div>
+                <div class="chart-card-sub">Job Revenue Forecast</div>
+              </div></div>
+              <div class="chart-canvas-wrap tall"><canvas id="forecast-chart"></canvas></div>
+            </div>
+            <div class="chart-card">
+              <div class="chart-card-header"><div>
+                <div class="chart-card-title">Variance by Salesperson</div>
+                <div class="chart-card-sub">Est. vs Actual gap</div>
+              </div></div>
+              <div class="chart-canvas-wrap tall"><canvas id="forecast-person-chart"></canvas></div>
+            </div>
+          </div>
+        </div><!-- /job-panel-forecast -->
+
+        <!-- ═══ REVENUE REPORT sub-panel ═══ -->
+        <div id="job-panel-revenue" class="job-sub-panel" style="display:none">
+          <div id="rev-kpi-row">
+            <div class="dash-kpi-tile" style="grid-column:1/-1;justify-content:center"><div class="spinner"></div></div>
+          </div>
+          <div class="dash-chart-row two-col">
+            <div class="chart-card">
+              <div class="chart-card-header"><div>
+                <div class="chart-card-title">Revenue by Salesperson</div>
+                <div class="chart-card-sub">Horizontal bar</div>
+              </div></div>
+              <div class="chart-canvas-wrap tall"><canvas id="rev-person-chart"></canvas></div>
+            </div>
+            <div class="chart-card" style="overflow:auto">
+              <div class="chart-card-header"><div>
+                <div class="chart-card-title">Revenue Report</div>
+                <div class="chart-card-sub">Salesperson · Revenue · Profit · %</div>
+              </div></div>
+              <div style="overflow-x:auto">
+                <table class="perf-table">
+                  <thead><tr>
+                    <th>Salesperson</th><th class="num">Revenue</th><th class="num">Profit</th><th>Margin %</th><th class="num">Jobs</th>
+                  </tr></thead>
+                  <tbody id="rev-table-body"><tr><td colspan="5" style="text-align:center;padding:20px"><div class="spinner" style="margin:auto"></div></td></tr></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div><!-- /job-panel-revenue -->
+
       </div><!-- /dash-jobs-content -->
 
       <!-- ── QUOTES CONTENT ── -->
       <div id="dash-quotes-content" style="display:none">
+        <!-- Quotes sub-tabs -->
+        <div class="dash-sub-tabs">
+          <button class="dash-sub-tab-q active" onclick="switchQuoteTab('summary')">Summary</button>
+          <button class="dash-sub-tab-q" onclick="switchQuoteTab('bystatus')">By Status</button>
+          <button class="dash-sub-tab-q" onclick="switchQuoteTab('salesperson')">By Salesperson</button>
+          <button class="dash-sub-tab-q" onclick="switchQuoteTab('forecast')">Revenue Forecast</button>
+        </div>
+
+        <!-- ═══ SUMMARY sub-panel ═══ -->
+        <div id="quote-panel-summary" class="quote-sub-panel">
         <!-- Quote KPI Tiles -->
         <div id="quote-kpi-row">
           <div class="dash-kpi-tile" style="grid-column:1/-1;justify-content:center"><div class="spinner"></div></div>
@@ -580,6 +722,88 @@
             </div>
           </div>
         </div>
+        </div><!-- /quote-panel-summary -->
+
+        <!-- ═══ BY STATUS sub-panel ═══ -->
+        <div id="quote-panel-bystatus" class="quote-sub-panel" style="display:none">
+          <div class="dash-chart-row two-col">
+            <div class="chart-card">
+              <div class="chart-card-header"><div>
+                <div class="chart-card-title">Quotes by Status</div>
+                <div class="chart-card-sub">Count distribution</div>
+              </div></div>
+              <div class="chart-canvas-wrap tall"><canvas id="qs-donut-chart"></canvas></div>
+              <div id="qs-chips"></div>
+            </div>
+            <div class="chart-card">
+              <div class="chart-card-header"><div>
+                <div class="chart-card-title">Quote Value by Status</div>
+                <div class="chart-card-sub">Total estimated value</div>
+              </div></div>
+              <div class="chart-canvas-wrap tall"><canvas id="qs-value-chart"></canvas></div>
+            </div>
+          </div>
+          <div class="dash-chart-row">
+            <div class="chart-card" style="width:100%">
+              <div class="chart-card-header"><div>
+                <div class="chart-card-title">Status Breakdown</div>
+                <div class="chart-card-sub">Count · Value</div>
+              </div></div>
+              <div style="overflow-x:auto">
+                <table class="perf-table">
+                  <thead><tr><th>Status</th><th class="num">Quotes</th><th class="num">Est. Value (Max)</th><th>Share</th></tr></thead>
+                  <tbody id="qs-table-body"><tr><td colspan="4" style="text-align:center;padding:20px"><div class="spinner" style="margin:auto"></div></td></tr></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div><!-- /quote-panel-bystatus -->
+
+        <!-- ═══ BY SALESPERSON sub-panel ═══ -->
+        <div id="quote-panel-salesperson" class="quote-sub-panel" style="display:none">
+          <div class="dash-chart-row two-col">
+            <div class="chart-card">
+              <div class="chart-card-header"><div>
+                <div class="chart-card-title">Quote Value by Salesperson</div>
+                <div class="chart-card-sub">Horizontal bar</div>
+              </div></div>
+              <div class="chart-canvas-wrap tall"><canvas id="qsp-bar-chart"></canvas></div>
+            </div>
+            <div class="chart-card" style="overflow:auto">
+              <div class="chart-card-header"><div>
+                <div class="chart-card-title">Salesperson Detail</div>
+                <div class="chart-card-sub">Quotes · Value · Share</div>
+              </div></div>
+              <div style="overflow-x:auto">
+                <table class="perf-table">
+                  <thead><tr><th>Salesperson</th><th class="num">Quotes</th><th class="num">Est. Value</th><th>Share</th></tr></thead>
+                  <tbody id="qsp-table-body"><tr><td colspan="4" style="text-align:center;padding:20px"><div class="spinner" style="margin:auto"></div></td></tr></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div><!-- /quote-panel-salesperson -->
+
+        <!-- ═══ REVENUE FORECAST sub-panel ═══ -->
+        <div id="quote-panel-forecast" class="quote-sub-panel" style="display:none">
+          <div class="dash-chart-row three-col">
+            <div class="chart-card">
+              <div class="chart-card-header"><div>
+                <div class="chart-card-title">Quote Revenue by Month</div>
+                <div class="chart-card-sub">Forecast dataset</div>
+              </div></div>
+              <div class="chart-canvas-wrap tall"><canvas id="qf-month-chart"></canvas></div>
+            </div>
+            <div class="chart-card">
+              <div class="chart-card-header"><div>
+                <div class="chart-card-title">Quote Count by Month</div>
+                <div class="chart-card-sub">Volume trend</div>
+              </div></div>
+              <div class="chart-canvas-wrap tall"><canvas id="qf-count-chart"></canvas></div>
+            </div>
+          </div>
+        </div><!-- /quote-panel-forecast -->
+
       </div><!-- /dash-quotes-content -->
 
     </div><!-- /dashboard-screen -->

@@ -641,3 +641,706 @@ function resetDashFilters() {
   document.getElementById('dash-yard').value = '';
   refreshDashboard();
 }
+
+/* ══════════════════════════════════════════════════════════════════
+   JOB SUB-TAB SWITCHING + LAZY LOAD
+   ══════════════════════════════════════════════════════════════════ */
+
+const JOB_TABS    = ['pl','finish','profitloss','forecast','revenue'];
+const QUOTE_TABS  = ['summary','bystatus','salesperson','forecast'];
+const jobLoaded   = {};
+const quoteLoaded = {};
+let activeJobTab   = 'pl';
+let activeQuoteTab = 'summary';
+
+function switchJobTab(tab) {
+  activeJobTab = tab;
+  // Update button states
+  document.querySelectorAll('.dash-sub-tab').forEach((btn, i) => {
+    btn.classList.toggle('active', JOB_TABS[i] === tab);
+  });
+  // Show/hide panels
+  JOB_TABS.forEach(t => {
+    const el = document.getElementById(`job-panel-${t}`);
+    if (el) el.style.display = t === tab ? '' : 'none';
+  });
+  // Lazy-load data on first visit
+  if (!jobLoaded[tab]) {
+    jobLoaded[tab] = true;
+    const dateFrom = document.getElementById('dash-date-from')?.value || '';
+    const dateTo   = document.getElementById('dash-date-to')?.value   || '';
+    const yard     = document.getElementById('dash-yard')?.value       || '';
+    loadJobSubTab(tab, dateFrom, dateTo, yard);
+  }
+}
+
+function switchQuoteTab(tab) {
+  activeQuoteTab = tab;
+  document.querySelectorAll('.dash-sub-tab-q').forEach((btn, i) => {
+    btn.classList.toggle('active', QUOTE_TABS[i] === tab);
+  });
+  QUOTE_TABS.forEach(t => {
+    const el = document.getElementById(`quote-panel-${t}`);
+    if (el) el.style.display = t === tab ? '' : 'none';
+  });
+  if (!quoteLoaded[tab]) {
+    quoteLoaded[tab] = true;
+    const dateFrom = document.getElementById('dash-date-from')?.value || '';
+    const dateTo   = document.getElementById('dash-date-to')?.value   || '';
+    const yard     = document.getElementById('dash-yard')?.value       || '';
+    loadQuoteSubTab(tab, dateFrom, dateTo, yard);
+  }
+}
+
+function loadJobSubTab(tab, dateFrom, dateTo, yard) {
+  if (tab === 'finish')     { loadFinishJobs(dateFrom, dateTo, yard); }
+  if (tab === 'profitloss') { loadJobProfitLoss(dateFrom, dateTo, yard); }
+  if (tab === 'forecast')   { loadForecast(dateFrom, dateTo, yard); }
+  if (tab === 'revenue')    { loadRevenueReport(dateFrom, dateTo, yard); }
+}
+
+function loadQuoteSubTab(tab, dateFrom, dateTo, yard) {
+  if (tab === 'bystatus')   { loadQuoteByStatus(dateFrom, dateTo, yard); }
+  if (tab === 'salesperson'){ loadQuoteBySalesperson(dateFrom, dateTo, yard); }
+  if (tab === 'forecast')   { loadQuoteForecast(dateFrom, dateTo, yard); }
+}
+
+// On global refresh, reload current sub-tabs too
+const _origRefresh = refreshDashboard;
+async function refreshDashboard() {
+  // Reset lazy-load state so filters re-trigger data fetches
+  JOB_TABS.forEach(t => { jobLoaded[t] = false; });
+  QUOTE_TABS.forEach(t => { quoteLoaded[t] = false; });
+  // Mark current active tabs as loaded (they'll load via the main refresh)
+  jobLoaded['pl'] = true;
+  quoteLoaded['summary'] = true;
+  await _origRefresh();
+  // Also reload whichever sub-tab is active
+  const dateFrom = document.getElementById('dash-date-from')?.value || '';
+  const dateTo   = document.getElementById('dash-date-to')?.value   || '';
+  const yard     = document.getElementById('dash-yard')?.value       || '';
+  if (activeJobTab !== 'pl') {
+    jobLoaded[activeJobTab] = true;
+    loadJobSubTab(activeJobTab, dateFrom, dateTo, yard);
+  }
+  if (activeQuoteTab !== 'summary') {
+    quoteLoaded[activeQuoteTab] = true;
+    loadQuoteSubTab(activeQuoteTab, dateFrom, dateTo, yard);
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   FINISH JOBS TAB
+   ══════════════════════════════════════════════════════════════════ */
+
+let finishStatusChart = null;
+let finishPersonChart = null;
+
+async function loadFinishJobs(dateFrom, dateTo, yard) {
+  const filters = [];
+  if (dateFrom && dateTo) filters.push({ segmentName:'JobStartDate', operator:'between', value:dateFrom, secondValue:dateTo });
+  if (yard) filters.push({ segmentName:'Yard', operator:'eq', value:yard });
+
+  // KPIs
+  try {
+    const kpiBody = { datasetName:'Jobs_By_Status', metrics:[
+      { metricName:'TotalJobs', aggregation:'COUNT', alias:'TotalJobs' },
+      { metricName:'TotalEstimatedValue', aggregation:'SUM', alias:'TotalEstimatedValue' },
+      { metricName:'AvgEstimatedValue', aggregation:'AVG', alias:'AvgEstimatedValue' },
+    ], filters };
+    const kr = await fetch(`${BASE_URL}/bi/kpis`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(kpiBody) });
+    const kj = await kr.json();
+    const kv = {}; (kj.data?.kpis||[]).forEach(k=>{ kv[k.name]=k.value; });
+    const tiles = [
+      { label:'Total Jobs',    value: dFmtNum(parseFloat(kv.TotalJobs||0),0),     color:NAVY,    icon:'briefcase'   },
+      { label:'Est. Value',    value: dFmtCur(parseFloat(kv.TotalEstimatedValue||0)), color:GREEN, icon:'dollar-sign' },
+      { label:'Avg Job Value', value: dFmtCur(parseFloat(kv.AvgEstimatedValue||0)),  color:'#7c3aed', icon:'trending-up' },
+    ];
+    document.getElementById('finish-kpi-row').innerHTML = tiles.map(t=>`
+      <div class="dash-kpi-tile">
+        <div class="dkt-icon" style="background:${t.color}20;color:${t.color}"><i data-lucide="${t.icon}" style="width:18px;height:18px;stroke-width:2"></i></div>
+        <div class="dkt-body"><div class="dkt-label">${t.label}</div><div class="dkt-value" style="color:${t.color}">${t.value}</div></div>
+      </div>`).join('');
+    lucide.createIcons();
+  } catch(e) {}
+
+  // Status donut
+  const ctxS = document.getElementById('finish-status-chart');
+  if (ctxS) {
+    if (finishStatusChart) { finishStatusChart.destroy(); finishStatusChart=null; }
+    try {
+      const r = await fetch(`${BASE_URL}/bi/query`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({
+        datasetName:'Jobs_By_Status', groupBySegments:['Status'],
+        metrics:[{metricName:'TotalJobs',aggregation:'COUNT',alias:'TotalJobs'},{metricName:'TotalEstimatedValue',aggregation:'SUM',alias:'TotalEstimatedValue'}],
+        filters, orderBy:[{field:'TotalJobs',direction:'DESC'}], limit:15
+      })});
+      const j = await r.json();
+      const rows = j.data?.data||[];
+      if (!rows.length) { showChartEmpty(ctxS,'No data'); }
+      else {
+        ctxS.style.display='';
+        const ex=ctxS.parentElement.querySelector('.chart-empty'); if(ex) ex.remove();
+        const STATUS_MAP = {T:'In Progress',Z:'Complete',C:'Cancelled',X:'On Hold',O:'Open',W:'Waiting',F:'Finished'};
+        const labels = rows.map(r=>STATUS_MAP[r.Status]||r.Status||'Unknown');
+        const counts = rows.map(r=>parseFloat(r.TotalJobs||0));
+        const colors = rows.map((_,i)=>PERF_COLORS[i%PERF_COLORS.length]);
+        finishStatusChart = new Chart(ctxS, { type:'doughnut',
+          data:{ labels, datasets:[{ data:counts, backgroundColor:colors, borderWidth:2, borderColor:'#fff', hoverOffset:6 }] },
+          options:{ responsive:true, maintainAspectRatio:false, cutout:'62%',
+            plugins:{ legend:{ position:'right', labels:{boxWidth:10,font:{size:11},padding:12} },
+              tooltip:{callbacks:{label:c=>` ${c.label}: ${dFmtNum(c.raw,0)} jobs`}} } }
+        });
+        const total=counts.reduce((a,b)=>a+b,0);
+        document.getElementById('finish-status-chips').innerHTML=rows.slice(0,5).map((row,i)=>`
+          <div class="status-chip">
+            <div style="width:8px;height:8px;border-radius:2px;background:${colors[i]};flex-shrink:0"></div>
+            <span>${STATUS_MAP[row.Status]||row.Status||'Unknown'}</span>
+            <strong>${dFmtNum(parseFloat(row.TotalJobs||0),0)}</strong>
+            <span style="color:var(--text-muted);font-size:10px">${total>0?(parseFloat(row.TotalJobs||0)/total*100).toFixed(0)+'%':''}</span>
+          </div>`).join('');
+
+        // Table
+        const maxVal=Math.max(...rows.map(r=>parseFloat(r.TotalEstimatedValue||0)));
+        document.getElementById('finish-table-body').innerHTML=rows.map((row,i)=>{
+          const val=parseFloat(row.TotalEstimatedValue||0);
+          const barW=maxVal>0?Math.min(100,val/maxVal*100):0;
+          const color=PERF_COLORS[i%PERF_COLORS.length];
+          return `<tr>
+            <td><div style="display:flex;align-items:center;gap:8px"><div style="width:8px;height:8px;border-radius:50%;background:${color}"></div><span style="font-weight:600">${STATUS_MAP[row.Status]||row.Status}</span></div></td>
+            <td class="num-cell">${dFmtNum(parseFloat(row.TotalJobs||0),0)}</td>
+            <td class="num-cell positive">${dFmtCur(val)}</td>
+            <td><div class="progress-cell"><div class="progress-bar-wrap"><div class="progress-bar-fill" style="width:${barW}%;background:${color}"></div></div><span class="progress-val">${barW.toFixed(0)}%</span></div></td>
+          </tr>`;
+        }).join('');
+      }
+    } catch(e) { showChartEmpty(ctxS,'Error'); }
+  }
+
+  // Salesperson bar
+  const ctxP = document.getElementById('finish-person-chart');
+  if (ctxP) {
+    if (finishPersonChart) { finishPersonChart.destroy(); finishPersonChart=null; }
+    try {
+      const r = await fetch(`${BASE_URL}/bi/query`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({
+        datasetName:'Jobs_By_Status', groupBySegments:['SalesPerson'],
+        metrics:[{metricName:'TotalJobs',aggregation:'COUNT',alias:'TotalJobs'},{metricName:'TotalEstimatedValue',aggregation:'SUM',alias:'TotalEstimatedValue'}],
+        filters, orderBy:[{field:'TotalEstimatedValue',direction:'DESC'}], limit:15
+      })});
+      const j = await r.json();
+      const rows = j.data?.data||[];
+      if (!rows.length) { showChartEmpty(ctxP,'No data'); }
+      else {
+        ctxP.style.display='';
+        const ex=ctxP.parentElement.querySelector('.chart-empty'); if(ex) ex.remove();
+        finishPersonChart = new Chart(ctxP, { type:'bar',
+          data:{ labels:rows.map(r=>r.SalesPerson||'—'),
+            datasets:[
+              { label:'Est. Value', data:rows.map(r=>parseFloat(r.TotalEstimatedValue||0)), backgroundColor:TEAL+'99', borderColor:TEAL, borderWidth:1 },
+              { label:'# Jobs', data:rows.map(r=>parseFloat(r.TotalJobs||0)), backgroundColor:NAVY+'66', borderColor:NAVY, borderWidth:1, yAxisID:'y2' },
+            ]},
+          options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false,
+            plugins:{ legend:{position:'bottom',labels:{boxWidth:12,font:{size:11}}},
+              tooltip:{callbacks:{label:c=>c.datasetIndex===0?` Est. Value: ${dFmtCur(c.raw)}`:` Jobs: ${dFmtNum(c.raw,0)}`}} },
+            scales:{
+              x:{ grid:{color:'#e2e8f0'}, ticks:{callback:v=>dFmtCurShort(v),font:{size:10}}, beginAtZero:true },
+              y:{ grid:{display:false}, ticks:{font:{size:11}} },
+              y2:{ display:false, beginAtZero:true }
+            }
+          }
+        });
+      }
+    } catch(e) { showChartEmpty(ctxP,'Error'); }
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   JOB PROFIT/LOSS TAB
+   ══════════════════════════════════════════════════════════════════ */
+
+let jplChart = null;
+
+async function loadJobProfitLoss(dateFrom, dateTo, yard) {
+  const filters = [];
+  if (dateFrom && dateTo) filters.push({ segmentName:'JobStartDate', operator:'between', value:dateFrom, secondValue:dateTo });
+  if (yard) filters.push({ segmentName:'YardCode', operator:'eq', value:yard });
+
+  // KPIs
+  try {
+    const kpiBody = { datasetName:'jobs_profit_by_invoice', metrics:[
+      { metricName:'Revenue', aggregation:'SUM', alias:'Revenue' },
+      { metricName:'LaborActual', aggregation:'SUM', alias:'LaborActual' },
+      { metricName:'MaterialActual', aggregation:'SUM', alias:'MaterialActual' },
+      { metricName:'LaborHours', aggregation:'SUM', alias:'LaborHours' },
+    ], filters };
+    const kr = await fetch(`${BASE_URL}/bi/kpis`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(kpiBody) });
+    const kj = await kr.json();
+    const kv = {}; (kj.data?.kpis||[]).forEach(k=>{ kv[k.name]=k.value; });
+    const rev=parseFloat(kv.Revenue||0), lab=parseFloat(kv.LaborActual||0), mat=parseFloat(kv.MaterialActual||0);
+    const net=rev-lab-mat;
+    const tiles = [
+      { label:'Revenue',        value: dFmtCur(rev),           color:NAVY,    icon:'dollar-sign'   },
+      { label:'Labor Cost',     value: dFmtCur(lab),           color:'#dc2626', icon:'users'        },
+      { label:'Material Cost',  value: dFmtCur(mat),           color:'#d97706', icon:'package'      },
+      { label:'Net',            value: dFmtCur(net),           color:net>=0?GREEN:RED, icon:'trending-up' },
+      { label:'Labor Hours',    value: dFmtNum(parseFloat(kv.LaborHours||0),0)+' hrs', color:'#7c3aed', icon:'clock' },
+    ];
+    document.getElementById('jpl-kpi-row').innerHTML = tiles.map(t=>`
+      <div class="dash-kpi-tile">
+        <div class="dkt-icon" style="background:${t.color}20;color:${t.color}"><i data-lucide="${t.icon}" style="width:18px;height:18px;stroke-width:2"></i></div>
+        <div class="dkt-body"><div class="dkt-label">${t.label}</div><div class="dkt-value" style="color:${t.color}">${t.value}</div></div>
+      </div>`).join('');
+    lucide.createIcons();
+  } catch(e) {}
+
+  // Chart + table by salesperson
+  const ctx = document.getElementById('jpl-chart');
+  if (ctx) {
+    if (jplChart) { jplChart.destroy(); jplChart=null; }
+    try {
+      const r = await fetch(`${BASE_URL}/bi/query`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({
+        datasetName:'jobs_profit_by_invoice', groupBySegments:['SalesPersonName'],
+        metrics:[
+          {metricName:'Revenue',aggregation:'SUM',alias:'Revenue'},
+          {metricName:'LaborActual',aggregation:'SUM',alias:'LaborActual'},
+          {metricName:'MaterialActual',aggregation:'SUM',alias:'MaterialActual'},
+        ],
+        filters, orderBy:[{field:'Revenue',direction:'DESC'}], limit:15
+      })});
+      const j = await r.json();
+      const rows = j.data?.data||[];
+      if (!rows.length) { showChartEmpty(ctx,'No data'); }
+      else {
+        ctx.style.display='';
+        const ex=ctx.parentElement.querySelector('.chart-empty'); if(ex) ex.remove();
+        jplChart = new Chart(ctx, { type:'bar',
+          data:{ labels:rows.map(r=>r.SalesPersonName||'—'),
+            datasets:[
+              { label:'Revenue',  data:rows.map(r=>parseFloat(r.Revenue||0)),      backgroundColor:TEAL+'99', borderColor:TEAL, borderWidth:1 },
+              { label:'Labor',    data:rows.map(r=>parseFloat(r.LaborActual||0)),  backgroundColor:NAVY+'88', borderColor:NAVY, borderWidth:1 },
+              { label:'Material', data:rows.map(r=>parseFloat(r.MaterialActual||0)), backgroundColor:AMBER+'99', borderColor:AMBER, borderWidth:1 },
+            ]},
+          options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false,
+            plugins:{ legend:{position:'bottom',labels:{boxWidth:12,font:{size:11}}},
+              tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${dFmtCur(c.raw)}`}} },
+            scales:{
+              x:{ grid:{color:'#e2e8f0'}, ticks:{callback:v=>dFmtCurShort(v),font:{size:10}}, beginAtZero:true },
+              y:{ grid:{display:false}, ticks:{font:{size:10}} }
+            }
+          }
+        });
+
+        // Table
+        document.getElementById('jpl-table-body').innerHTML=rows.map((row,i)=>{
+          const rev=parseFloat(row.Revenue||0), lab=parseFloat(row.LaborActual||0), mat=parseFloat(row.MaterialActual||0);
+          const net=rev-lab-mat;
+          const color=PERF_COLORS[i%PERF_COLORS.length];
+          return `<tr>
+            <td><div style="display:flex;align-items:center;gap:8px"><div style="width:8px;height:8px;border-radius:50%;background:${color}"></div><span style="font-weight:600">${row.SalesPersonName||'—'}</span></div></td>
+            <td class="num-cell">${dFmtCur(rev)}</td>
+            <td class="num-cell" style="color:#dc2626">${dFmtCur(lab)}</td>
+            <td class="num-cell" style="color:#d97706">${dFmtCur(mat)}</td>
+            <td class="num-cell ${net>=0?'positive':'negative'}">${dFmtCur(net)}</td>
+          </tr>`;
+        }).join('');
+      }
+    } catch(e) { showChartEmpty(ctx,'Error'); }
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   FORECAST TAB
+   ══════════════════════════════════════════════════════════════════ */
+
+let forecastChart = null;
+let forecastPersonChart = null;
+
+async function loadForecast(dateFrom, dateTo, yard) {
+  const filters = [];
+  if (dateFrom && dateTo) filters.push({ segmentName:'JobStartDate', operator:'between', value:dateFrom, secondValue:dateTo });
+  if (yard) filters.push({ segmentName:'Yard', operator:'eq', value:yard });
+
+  // KPIs
+  try {
+    const kpiBody = { datasetName:'Job_Revenue_Forecast', metrics:[
+      { metricName:'EstimatedRevenue', aggregation:'SUM', alias:'EstimatedRevenue' },
+      { metricName:'ActualRevenue',    aggregation:'SUM', alias:'ActualRevenue'    },
+      { metricName:'Variance',         aggregation:'SUM', alias:'Variance'         },
+      { metricName:'JobCount',         aggregation:'COUNT', alias:'JobCount'       },
+    ], filters };
+    const kr = await fetch(`${BASE_URL}/bi/kpis`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(kpiBody) });
+    const kj = await kr.json();
+    const kv = {}; (kj.data?.kpis||[]).forEach(k=>{ kv[k.name]=k.value; });
+    const est=parseFloat(kv.EstimatedRevenue||0), act=parseFloat(kv.ActualRevenue||0), vari=parseFloat(kv.Variance||0);
+    const tiles = [
+      { label:'Est. Revenue',  value:dFmtCur(est),  color:NAVY,    icon:'target'        },
+      { label:'Actual Revenue',value:dFmtCur(act),  color:GREEN,   icon:'dollar-sign'   },
+      { label:'Variance',      value:dFmtCur(vari), color:vari<=0?GREEN:RED, icon:'trending-up' },
+      { label:'Job Count',     value:dFmtNum(parseFloat(kv.JobCount||0),0), color:'#0369a1', icon:'briefcase' },
+    ];
+    document.getElementById('forecast-kpi-row').innerHTML = tiles.map(t=>`
+      <div class="dash-kpi-tile">
+        <div class="dkt-icon" style="background:${t.color}20;color:${t.color}"><i data-lucide="${t.icon}" style="width:18px;height:18px;stroke-width:2"></i></div>
+        <div class="dkt-body"><div class="dkt-label">${t.label}</div><div class="dkt-value" style="color:${t.color}">${t.value}</div></div>
+      </div>`).join('');
+    lucide.createIcons();
+  } catch(e) {}
+
+  // Estimated vs Actual by Month
+  const ctx = document.getElementById('forecast-chart');
+  if (ctx) {
+    if (forecastChart) { forecastChart.destroy(); forecastChart=null; }
+    try {
+      const r = await fetch(`${BASE_URL}/bi/query`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({
+        datasetName:'Job_Revenue_Forecast', groupBySegments:['Year','Month'],
+        metrics:[
+          {metricName:'EstimatedRevenue',aggregation:'SUM',alias:'EstimatedRevenue'},
+          {metricName:'ActualRevenue',aggregation:'SUM',alias:'ActualRevenue'},
+          {metricName:'Variance',aggregation:'SUM',alias:'Variance'},
+        ],
+        filters, orderBy:[{field:'Year',direction:'ASC'},{field:'Month',direction:'ASC'}], limit:60
+      })});
+      const j = await r.json();
+      const rows = (j.data?.data||[]).filter(r=>r.Year&&r.Year>=2020);
+      if (!rows.length) { showChartEmpty(ctx,'No forecast data'); }
+      else {
+        ctx.style.display='';
+        const ex=ctx.parentElement.querySelector('.chart-empty'); if(ex) ex.remove();
+        const MN=['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        forecastChart = new Chart(ctx, { type:'bar',
+          data:{ labels:rows.map(r=>`${MN[+r.Month]||r.Month} ${r.Year}`),
+            datasets:[
+              { label:'Estimated', data:rows.map(r=>parseFloat(r.EstimatedRevenue||0)), backgroundColor:NAVY+'88', borderColor:NAVY, borderWidth:1, order:2 },
+              { label:'Actual',    data:rows.map(r=>parseFloat(r.ActualRevenue||0)),    backgroundColor:TEAL+'bb', borderColor:TEAL, borderWidth:1, order:3 },
+              { label:'Variance',  data:rows.map(r=>parseFloat(r.Variance||0)), type:'line', borderColor:AMBER, backgroundColor:AMBER+'22', borderWidth:2.5, pointRadius:3, pointBackgroundColor:AMBER, tension:.35, fill:false, order:1 },
+            ]},
+          options:{ responsive:true, maintainAspectRatio:false,
+            interaction:{mode:'index',intersect:false},
+            plugins:{ legend:{position:'bottom',labels:{boxWidth:12,font:{size:11}}},
+              tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${dFmtCur(c.raw)}`}} },
+            scales:{
+              x:{grid:{display:false},ticks:{font:{size:10},maxRotation:45,maxTicksLimit:12}},
+              y:{grid:{color:'#e2e8f0'},ticks:{callback:v=>dFmtCurShort(v),font:{size:10}},beginAtZero:true}
+            }
+          }
+        });
+      }
+    } catch(e) { showChartEmpty(ctx,'Error'); }
+  }
+
+  // Variance by Salesperson
+  const ctxP = document.getElementById('forecast-person-chart');
+  if (ctxP) {
+    if (forecastPersonChart) { forecastPersonChart.destroy(); forecastPersonChart=null; }
+    try {
+      const r = await fetch(`${BASE_URL}/bi/query`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({
+        datasetName:'Job_Revenue_Forecast', groupBySegments:['SalesPerson'],
+        metrics:[
+          {metricName:'EstimatedRevenue',aggregation:'SUM',alias:'EstimatedRevenue'},
+          {metricName:'ActualRevenue',aggregation:'SUM',alias:'ActualRevenue'},
+        ],
+        filters, orderBy:[{field:'EstimatedRevenue',direction:'DESC'}], limit:15
+      })});
+      const j = await r.json();
+      const rows = j.data?.data||[];
+      if (!rows.length) { showChartEmpty(ctxP,'No data'); }
+      else {
+        ctxP.style.display='';
+        const ex=ctxP.parentElement.querySelector('.chart-empty'); if(ex) ex.remove();
+        forecastPersonChart = new Chart(ctxP, { type:'bar',
+          data:{ labels:rows.map(r=>r.SalesPerson||'—'),
+            datasets:[
+              { label:'Estimated', data:rows.map(r=>parseFloat(r.EstimatedRevenue||0)), backgroundColor:NAVY+'88', borderColor:NAVY, borderWidth:1 },
+              { label:'Actual',    data:rows.map(r=>parseFloat(r.ActualRevenue||0)),    backgroundColor:TEAL+'bb', borderColor:TEAL, borderWidth:1 },
+            ]},
+          options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false,
+            plugins:{ legend:{position:'bottom',labels:{boxWidth:12,font:{size:11}}},
+              tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${dFmtCur(c.raw)}`}} },
+            scales:{
+              x:{grid:{color:'#e2e8f0'},ticks:{callback:v=>dFmtCurShort(v),font:{size:10}},beginAtZero:true},
+              y:{grid:{display:false},ticks:{font:{size:11}}}
+            }
+          }
+        });
+      }
+    } catch(e) { showChartEmpty(ctxP,'Error'); }
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   REVENUE REPORT TAB
+   ══════════════════════════════════════════════════════════════════ */
+
+let revPersonChart = null;
+
+async function loadRevenueReport(dateFrom, dateTo, yard) {
+  const filters = buildJobFilters(dateFrom, dateTo, yard);
+
+  // KPIs (reuse jobs_profit_loss)
+  try {
+    const kpiBody = { datasetName:'jobs_profit_loss', metrics:[
+      { metricName:'JobRevenue', aggregation:'SUM', alias:'JobRevenue' },
+      { metricName:'Profit',     aggregation:'SUM', alias:'Profit'     },
+      { metricName:'JobCount',   aggregation:'COUNT', alias:'JobCount' },
+    ], filters };
+    const kr = await fetch(`${BASE_URL}/bi/kpis`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(kpiBody) });
+    const kj = await kr.json();
+    const kv = {}; (kj.data?.kpis||[]).forEach(k=>{ kv[k.name]=k.value; });
+    const rev=parseFloat(kv.JobRevenue||0), prof=parseFloat(kv.Profit||0);
+    const margin=rev>0?prof/rev*100:0;
+    const tiles = [
+      { label:'Total Revenue', value:dFmtCur(rev),   color:NAVY,  icon:'dollar-sign' },
+      { label:'Total Profit',  value:dFmtCur(prof),  color:prof>=0?GREEN:RED, icon:'trending-up' },
+      { label:'Margin %',      value:margin.toFixed(1)+'%', color:margin>=50?GREEN:AMBER, icon:'percent' },
+      { label:'Job Count',     value:dFmtNum(parseFloat(kv.JobCount||0),0), color:'#0369a1', icon:'briefcase' },
+    ];
+    document.getElementById('rev-kpi-row').innerHTML = tiles.map(t=>`
+      <div class="dash-kpi-tile">
+        <div class="dkt-icon" style="background:${t.color}20;color:${t.color}"><i data-lucide="${t.icon}" style="width:18px;height:18px;stroke-width:2"></i></div>
+        <div class="dkt-body"><div class="dkt-label">${t.label}</div><div class="dkt-value" style="color:${t.color}">${t.value}</div></div>
+      </div>`).join('');
+    lucide.createIcons();
+  } catch(e) {}
+
+  // Revenue by salesperson
+  const ctx = document.getElementById('rev-person-chart');
+  if (ctx) {
+    if (revPersonChart) { revPersonChart.destroy(); revPersonChart=null; }
+    try {
+      const r = await fetch(`${BASE_URL}/bi/query`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({
+        datasetName:'jobs_profit_loss', groupBySegments:['SalesPerson'],
+        metrics:[
+          {metricName:'JobRevenue',aggregation:'SUM',alias:'JobRevenue'},
+          {metricName:'Profit',aggregation:'SUM',alias:'Profit'},
+          {metricName:'JobCount',aggregation:'COUNT',alias:'JobCount'},
+        ],
+        filters, orderBy:[{field:'JobRevenue',direction:'DESC'}], limit:20
+      })});
+      const j = await r.json();
+      const rows = j.data?.data||[];
+      if (!rows.length) { showChartEmpty(ctx,'No data'); }
+      else {
+        ctx.style.display='';
+        const ex=ctx.parentElement.querySelector('.chart-empty'); if(ex) ex.remove();
+        revPersonChart = new Chart(ctx, { type:'bar',
+          data:{ labels:rows.map(r=>r.SalesPerson||'—'),
+            datasets:[
+              { label:'Revenue', data:rows.map(r=>parseFloat(r.JobRevenue||0)), backgroundColor:TEAL+'99', borderColor:TEAL, borderWidth:1 },
+              { label:'Profit',  data:rows.map(r=>parseFloat(r.Profit||0)),     backgroundColor:NAVY+'cc', borderColor:NAVY, borderWidth:1 },
+            ]},
+          options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false,
+            plugins:{ legend:{position:'bottom',labels:{boxWidth:12,font:{size:11}}},
+              tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${dFmtCur(c.raw)}`}} },
+            scales:{
+              x:{grid:{color:'#e2e8f0'},ticks:{callback:v=>dFmtCurShort(v),font:{size:10}},beginAtZero:true},
+              y:{grid:{display:false},ticks:{font:{size:11}}}
+            }
+          }
+        });
+
+        // Table
+        document.getElementById('rev-table-body').innerHTML=rows.map((row,i)=>{
+          const rev=parseFloat(row.JobRevenue||0), prof=parseFloat(row.Profit||0);
+          const margin=rev>0?prof/rev*100:0;
+          const color=PERF_COLORS[i%PERF_COLORS.length];
+          return `<tr>
+            <td><div style="display:flex;align-items:center;gap:8px"><div style="width:8px;height:8px;border-radius:50%;background:${color}"></div><span style="font-weight:600">${row.SalesPerson||'—'}</span></div></td>
+            <td class="num-cell">${dFmtCur(rev)}</td>
+            <td class="num-cell ${prof>=0?'positive':'negative'}">${dFmtCur(prof)}</td>
+            <td><div class="progress-cell"><div class="progress-bar-wrap"><div class="progress-bar-fill" style="width:${Math.min(100,Math.max(0,margin))}%;background:${color}"></div></div><span class="progress-val">${margin.toFixed(1)}%</span></div></td>
+            <td class="num-cell">${dFmtNum(parseFloat(row.JobCount||0),0)}</td>
+          </tr>`;
+        }).join('');
+      }
+    } catch(e) { showChartEmpty(ctx,'Error'); }
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   QUOTE BY STATUS TAB
+   ══════════════════════════════════════════════════════════════════ */
+
+let qsDonutChart=null, qsValueChart=null;
+const STATUS_LABELS = { PEND:'Pending', AWD:'Awarded', BUD:'Budget', DUP:'Duplicate', CHECK:'In Review', REJ:'Rejected', LOST:'Lost' };
+
+async function loadQuoteByStatus(dateFrom, dateTo, yard) {
+  const filters = buildQuoteFilters(dateFrom, dateTo, yard);
+  try {
+    const r = await fetch(`${BASE_URL}/bi/query`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({
+      datasetName:'Quotes_By_Status', groupBySegments:['QuoteStatus'],
+      metrics:[
+        {metricName:'TotalQuotes',aggregation:'COUNT',alias:'TotalQuotes'},
+        {metricName:'TotalQuoteMax',aggregation:'SUM',alias:'TotalQuoteMax'},
+      ],
+      filters, orderBy:[{field:'TotalQuotes',direction:'DESC'}], limit:15
+    })});
+    const j = await r.json();
+    const rows = j.data?.data||[];
+
+    const ctxD=document.getElementById('qs-donut-chart');
+    const ctxV=document.getElementById('qs-value-chart');
+    if (!rows.length) { if(ctxD)showChartEmpty(ctxD,'No data'); if(ctxV)showChartEmpty(ctxV,'No data'); return; }
+
+    const labels=rows.map(r=>STATUS_LABELS[r.QuoteStatus]||r.QuoteStatus||'Unknown');
+    const counts=rows.map(r=>parseFloat(r.TotalQuotes||0));
+    const values=rows.map(r=>parseFloat(r.TotalQuoteMax||0));
+    const colors=rows.map((_,i)=>PERF_COLORS[i%PERF_COLORS.length]);
+
+    if(ctxD){
+      if(qsDonutChart){qsDonutChart.destroy();qsDonutChart=null;}
+      ctxD.style.display='';
+      const ex=ctxD.parentElement.querySelector('.chart-empty'); if(ex)ex.remove();
+      qsDonutChart=new Chart(ctxD,{type:'doughnut',
+        data:{labels,datasets:[{data:counts,backgroundColor:colors,borderWidth:2,borderColor:'#fff',hoverOffset:6}]},
+        options:{responsive:true,maintainAspectRatio:false,cutout:'62%',
+          plugins:{legend:{position:'right',labels:{boxWidth:10,font:{size:11},padding:12}},
+            tooltip:{callbacks:{label:c=>` ${c.label}: ${dFmtNum(c.raw,0)} quotes`}}}}
+      });
+      const total=counts.reduce((a,b)=>a+b,0);
+      document.getElementById('qs-chips').innerHTML=rows.slice(0,5).map((row,i)=>`
+        <div class="status-chip">
+          <div style="width:8px;height:8px;border-radius:2px;background:${colors[i]};flex-shrink:0"></div>
+          <span>${STATUS_LABELS[row.QuoteStatus]||row.QuoteStatus}</span>
+          <strong>${dFmtNum(parseFloat(row.TotalQuotes||0),0)}</strong>
+          <span style="color:var(--text-muted);font-size:10px">${total>0?(parseFloat(row.TotalQuotes||0)/total*100).toFixed(0)+'%':''}</span>
+        </div>`).join('');
+    }
+
+    if(ctxV){
+      if(qsValueChart){qsValueChart.destroy();qsValueChart=null;}
+      ctxV.style.display='';
+      const ex=ctxV.parentElement.querySelector('.chart-empty'); if(ex)ex.remove();
+      qsValueChart=new Chart(ctxV,{type:'bar',
+        data:{labels,datasets:[{label:'Est. Value',data:values,backgroundColor:colors,borderWidth:1}]},
+        options:{responsive:true,maintainAspectRatio:false,
+          plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` ${c.label}: ${dFmtCur(c.raw)}`}}},
+          scales:{x:{grid:{display:false},ticks:{font:{size:10}}},y:{grid:{color:'#e2e8f0'},ticks:{callback:v=>dFmtCurShort(v),font:{size:10}},beginAtZero:true}}
+        }
+      });
+    }
+
+    // Table
+    const maxVal=Math.max(...values);
+    document.getElementById('qs-table-body').innerHTML=rows.map((row,i)=>{
+      const cnt=parseFloat(row.TotalQuotes||0), val=parseFloat(row.TotalQuoteMax||0);
+      const barW=maxVal>0?Math.min(100,val/maxVal*100):0;
+      const color=colors[i];
+      return `<tr>
+        <td><div style="display:flex;align-items:center;gap:8px"><div style="width:8px;height:8px;border-radius:50%;background:${color}"></div><span style="font-weight:600">${STATUS_LABELS[row.QuoteStatus]||row.QuoteStatus}</span></div></td>
+        <td class="num-cell">${dFmtNum(cnt,0)}</td>
+        <td class="num-cell positive">${dFmtCur(val)}</td>
+        <td><div class="progress-cell"><div class="progress-bar-wrap"><div class="progress-bar-fill" style="width:${barW}%;background:${color}"></div></div><span class="progress-val">${barW.toFixed(0)}%</span></div></td>
+      </tr>`;
+    }).join('');
+  } catch(e) {}
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   QUOTE BY SALESPERSON TAB
+   ══════════════════════════════════════════════════════════════════ */
+
+let qspBarChart=null;
+
+async function loadQuoteBySalesperson(dateFrom, dateTo, yard) {
+  const filters = buildQuoteFilters(dateFrom, dateTo, yard);
+  try {
+    const r = await fetch(`${BASE_URL}/bi/query`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({
+      datasetName:'Quotes_By_Status', groupBySegments:['SalesPerson'],
+      metrics:[
+        {metricName:'TotalQuotes',aggregation:'COUNT',alias:'TotalQuotes'},
+        {metricName:'TotalQuoteMax',aggregation:'SUM',alias:'TotalQuoteMax'},
+      ],
+      filters, orderBy:[{field:'TotalQuoteMax',direction:'DESC'}], limit:20
+    })});
+    const j = await r.json();
+    const rows = j.data?.data||[];
+    const ctx=document.getElementById('qsp-bar-chart');
+    if (!rows.length) { if(ctx)showChartEmpty(ctx,'No data'); return; }
+
+    if(ctx){
+      if(qspBarChart){qspBarChart.destroy();qspBarChart=null;}
+      ctx.style.display='';
+      const ex=ctx.parentElement.querySelector('.chart-empty'); if(ex)ex.remove();
+      qspBarChart=new Chart(ctx,{type:'bar',
+        data:{labels:rows.map(r=>r.SalesPerson||'—'),
+          datasets:[{label:'Est. Value',data:rows.map(r=>parseFloat(r.TotalQuoteMax||0)),backgroundColor:TEAL+'99',borderColor:TEAL,borderWidth:1}]},
+        options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
+          plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` Est. Value: ${dFmtCur(c.raw)}`}}},
+          scales:{x:{grid:{color:'#e2e8f0'},ticks:{callback:v=>dFmtCurShort(v),font:{size:10}},beginAtZero:true},y:{grid:{display:false},ticks:{font:{size:11}}}}
+        }
+      });
+    }
+
+    const maxVal=Math.max(...rows.map(r=>parseFloat(r.TotalQuoteMax||0)));
+    document.getElementById('qsp-table-body').innerHTML=rows.map((row,i)=>{
+      const cnt=parseFloat(row.TotalQuotes||0), val=parseFloat(row.TotalQuoteMax||0);
+      const barW=maxVal>0?Math.min(100,val/maxVal*100):0;
+      const color=PERF_COLORS[i%PERF_COLORS.length];
+      return `<tr>
+        <td><div style="display:flex;align-items:center;gap:8px"><div style="width:8px;height:8px;border-radius:50%;background:${color}"></div><span style="font-weight:600">${row.SalesPerson||'—'}</span></div></td>
+        <td class="num-cell">${dFmtNum(cnt,0)}</td>
+        <td class="num-cell positive">${dFmtCur(val)}</td>
+        <td><div class="progress-cell"><div class="progress-bar-wrap"><div class="progress-bar-fill" style="width:${barW}%;background:${color}"></div></div><span class="progress-val">${barW.toFixed(0)}%</span></div></td>
+      </tr>`;
+    }).join('');
+  } catch(e) {}
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   QUOTE REVENUE FORECAST TAB
+   ══════════════════════════════════════════════════════════════════ */
+
+let qfMonthChart=null, qfCountChart=null;
+
+async function loadQuoteForecast(dateFrom, dateTo, yard) {
+  const filters=[];
+  if(dateFrom&&dateTo) filters.push({segmentName:'QuoteDate',operator:'between',value:dateFrom,secondValue:dateTo});
+
+  try {
+    const r = await fetch(`${BASE_URL}/bi/query`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({
+      datasetName:'Quote_Revenue_Forecast', groupBySegments:['Year','Month'],
+      metrics:[
+        {metricName:'TotalQuoteAmount',aggregation:'SUM',alias:'TotalQuoteAmount'},
+        {metricName:'QuoteCount',aggregation:'COUNT',alias:'QuoteCount'},
+      ],
+      filters, orderBy:[{field:'Year',direction:'ASC'},{field:'Month',direction:'ASC'}], limit:60
+    })});
+    const j=await r.json();
+    const rows=(j.data?.data||[]).filter(r=>r.Year&&r.Year>=2019);
+    const MN=['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const labels=rows.map(r=>`${MN[+r.Month]||r.Month} ${r.Year}`);
+
+    const ctxM=document.getElementById('qf-month-chart');
+    if(ctxM){
+      if(qfMonthChart){qfMonthChart.destroy();qfMonthChart=null;}
+      if(!rows.length){showChartEmpty(ctxM,'No data');}
+      else{
+        ctxM.style.display='';
+        const ex=ctxM.parentElement.querySelector('.chart-empty');if(ex)ex.remove();
+        qfMonthChart=new Chart(ctxM,{type:'bar',
+          data:{labels,datasets:[{label:'Quote Value',data:rows.map(r=>parseFloat(r.TotalQuoteAmount||0)),backgroundColor:TEAL+'bb',borderColor:TEAL,borderWidth:1}]},
+          options:{responsive:true,maintainAspectRatio:false,
+            plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` Value: ${dFmtCur(c.raw)}`}}},
+            scales:{x:{grid:{display:false},ticks:{font:{size:10},maxRotation:45,maxTicksLimit:12}},y:{grid:{color:'#e2e8f0'},ticks:{callback:v=>dFmtCurShort(v),font:{size:10}},beginAtZero:true}}
+          }
+        });
+      }
+    }
+
+    const ctxC=document.getElementById('qf-count-chart');
+    if(ctxC){
+      if(qfCountChart){qfCountChart.destroy();qfCountChart=null;}
+      if(!rows.length){showChartEmpty(ctxC,'No data');}
+      else{
+        ctxC.style.display='';
+        const ex=ctxC.parentElement.querySelector('.chart-empty');if(ex)ex.remove();
+        qfCountChart=new Chart(ctxC,{type:'line',
+          data:{labels,datasets:[{label:'# Quotes',data:rows.map(r=>parseFloat(r.QuoteCount||0)),borderColor:NAVY,backgroundColor:NAVY+'22',borderWidth:2.5,pointRadius:3,pointBackgroundColor:NAVY,tension:.35,fill:true}]},
+          options:{responsive:true,maintainAspectRatio:false,
+            plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` Quotes: ${dFmtNum(c.raw,0)}`}}},
+            scales:{x:{grid:{display:false},ticks:{font:{size:10},maxRotation:45,maxTicksLimit:12}},y:{grid:{color:'#e2e8f0'},ticks:{font:{size:10}},beginAtZero:true}}
+          }
+        });
+      }
+    }
+  } catch(e) {}
+}
