@@ -908,11 +908,11 @@ async function loadFinishJobs(dateFrom, dateTo, yards) {
   }
 }
 
-/* ══════════════════════════════════════════════════════════════════
-   JOB PRO
   // Yard breakout
   loadYardBreakoutFinish(dateFrom, dateTo, yards);
-FIT/LOSS TAB
+
+/* ══════════════════════════════════════════════════════════════════
+   JOB PROFIT/LOSS TAB
    ══════════════════════════════════════════════════════════════════ */
 
 let jplChart = null;
@@ -1005,12 +1005,12 @@ async function loadJobProfitLoss(dateFrom, dateTo, yards) {
   }
 }
 
-/* ══════════════════════════════════════════════════════════════════
-   FORECAST TAB
-   ═════════════════════
   // Yard breakout
   loadYardBreakoutJPL(dateFrom, dateTo, yards);
-═════════════════════════════════════════════ */
+
+/* ══════════════════════════════════════════════════════════════════
+   FORECAST TAB
+   ══════════════════════════════════════════════════════════════════ */
 
 let forecastChart = null;
 let forecastPersonChart = null;
@@ -1127,11 +1127,11 @@ async function loadForecast(dateFrom, dateTo, yards) {
   }
 }
 
-/* ══════════════════════════════════════════════════════════════════
-   REVENUE REPO
   // Yard breakout
   loadYardBreakoutForecast(dateFrom, dateTo, yards);
-RT TAB
+
+/* ══════════════════════════════════════════════════════════════════
+   REVENUE REPORT TAB
    ══════════════════════════════════════════════════════════════════ */
 
 let revPersonChart = null;
@@ -1223,11 +1223,12 @@ async function loadRevenueReport(dateFrom, dateTo, yards) {
    QUOTE BY STATUS TAB
    ══════════════════════════════════════════════════════════════════ */
 
-let qsDonutChart=null, qsValueChart=null;
-const STATUS_LABELS = { PEND
   // Yard breakout
   loadYardBreakoutRevenue(dateFrom, dateTo, yards);
-:'Pending', AWD:'Awarded', BUD:'Budget', DUP:'Duplicate', CHECK:'In Review', REJ:'Rejected', LOST:'Lost' };
+
+let qsDonutChart=null, qsValueChart=null;
+
+const STATUS_LABELS = { PEND:'Pending', AWD:'Awarded', BUD:'Budget', DUP:'Duplicate', CHECK:'In Review', REJ:'Rejected', LOST:'Lost' };
 
 async function loadQuoteByStatus(dateFrom, dateTo, yards) {
   const filters = buildQuoteFilters(dateFrom, dateTo, yards);
@@ -1301,11 +1302,11 @@ async function loadQuoteByStatus(dateFrom, dateTo, yards) {
   } catch(e) {}
 }
 
-/* ══════════════════════════════════════════════════════════════════
-   QUOTE BY SALE
   // Yard breakout
   loadYardBreakoutQStatus(dateFrom, dateTo, yards);
-SPERSON TAB
+
+/* ══════════════════════════════════════════════════════════════════
+   QUOTE BY SALESPERSON TAB
    ══════════════════════════════════════════════════════════════════ */
 
 let qspBarChart=null;
@@ -1355,12 +1356,12 @@ async function loadQuoteBySalesperson(dateFrom, dateTo, yards) {
   } catch(e) {}
 }
 
-/* ══════════════════════════════════════════════════════════════════
-   QUOTE REVENUE FORECAST TAB
-   ═════
   // Yard breakout
   loadYardBreakoutQSP(dateFrom, dateTo, yards);
-═════════════════════════════════════════════════════════════ */
+
+/* ══════════════════════════════════════════════════════════════════
+   QUOTE REVENUE FORECAST TAB
+   ══════════════════════════════════════════════════════════════════ */
 
 let qfMonthChart=null, qfCountChart=null;
 
@@ -1416,11 +1417,11 @@ async function loadQuoteForecast(dateFrom, dateTo, yards) {
         });
       }
     }
+  // Yard breakout
+  loadYardBreakoutQForecast(dateFrom, dateTo, yards);
   } catch(e) {}
 }
 
-  // Yard breakout
-  loadYardBreakoutQForecast(dateFrom, dateTo, yards);
 
 /* ══════════════════════════════════════════════════════════════════
    YARD BREAKOUT CHARTS
