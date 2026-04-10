@@ -1,17 +1,23 @@
 /* ═══════════════════════════════════════════════════════════════════
-   FCC BI — Dashboard module
+   FCC BI — Dashboard module  (Jobs + Quotes, global filters)
    ═══════════════════════════════════════════════════════════════════ */
 
 const BASE_URL = 'https://saasanalytic.fleetcostcare.com/api';
 
-let monthChart  = null;
-let statusChart = null;
-let perfChart   = null;
+let monthChart    = null;
+let statusChart   = null;
+let perfChart     = null;
+let qMonthChart   = null;
+let qStatusChart  = null;
+let qPerfChart    = null;
+
+let activeDashTab = 'jobs'; // 'jobs' | 'quotes'
 
 const TEAL  = '#00BFA5';
 const NAVY  = '#003366';
 const AMBER = '#f59e0b';
 const RED   = '#ef4444';
+const GREEN = '#16a34a';
 
 const PERF_COLORS = [
   '#00BFA5','#003366','#f59e0b','#6366f1','#ec4899',
@@ -20,11 +26,12 @@ const PERF_COLORS = [
 
 /* ── Boot ─────────────────────────────────────────────────────────── */
 async function initDashboard() {
-  // Default to this year
-  const now = new Date();
+  // Default: last 90 days
+  const now  = new Date();
+  const ago  = new Date(now); ago.setDate(ago.getDate() - 90);
   const fromEl = document.getElementById('dash-date-from');
   const toEl   = document.getElementById('dash-date-to');
-  if (fromEl && !fromEl.value) fromEl.value = `${now.getFullYear()}-01-01`;
+  if (fromEl && !fromEl.value) fromEl.value = ago.toISOString().slice(0,10);
   if (toEl   && !toEl.value)   toEl.value   = now.toISOString().slice(0,10);
 
   await Promise.all([ loadYardFilter(), refreshDashboard() ]);
@@ -43,6 +50,15 @@ async function loadYardFilter() {
   } catch(e) {}
 }
 
+/* ── Tab switching ────────────────────────────────────────────────── */
+function switchDashTab(tab) {
+  activeDashTab = tab;
+  document.getElementById('dash-tab-jobs').classList.toggle('active', tab === 'jobs');
+  document.getElementById('dash-tab-quotes').classList.toggle('active', tab === 'quotes');
+  document.getElementById('dash-jobs-content').style.display   = tab === 'jobs'   ? '' : 'none';
+  document.getElementById('dash-quotes-content').style.display = tab === 'quotes' ? '' : 'none';
+}
+
 /* ── Master refresh ───────────────────────────────────────────────── */
 async function refreshDashboard() {
   const dateFrom = document.getElementById('dash-date-from')?.value || '';
@@ -51,16 +67,21 @@ async function refreshDashboard() {
   setDashLoading(true);
   try {
     await Promise.all([
-      loadKpis(dateFrom, dateTo, yard),
+      loadJobKpis(dateFrom, dateTo, yard),
       loadMonthChart(dateFrom, dateTo, yard),
       loadSalespersonPerf(dateFrom, dateTo, yard),
       loadStatusBreakdown(dateFrom, dateTo, yard),
+      loadQuoteKpis(dateFrom, dateTo, yard),
+      loadQuoteMonthChart(dateFrom, dateTo, yard),
+      loadQuoteStatusChart(dateFrom, dateTo, yard),
+      loadQuoteSalespersonTable(dateFrom, dateTo, yard),
     ]);
   } catch(e) { console.error('Dashboard refresh error:', e); }
   setDashLoading(false);
 }
 
-function buildFilters(dateFrom, dateTo, yard) {
+/* ── Filter builders ──────────────────────────────────────────────── */
+function buildJobFilters(dateFrom, dateTo, yard) {
   const f = [];
   if (dateFrom && dateTo) f.push({ segmentName:'JobStartDate', operator:'between', value: dateFrom, secondValue: dateTo });
   else if (dateFrom)      f.push({ segmentName:'JobStartDate', operator:'gte', value: dateFrom });
@@ -69,8 +90,21 @@ function buildFilters(dateFrom, dateTo, yard) {
   return f;
 }
 
-/* ── KPI Tiles ────────────────────────────────────────────────────── */
-async function loadKpis(dateFrom, dateTo, yard) {
+function buildQuoteFilters(dateFrom, dateTo, yard) {
+  const f = [];
+  if (dateFrom && dateTo) f.push({ segmentName:'QuoteDate', operator:'between', value: dateFrom, secondValue: dateTo });
+  else if (dateFrom)      f.push({ segmentName:'QuoteDate', operator:'gte', value: dateFrom });
+  else if (dateTo)        f.push({ segmentName:'QuoteDate', operator:'lte', value: dateTo });
+  if (yard)               f.push({ segmentName:'Yard', operator:'eq', value: yard });
+  return f;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   JOBS DASHBOARD
+   ══════════════════════════════════════════════════════════════════ */
+
+/* ── Job KPI Tiles ────────────────────────────────────────────────── */
+async function loadJobKpis(dateFrom, dateTo, yard) {
   const body = {
     datasetName: 'jobs_profit_loss',
     metrics: [
@@ -80,12 +114,11 @@ async function loadKpis(dateFrom, dateTo, yard) {
       { metricName:'LaborHours',    aggregation:'SUM',   alias:'LaborHours'    },
       { metricName:'JobCount',      aggregation:'COUNT', alias:'JobCount'      },
     ],
-    filters: buildFilters(dateFrom, dateTo, yard)
+    filters: buildJobFilters(dateFrom, dateTo, yard)
   };
   try {
     const r = await fetch(`${BASE_URL}/bi/kpis`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
     const j = await r.json();
-    // Response: { data: { kpis: [{name, value, formatted}, ...] } }
     const kpis = j.data?.kpis || [];
     const kv = {};
     kpis.forEach(k => { kv[k.name] = k.value; });
@@ -96,12 +129,12 @@ async function loadKpis(dateFrom, dateTo, yard) {
     const jobs = parseFloat(kv.JobCount      || 0);
     const pct  = rev > 0 ? (prof / rev * 100) : 0;
     const tiles = [
-      { label:'Job Revenue',    value: dFmtCur(rev),          color: NAVY,                      icon:'dollar-sign'   },
-      { label:'Total Expenses', value: dFmtCur(exp),          color: '#dc2626',                 icon:'trending-down' },
-      { label:'Profit',         value: dFmtCur(prof),         color: prof>=0?'#16a34a':RED,     icon:'trending-up'   },
-      { label:'Labor Hours',    value: dFmtNum(hrs,0)+' hrs', color: '#7c3aed',                 icon:'clock'         },
-      { label:'Job Count',      value: dFmtNum(jobs,0),       color: '#0369a1',                 icon:'briefcase'     },
-      { label:'Profit %',       value: pct.toFixed(1)+'%',    color: pct>=50?'#16a34a':AMBER,   icon:'percent'       },
+      { label:'Job Revenue',    value: dFmtCur(rev),          color: NAVY,                    icon:'dollar-sign'   },
+      { label:'Total Expenses', value: dFmtCur(exp),          color: '#dc2626',               icon:'trending-down' },
+      { label:'Profit',         value: dFmtCur(prof),         color: prof>=0?GREEN:RED,       icon:'trending-up'   },
+      { label:'Labor Hours',    value: dFmtNum(hrs,0)+' hrs', color: '#7c3aed',               icon:'clock'         },
+      { label:'Job Count',      value: dFmtNum(jobs,0),       color: '#0369a1',               icon:'briefcase'     },
+      { label:'Profit %',       value: pct.toFixed(1)+'%',    color: pct>=50?GREEN:AMBER,     icon:'percent'       },
     ];
     document.getElementById('dash-kpi-row').innerHTML = tiles.map(t => `
       <div class="dash-kpi-tile">
@@ -127,7 +160,7 @@ async function loadMonthChart(dateFrom, dateTo, yard) {
       { metricName:'TotalExpenses', aggregation:'SUM', alias:'TotalExpenses' },
       { metricName:'Profit',        aggregation:'SUM', alias:'Profit'        },
     ],
-    filters: buildFilters(dateFrom, dateTo, yard),
+    filters: buildJobFilters(dateFrom, dateTo, yard),
     orderBy: [{ field:'JobYear', direction:'ASC' },{ field:'JobMonth', direction:'ASC' }],
     limit: 60
   };
@@ -138,9 +171,13 @@ async function loadMonthChart(dateFrom, dateTo, yard) {
   try {
     const r = await fetch(`${BASE_URL}/bi/query`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
     const j = await r.json();
-    const rows = j.data?.data || [];
+    // Filter out null/bogus years (before 2010)
+    const rows = (j.data?.data || []).filter(r => r.JobYear && r.JobYear >= 2010);
 
     if (!rows.length) { showChartEmpty(ctx, 'No job data for this period'); return; }
+    ctx.style.display = '';
+    const existing = ctx.parentElement.querySelector('.chart-empty');
+    if (existing) existing.remove();
 
     const MN = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     const labels   = rows.map(r => `${MN[+r.JobMonth]||r.JobMonth} ${r.JobYear}`);
@@ -185,7 +222,7 @@ async function loadSalespersonPerf(dateFrom, dateTo, yard) {
       { metricName:'Profit',        aggregation:'SUM',   alias:'Profit'        },
       { metricName:'JobCount',      aggregation:'COUNT', alias:'JobCount'      },
     ],
-    filters: buildFilters(dateFrom, dateTo, yard),
+    filters: buildJobFilters(dateFrom, dateTo, yard),
     orderBy: [{ field:'Profit', direction:'DESC' }],
     limit: 20
   };
@@ -230,9 +267,11 @@ async function loadSalespersonPerf(dateFrom, dateTo, yard) {
         </tr>`;
     }).join('');
 
-    // Horizontal bar chart
     if (ctx) {
       if (perfChart) { perfChart.destroy(); perfChart = null; }
+      ctx.style.display = '';
+      const existing = ctx.parentElement.querySelector('.chart-empty');
+      if (existing) existing.remove();
       const labels  = rows.map(r => r.SalesPerson||'—');
       const profits = rows.map(r => parseFloat(r.Profit||0));
       const revs    = rows.map(r => parseFloat(r.JobRevenue||0));
@@ -265,7 +304,7 @@ async function loadSalespersonPerf(dateFrom, dateTo, yard) {
   }
 }
 
-/* ── Status Breakdown ─────────────────────────────────────────────── */
+/* ── Jobs Status Breakdown ────────────────────────────────────────── */
 async function loadStatusBreakdown(dateFrom, dateTo, yard) {
   const body = {
     datasetName: 'jobs_profit_loss',
@@ -274,7 +313,7 @@ async function loadStatusBreakdown(dateFrom, dateTo, yard) {
       { metricName:'JobCount',   aggregation:'COUNT', alias:'JobCount'   },
       { metricName:'JobRevenue', aggregation:'SUM',   alias:'JobRevenue' },
     ],
-    filters: buildFilters(dateFrom, dateTo, yard),
+    filters: buildJobFilters(dateFrom, dateTo, yard),
     orderBy: [{ field:'JobCount', direction:'DESC' }],
     limit: 20
   };
@@ -289,6 +328,9 @@ async function loadStatusBreakdown(dateFrom, dateTo, yard) {
     const rows = j.data?.data || [];
 
     if (!rows.length) { showChartEmpty(ctx, 'No status data'); document.getElementById('status-chips').innerHTML=''; return; }
+    ctx.style.display = '';
+    const existing = ctx.parentElement.querySelector('.chart-empty');
+    if (existing) existing.remove();
 
     const labels = rows.map(r => r.JobStatus||'Unknown');
     const counts  = rows.map(r => parseFloat(r.JobCount||0));
@@ -318,6 +360,223 @@ async function loadStatusBreakdown(dateFrom, dateTo, yard) {
         <span style="color:var(--text-muted);font-size:10px">${total>0?(parseFloat(row.JobCount||0)/total*100).toFixed(0)+'%':''}</span>
       </div>`).join('');
   } catch(e) { showChartEmpty(ctx, 'Error loading chart'); }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   QUOTES DASHBOARD
+   ══════════════════════════════════════════════════════════════════ */
+
+/* ── Quote KPI Tiles ──────────────────────────────────────────────── */
+async function loadQuoteKpis(dateFrom, dateTo, yard) {
+  const body = {
+    datasetName: 'Quotes_By_Status',
+    metrics: [
+      { metricName:'TotalQuotes',   aggregation:'COUNT', alias:'TotalQuotes'   },
+      { metricName:'TotalQuoteMax', aggregation:'SUM',   alias:'TotalQuoteMax' },
+      { metricName:'TotalQuoteMin', aggregation:'SUM',   alias:'TotalQuoteMin' },
+    ],
+    filters: buildQuoteFilters(dateFrom, dateTo, yard)
+  };
+  try {
+    const r = await fetch(`${BASE_URL}/bi/kpis`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    const j = await r.json();
+    const kpis = j.data?.kpis || [];
+    const kv = {};
+    kpis.forEach(k => { kv[k.name] = k.value; });
+    const total  = parseFloat(kv.TotalQuotes   || 0);
+    const maxAmt = parseFloat(kv.TotalQuoteMax || 0);
+    const minAmt = parseFloat(kv.TotalQuoteMin || 0);
+    const tiles = [
+      { label:'Total Quotes',    value: dFmtNum(total,0),   color: NAVY,    icon:'file-text'   },
+      { label:'Quote Value (Max)', value: dFmtCur(maxAmt), color: GREEN,   icon:'trending-up' },
+      { label:'Quote Value (Min)', value: dFmtCur(minAmt), color: '#0369a1', icon:'dollar-sign' },
+    ];
+    document.getElementById('quote-kpi-row').innerHTML = tiles.map(t => `
+      <div class="dash-kpi-tile">
+        <div class="dkt-icon" style="background:${t.color}20;color:${t.color}"><i data-lucide="${t.icon}" style="width:18px;height:18px;stroke-width:2"></i></div>
+        <div class="dkt-body">
+          <div class="dkt-label">${t.label}</div>
+          <div class="dkt-value" style="color:${t.color}">${t.value}</div>
+        </div>
+      </div>`).join('');
+    lucide.createIcons();
+  } catch(e) {
+    document.getElementById('quote-kpi-row').innerHTML = `<div style="color:var(--text-muted);font-size:13px;grid-column:1/-1;padding:8px">Could not load KPIs</div>`;
+  }
+}
+
+/* ── Quote Amount by Month ────────────────────────────────────────── */
+async function loadQuoteMonthChart(dateFrom, dateTo, yard) {
+  const body = {
+    datasetName: 'Quote_Revenue_Forecast',
+    groupBySegments: ['Year','Month'],
+    metrics: [
+      { metricName:'TotalQuoteAmount', aggregation:'SUM',   alias:'TotalQuoteAmount' },
+      { metricName:'QuoteCount',       aggregation:'COUNT', alias:'QuoteCount'       },
+    ],
+    filters: (() => {
+      // Quote_Revenue_Forecast uses QuoteDate for filtering
+      const f = [];
+      if (dateFrom && dateTo) f.push({ segmentName:'QuoteDate', operator:'between', value: dateFrom, secondValue: dateTo });
+      return f;
+    })(),
+    orderBy: [{ field:'Year', direction:'ASC' },{ field:'Month', direction:'ASC' }],
+    limit: 60
+  };
+  const ctx = document.getElementById('q-month-chart');
+  if (!ctx) return;
+  if (qMonthChart) { qMonthChart.destroy(); qMonthChart = null; }
+
+  try {
+    const r = await fetch(`${BASE_URL}/bi/query`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    const j = await r.json();
+    const rows = (j.data?.data || []).filter(r => r.Year && r.Year >= 2019);
+
+    if (!rows.length) { showChartEmpty(ctx, 'No quote data for this period'); return; }
+    ctx.style.display = '';
+    const existing = ctx.parentElement.querySelector('.chart-empty');
+    if (existing) existing.remove();
+
+    const MN = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const labels  = rows.map(r => `${MN[+r.Month]||r.Month} ${r.Year}`);
+    const amounts = rows.map(r => parseFloat(r.TotalQuoteAmount || 0));
+    const counts  = rows.map(r => parseFloat(r.QuoteCount || 0));
+
+    qMonthChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [
+          { label:'Quote Value', data: amounts, backgroundColor: TEAL+'bb', borderColor: TEAL, borderWidth:1, order:2, yAxisID:'y' },
+          { label:'# Quotes',   data: counts,  type:'line', borderColor: AMBER, backgroundColor: AMBER+'22', borderWidth:2.5, pointRadius:3, pointBackgroundColor: AMBER, tension:.35, fill:false, order:1, yAxisID:'y2' },
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        interaction: { mode:'index', intersect:false },
+        plugins: {
+          legend: { position:'bottom', labels:{ boxWidth:12, font:{size:11} } },
+          tooltip: { callbacks:{ label: c => c.dataset.yAxisID==='y2' ? ` ${c.dataset.label}: ${dFmtNum(c.raw,0)}` : ` ${c.dataset.label}: ${dFmtCur(c.raw)}` } }
+        },
+        scales: {
+          x:  { grid:{ display:false }, ticks:{ font:{size:10}, maxRotation:45, maxTicksLimit:12 } },
+          y:  { grid:{ color:'#e2e8f0' }, ticks:{ callback: v => dFmtCurShort(v), font:{size:10} }, beginAtZero:true, position:'left' },
+          y2: { grid:{ display:false }, ticks:{ font:{size:10} }, beginAtZero:true, position:'right' }
+        }
+      }
+    });
+  } catch(e) { showChartEmpty(ctx, 'Error loading chart'); }
+}
+
+/* ── Quotes by Status ─────────────────────────────────────────────── */
+async function loadQuoteStatusChart(dateFrom, dateTo, yard) {
+  const body = {
+    datasetName: 'Quotes_By_Status',
+    groupBySegments: ['QuoteStatus'],
+    metrics: [
+      { metricName:'TotalQuotes',   aggregation:'COUNT', alias:'TotalQuotes'   },
+      { metricName:'TotalQuoteMax', aggregation:'SUM',   alias:'TotalQuoteMax' },
+    ],
+    filters: buildQuoteFilters(dateFrom, dateTo, yard),
+    orderBy: [{ field:'TotalQuotes', direction:'DESC' }],
+    limit: 15
+  };
+
+  const ctx = document.getElementById('q-status-chart');
+  if (!ctx) return;
+  if (qStatusChart) { qStatusChart.destroy(); qStatusChart = null; }
+
+  try {
+    const r = await fetch(`${BASE_URL}/bi/query`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    const j = await r.json();
+    const rows = j.data?.data || [];
+
+    if (!rows.length) { showChartEmpty(ctx, 'No quote status data'); document.getElementById('q-status-chips').innerHTML=''; return; }
+    ctx.style.display = '';
+    const existing = ctx.parentElement.querySelector('.chart-empty');
+    if (existing) existing.remove();
+
+    const STATUS_LABELS = { PEND:'Pending', AWD:'Awarded', BUD:'Budget', DUP:'Duplicate', CHECK:'In Review', REJ:'Rejected', LOST:'Lost' };
+    const labels = rows.map(r => STATUS_LABELS[r.QuoteStatus] || r.QuoteStatus || 'Unknown');
+    const counts = rows.map(r => parseFloat(r.TotalQuotes||0));
+    const colors = rows.map((_,i) => PERF_COLORS[i % PERF_COLORS.length]);
+
+    qStatusChart = new Chart(ctx, {
+      type: 'doughnut',
+      data: { labels, datasets:[{ data: counts, backgroundColor: colors, borderWidth:2, borderColor:'#fff', hoverOffset:6 }] },
+      options: {
+        responsive: true, maintainAspectRatio: false, cutout:'62%',
+        plugins: {
+          legend: { position:'right', labels:{ boxWidth:10, font:{size:11}, padding:12 } },
+          tooltip: { callbacks:{ label: c => {
+            const row = rows[c.dataIndex];
+            return ` ${c.label}: ${dFmtNum(c.raw,0)} quotes · ${dFmtCur(parseFloat(row?.TotalQuoteMax||0))}`;
+          }}}
+        }
+      }
+    });
+
+    const total = counts.reduce((a,b)=>a+b,0);
+    document.getElementById('q-status-chips').innerHTML = rows.slice(0,6).map((row,i)=>`
+      <div class="status-chip">
+        <div style="width:8px;height:8px;border-radius:2px;background:${colors[i]};flex-shrink:0"></div>
+        <span>${STATUS_LABELS[row.QuoteStatus]||row.QuoteStatus||'Unknown'}</span>
+        <strong>${dFmtNum(parseFloat(row.TotalQuotes||0),0)}</strong>
+        <span style="color:var(--text-muted);font-size:10px">${total>0?(parseFloat(row.TotalQuotes||0)/total*100).toFixed(0)+'%':''}</span>
+      </div>`).join('');
+  } catch(e) { showChartEmpty(ctx, 'Error loading chart'); }
+}
+
+/* ── Quote Salesperson Table ──────────────────────────────────────── */
+async function loadQuoteSalespersonTable(dateFrom, dateTo, yard) {
+  const body = {
+    datasetName: 'Quotes_By_Status',
+    groupBySegments: ['SalesPerson'],
+    metrics: [
+      { metricName:'TotalQuotes',   aggregation:'COUNT', alias:'TotalQuotes'   },
+      { metricName:'TotalQuoteMax', aggregation:'SUM',   alias:'TotalQuoteMax' },
+      { metricName:'TotalQuoteMin', aggregation:'SUM',   alias:'TotalQuoteMin' },
+    ],
+    filters: buildQuoteFilters(dateFrom, dateTo, yard),
+    orderBy: [{ field:'TotalQuoteMax', direction:'DESC' }],
+    limit: 20
+  };
+
+  const tbody = document.getElementById('q-perf-table-body');
+  try {
+    const r = await fetch(`${BASE_URL}/bi/query`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    const j = await r.json();
+    const rows = j.data?.data || [];
+
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:20px">No data for this period</td></tr>';
+      return;
+    }
+
+    const maxAmt = Math.max(...rows.map(r => parseFloat(r.TotalQuoteMax||0)));
+
+    tbody.innerHTML = rows.map((row, i) => {
+      const total  = parseFloat(row.TotalQuotes   || 0);
+      const maxAmt_row = parseFloat(row.TotalQuoteMax || 0);
+      const barW   = maxAmt > 0 ? Math.max(0, Math.min(100, maxAmt_row / maxAmt * 100)) : 0;
+      const color  = PERF_COLORS[i % PERF_COLORS.length];
+      return `
+        <tr>
+          <td><div style="display:flex;align-items:center;gap:8px">
+            <div style="width:8px;height:8px;border-radius:50%;background:${color};flex-shrink:0"></div>
+            <span style="font-weight:600">${row.SalesPerson||'—'}</span>
+          </div></td>
+          <td class="num-cell">${dFmtNum(total,0)}</td>
+          <td class="num-cell positive">${dFmtCur(maxAmt_row)}</td>
+          <td><div class="progress-cell">
+            <div class="progress-bar-wrap"><div class="progress-bar-fill" style="width:${barW}%;background:${color}"></div></div>
+            <span class="progress-val">${barW.toFixed(0)}%</span>
+          </div></td>
+        </tr>`;
+    }).join('');
+  } catch(e) {
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--red);padding:20px">Error loading data</td></tr>';
+  }
 }
 
 /* ── Chart empty state ────────────────────────────────────────────── */
@@ -371,4 +630,14 @@ function dFmtNum(n, dec=2) {
 function setDashLoading(on) {
   const el = document.getElementById('dash-loading');
   if (el) el.style.display = on ? 'flex' : 'none';
+}
+
+/* ── Reset ────────────────────────────────────────────────────────── */
+function resetDashFilters() {
+  const now = new Date();
+  const ago = new Date(now); ago.setDate(ago.getDate() - 90);
+  document.getElementById('dash-date-from').value = ago.toISOString().slice(0,10);
+  document.getElementById('dash-date-to').value   = now.toISOString().slice(0,10);
+  document.getElementById('dash-yard').value = '';
+  refreshDashboard();
 }

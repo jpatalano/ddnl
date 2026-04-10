@@ -151,8 +151,24 @@
       border-radius: 8px; padding: 7px 14px; font-size: 13px; cursor: pointer;
     }
 
+    /* Dashboard type tabs (Jobs / Quotes) */
+    .dash-type-tabs {
+      display: flex; gap: 4px;
+      border-bottom: 2px solid var(--border);
+      padding-bottom: 0;
+    }
+    .dash-type-tab {
+      background: none; border: none; border-bottom: 2px solid transparent;
+      margin-bottom: -2px; padding: 8px 20px; font-size: 13.5px; font-weight: 600;
+      color: var(--text-muted); cursor: pointer; transition: color .15s, border-color .15s;
+      border-radius: 6px 6px 0 0;
+    }
+    .dash-type-tab:hover { color: var(--navy); }
+    .dash-type-tab.active { color: var(--navy); border-bottom-color: var(--teal); }
+
     /* KPI row */
-    #dash-kpi-row { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; }
+    #dash-kpi-row, #quote-kpi-row { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; }
+    #quote-kpi-row { grid-template-columns: repeat(3, 1fr); }
     .dash-kpi-tile {
       background: var(--surface); border-radius: var(--radius); border: 1px solid var(--border);
       padding: 14px 16px; display: flex; align-items: center; gap: 12px; box-shadow: var(--shadow);
@@ -414,7 +430,8 @@
 
     <!-- ═══ DASHBOARD ═══ -->
     <div id="dashboard-screen">
-      <!-- Filter Bar -->
+
+      <!-- Global Filter Bar -->
       <div class="dash-filter-bar">
         <div class="dash-filter-group">
           <label>Date Range</label>
@@ -432,72 +449,139 @@
         <button class="dash-reset-btn" onclick="resetDashFilters()">Reset</button>
       </div>
 
-      <!-- KPI Tiles -->
-      <div id="dash-kpi-row">
-        <!-- populated by JS -->
-        <div class="dash-kpi-tile" style="grid-column:1/-1;justify-content:center"><div class="spinner"></div></div>
+      <!-- Jobs / Quotes Tab Switcher -->
+      <div class="dash-type-tabs">
+        <button id="dash-tab-jobs"   class="dash-type-tab active" onclick="switchDashTab('jobs')">Jobs</button>
+        <button id="dash-tab-quotes" class="dash-type-tab"        onclick="switchDashTab('quotes')">Quotes</button>
       </div>
 
-      <!-- Row 1: Month chart + Status donut -->
-      <div class="dash-chart-row three-col">
-        <div class="chart-card">
-          <div class="chart-card-header">
-            <div>
-              <div class="chart-card-title">Revenue, Expenses &amp; Profit by Month</div>
-              <div class="chart-card-sub">Jobs P&amp;L dataset</div>
-            </div>
-          </div>
-          <div class="chart-canvas-wrap tall"><canvas id="month-chart"></canvas></div>
+      <!-- ── JOBS CONTENT ── -->
+      <div id="dash-jobs-content">
+        <!-- KPI Tiles -->
+        <div id="dash-kpi-row">
+          <div class="dash-kpi-tile" style="grid-column:1/-1;justify-content:center"><div class="spinner"></div></div>
         </div>
-        <div class="chart-card">
-          <div class="chart-card-header">
-            <div>
-              <div class="chart-card-title">Jobs by Status</div>
-              <div class="chart-card-sub">Count breakdown</div>
-            </div>
-          </div>
-          <div class="chart-canvas-wrap medium"><canvas id="status-chart"></canvas></div>
-          <div id="status-chips"></div>
-        </div>
-      </div>
 
-      <!-- Row 2: Salesperson perf chart + table -->
-      <div class="dash-chart-row two-col">
-        <div class="chart-card">
-          <div class="chart-card-header">
-            <div>
-              <div class="chart-card-title">Revenue &amp; Profit by Salesperson</div>
-              <div class="chart-card-sub">Horizontal bar</div>
+        <!-- Row 1: Month chart + Status donut -->
+        <div class="dash-chart-row three-col">
+          <div class="chart-card">
+            <div class="chart-card-header">
+              <div>
+                <div class="chart-card-title">Revenue, Expenses &amp; Profit by Month</div>
+                <div class="chart-card-sub">Jobs P&amp;L dataset</div>
+              </div>
             </div>
+            <div class="chart-canvas-wrap tall"><canvas id="month-chart"></canvas></div>
           </div>
-          <div class="chart-canvas-wrap tall"><canvas id="perf-chart"></canvas></div>
-        </div>
-        <div class="chart-card" style="overflow:auto">
-          <div class="chart-card-header">
-            <div>
-              <div class="chart-card-title">Salesperson Performance</div>
-              <div class="chart-card-sub">Revenue · Expenses · Profit · Profit %</div>
+          <div class="chart-card">
+            <div class="chart-card-header">
+              <div>
+                <div class="chart-card-title">Jobs by Status</div>
+                <div class="chart-card-sub">Count breakdown</div>
+              </div>
             </div>
-          </div>
-          <div style="overflow-x:auto">
-            <table class="perf-table">
-              <thead>
-                <tr>
-                  <th>Salesperson</th>
-                  <th class="num">Revenue</th>
-                  <th class="num">Expenses</th>
-                  <th class="num">Profit</th>
-                  <th>Profit %</th>
-                  <th class="num">Jobs</th>
-                </tr>
-              </thead>
-              <tbody id="perf-table-body">
-                <tr><td colspan="6" style="text-align:center;padding:20px"><div class="spinner" style="margin:auto"></div></td></tr>
-              </tbody>
-            </table>
+            <div class="chart-canvas-wrap medium"><canvas id="status-chart"></canvas></div>
+            <div id="status-chips"></div>
           </div>
         </div>
-      </div>
+
+        <!-- Row 2: Salesperson perf chart + table -->
+        <div class="dash-chart-row two-col">
+          <div class="chart-card">
+            <div class="chart-card-header">
+              <div>
+                <div class="chart-card-title">Revenue &amp; Profit by Salesperson</div>
+                <div class="chart-card-sub">Horizontal bar</div>
+              </div>
+            </div>
+            <div class="chart-canvas-wrap tall"><canvas id="perf-chart"></canvas></div>
+          </div>
+          <div class="chart-card" style="overflow:auto">
+            <div class="chart-card-header">
+              <div>
+                <div class="chart-card-title">Salesperson Performance</div>
+                <div class="chart-card-sub">Revenue · Expenses · Profit · Profit %</div>
+              </div>
+            </div>
+            <div style="overflow-x:auto">
+              <table class="perf-table">
+                <thead>
+                  <tr>
+                    <th>Salesperson</th>
+                    <th class="num">Revenue</th>
+                    <th class="num">Expenses</th>
+                    <th class="num">Profit</th>
+                    <th>Profit %</th>
+                    <th class="num">Jobs</th>
+                  </tr>
+                </thead>
+                <tbody id="perf-table-body">
+                  <tr><td colspan="6" style="text-align:center;padding:20px"><div class="spinner" style="margin:auto"></div></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div><!-- /dash-jobs-content -->
+
+      <!-- ── QUOTES CONTENT ── -->
+      <div id="dash-quotes-content" style="display:none">
+        <!-- Quote KPI Tiles -->
+        <div id="quote-kpi-row">
+          <div class="dash-kpi-tile" style="grid-column:1/-1;justify-content:center"><div class="spinner"></div></div>
+        </div>
+
+        <!-- Row 1: Quote Amount by Month + Quotes by Status -->
+        <div class="dash-chart-row three-col">
+          <div class="chart-card">
+            <div class="chart-card-header">
+              <div>
+                <div class="chart-card-title">Quote Value by Month</div>
+                <div class="chart-card-sub">Total value &amp; count</div>
+              </div>
+            </div>
+            <div class="chart-canvas-wrap tall"><canvas id="q-month-chart"></canvas></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-card-header">
+              <div>
+                <div class="chart-card-title">Quotes by Status</div>
+                <div class="chart-card-sub">Count breakdown</div>
+              </div>
+            </div>
+            <div class="chart-canvas-wrap medium"><canvas id="q-status-chart"></canvas></div>
+            <div id="q-status-chips"></div>
+          </div>
+        </div>
+
+        <!-- Row 2: Salesperson quote table -->
+        <div class="dash-chart-row">
+          <div class="chart-card" style="overflow:auto;width:100%">
+            <div class="chart-card-header">
+              <div>
+                <div class="chart-card-title">Salesperson Quote Performance</div>
+                <div class="chart-card-sub">Quotes · Value · Share</div>
+              </div>
+            </div>
+            <div style="overflow-x:auto">
+              <table class="perf-table">
+                <thead>
+                  <tr>
+                    <th>Salesperson</th>
+                    <th class="num">Quotes</th>
+                    <th class="num">Total Value</th>
+                    <th>Share</th>
+                  </tr>
+                </thead>
+                <tbody id="q-perf-table-body">
+                  <tr><td colspan="4" style="text-align:center;padding:20px"><div class="spinner" style="margin:auto"></div></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div><!-- /dash-quotes-content -->
+
     </div><!-- /dashboard-screen -->
 
     <!-- ═══ HOME ═══ -->
@@ -905,14 +989,6 @@ async function loadReport(id) {
 function deleteReport(id) {
   if(!confirm('Delete this saved report?')) return;
   savedReports=savedReports.filter(x=>x.id!==id); renderSavedList();
-}
-
-/* ── Dashboard filter helpers ── */
-function resetDashFilters() {
-  document.getElementById('dash-date-from').value='';
-  document.getElementById('dash-date-to').value='';
-  document.getElementById('dash-yard').value='';
-  refreshDashboard();
 }
 
 /* ── View management ── */
