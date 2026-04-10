@@ -64,8 +64,14 @@ async function refreshDashboard() {
   const dateFrom = document.getElementById('dash-date-from')?.value || '';
   const dateTo   = document.getElementById('dash-date-to')?.value   || '';
   const yard     = document.getElementById('dash-yard')?.value       || '';
+
+  // Reset lazy-load flags so sub-tabs re-fetch with new filters
+  JOB_TABS.forEach(t   => { jobLoaded[t]   = false; });
+  QUOTE_TABS.forEach(t => { quoteLoaded[t] = false; });
+
   setDashLoading(true);
   try {
+    // Always reload the P/L Dashboard (Jobs) and Quotes Summary panels
     await Promise.all([
       loadJobKpis(dateFrom, dateTo, yard),
       loadMonthChart(dateFrom, dateTo, yard),
@@ -78,6 +84,20 @@ async function refreshDashboard() {
     ]);
   } catch(e) { console.error('Dashboard refresh error:', e); }
   setDashLoading(false);
+
+  // Mark the always-loaded tabs so they don't re-fire on tab switch
+  jobLoaded['pl']       = true;
+  quoteLoaded['summary'] = true;
+
+  // Re-load whichever sub-tab is currently visible (if not the defaults)
+  if (activeJobTab !== 'pl') {
+    jobLoaded[activeJobTab] = true;
+    loadJobSubTab(activeJobTab, dateFrom, dateTo, yard);
+  }
+  if (activeQuoteTab !== 'summary') {
+    quoteLoaded[activeQuoteTab] = true;
+    loadQuoteSubTab(activeQuoteTab, dateFrom, dateTo, yard);
+  }
 }
 
 /* ── Filter builders ──────────────────────────────────────────────── */
@@ -705,29 +725,7 @@ function loadQuoteSubTab(tab, dateFrom, dateTo, yard) {
   if (tab === 'forecast')   { loadQuoteForecast(dateFrom, dateTo, yard); }
 }
 
-// On global refresh, reload current sub-tabs too
-const _origRefresh = refreshDashboard;
-async function refreshDashboard() {
-  // Reset lazy-load state so filters re-trigger data fetches
-  JOB_TABS.forEach(t => { jobLoaded[t] = false; });
-  QUOTE_TABS.forEach(t => { quoteLoaded[t] = false; });
-  // Mark current active tabs as loaded (they'll load via the main refresh)
-  jobLoaded['pl'] = true;
-  quoteLoaded['summary'] = true;
-  await _origRefresh();
-  // Also reload whichever sub-tab is active
-  const dateFrom = document.getElementById('dash-date-from')?.value || '';
-  const dateTo   = document.getElementById('dash-date-to')?.value   || '';
-  const yard     = document.getElementById('dash-yard')?.value       || '';
-  if (activeJobTab !== 'pl') {
-    jobLoaded[activeJobTab] = true;
-    loadJobSubTab(activeJobTab, dateFrom, dateTo, yard);
-  }
-  if (activeQuoteTab !== 'summary') {
-    quoteLoaded[activeQuoteTab] = true;
-    loadQuoteSubTab(activeQuoteTab, dateFrom, dateTo, yard);
-  }
-}
+// (refreshDashboard consolidation — see master refresh above)
 
 /* ══════════════════════════════════════════════════════════════════
    FINISH JOBS TAB
