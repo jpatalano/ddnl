@@ -73,7 +73,6 @@ function buildFilters(dateFrom, dateTo, yard) {
 async function loadKpis(dateFrom, dateTo, yard) {
   const body = {
     datasetName: 'jobs_profit_loss',
-    groupBySegments: [],
     metrics: [
       { metricName:'JobRevenue',    aggregation:'SUM',   alias:'JobRevenue'    },
       { metricName:'TotalExpenses', aggregation:'SUM',   alias:'TotalExpenses' },
@@ -81,17 +80,20 @@ async function loadKpis(dateFrom, dateTo, yard) {
       { metricName:'LaborHours',    aggregation:'SUM',   alias:'LaborHours'    },
       { metricName:'JobCount',      aggregation:'COUNT', alias:'JobCount'      },
     ],
-    filters: buildFilters(dateFrom, dateTo, yard), limit: 1
+    filters: buildFilters(dateFrom, dateTo, yard)
   };
   try {
     const r = await fetch(`${BASE_URL}/bi/kpis`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
     const j = await r.json();
-    const row = j.data?.rows?.[0] || j.data?.kpis?.[0] || {};
-    const rev  = parseFloat(row.JobRevenue    || 0);
-    const exp  = parseFloat(row.TotalExpenses || 0);
-    const prof = parseFloat(row.Profit        || 0);
-    const hrs  = parseFloat(row.LaborHours    || 0);
-    const jobs = parseFloat(row.JobCount      || 0);
+    // Response: { data: { kpis: [{name, value, formatted}, ...] } }
+    const kpis = j.data?.kpis || [];
+    const kv = {};
+    kpis.forEach(k => { kv[k.name] = k.value; });
+    const rev  = parseFloat(kv.JobRevenue    || 0);
+    const exp  = parseFloat(kv.TotalExpenses || 0);
+    const prof = parseFloat(kv.Profit        || 0);
+    const hrs  = parseFloat(kv.LaborHours    || 0);
+    const jobs = parseFloat(kv.JobCount      || 0);
     const pct  = rev > 0 ? (prof / rev * 100) : 0;
     const tiles = [
       { label:'Job Revenue',    value: dFmtCur(rev),          color: NAVY,                      icon:'💵' },
@@ -135,7 +137,7 @@ async function loadMonthChart(dateFrom, dateTo, yard) {
   try {
     const r = await fetch(`${BASE_URL}/bi/query`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
     const j = await r.json();
-    const rows = j.data?.rows || [];
+    const rows = j.data?.data || [];
 
     if (!rows.length) { showChartEmpty(ctx, 'No job data for this period'); return; }
 
@@ -193,7 +195,7 @@ async function loadSalespersonPerf(dateFrom, dateTo, yard) {
   try {
     const r = await fetch(`${BASE_URL}/bi/query`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
     const j = await r.json();
-    const rows = j.data?.rows || [];
+    const rows = j.data?.data || [];
 
     if (!rows.length) {
       tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:20px">No data for this period</td></tr>';
@@ -283,7 +285,7 @@ async function loadStatusBreakdown(dateFrom, dateTo, yard) {
   try {
     const r = await fetch(`${BASE_URL}/bi/query`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
     const j = await r.json();
-    const rows = j.data?.rows || [];
+    const rows = j.data?.data || [];
 
     if (!rows.length) { showChartEmpty(ctx, 'No status data'); document.getElementById('status-chips').innerHTML=''; return; }
 

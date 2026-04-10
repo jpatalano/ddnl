@@ -777,7 +777,7 @@ async function runQuery() {
     ]);
     const qj=await qr.json(); const kj=kr?await kr.json():null;
     if(!qj.success) throw new Error(qj.error?.message||'Query failed');
-    lastRowData=qj.data.rows||[];
+    lastRowData=qj.data?.data||qj.data?.rows||[];
     renderGrid(lastRowData,mets);
     if(kj?.success) renderKpis(kj.data,mets); else document.getElementById('kpi-bar').innerHTML='';
     document.getElementById('result-info').textContent=`${lastRowData.length.toLocaleString()} rows · ${fmtName(currentDataset.dataset.name)}`;
@@ -787,7 +787,10 @@ async function runQuery() {
 
 function renderKpis(data,mets) {
   const bar=document.getElementById('kpi-bar');
-  const row=(data.rows||data.kpis||[])[0]||{};
+  // /bi/kpis returns { kpis: [{name, value}] }, /bi/query returns { data: [...] }
+  let row={};
+  if(data?.kpis) { data.kpis.forEach(k=>{ row[k.name]=k.value; }); }
+  else { row=(data?.data||data?.rows||[])[0]||{}; }
   bar.innerHTML=mets.map(m=>{
     const raw=row[m.metricName]??row[m.alias];
     const num=parseFloat(raw);
