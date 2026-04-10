@@ -11,6 +11,8 @@ let qMonthChart   = null;
 let qStatusChart  = null;
 let qPerfChart    = null;
 
+const _yardBreakoutCharts = {};
+
 let activeDashTab = 'jobs'; // 'jobs' | 'quotes'
 
 const TEAL  = '#00BFA5';
@@ -906,10 +908,10 @@ async function loadFinishJobs(dateFrom, dateTo, yards) {
       }
     } catch(e) { showChartEmpty(ctxP,'Error'); }
   }
-}
 
   // Yard breakout
   loadYardBreakoutFinish(dateFrom, dateTo, yards);
+}
 
 /* ══════════════════════════════════════════════════════════════════
    JOB PROFIT/LOSS TAB
@@ -1003,10 +1005,10 @@ async function loadJobProfitLoss(dateFrom, dateTo, yards) {
       }
     } catch(e) { showChartEmpty(ctx,'Error'); }
   }
-}
 
   // Yard breakout
   loadYardBreakoutJPL(dateFrom, dateTo, yards);
+}
 
 /* ══════════════════════════════════════════════════════════════════
    FORECAST TAB
@@ -1125,10 +1127,10 @@ async function loadForecast(dateFrom, dateTo, yards) {
       }
     } catch(e) { showChartEmpty(ctxP,'Error'); }
   }
-}
 
   // Yard breakout
   loadYardBreakoutForecast(dateFrom, dateTo, yards);
+}
 
 /* ══════════════════════════════════════════════════════════════════
    REVENUE REPORT TAB
@@ -1220,11 +1222,13 @@ async function loadRevenueReport(dateFrom, dateTo, yards) {
 }
 
 /* ══════════════════════════════════════════════════════════════════
-   QUOTE BY STATUS TAB
-   ══════════════════════════════════════════════════════════════════ */
-
   // Yard breakout
   loadYardBreakoutRevenue(dateFrom, dateTo, yards);
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   QUOTE BY STATUS TAB
+   ══════════════════════════════════════════════════════════════════ */
 
 let qsDonutChart=null, qsValueChart=null;
 
@@ -1300,10 +1304,10 @@ async function loadQuoteByStatus(dateFrom, dateTo, yards) {
       </tr>`;
     }).join('');
   } catch(e) {}
-}
 
   // Yard breakout
   loadYardBreakoutQStatus(dateFrom, dateTo, yards);
+}
 
 /* ══════════════════════════════════════════════════════════════════
    QUOTE BY SALESPERSON TAB
@@ -1354,10 +1358,10 @@ async function loadQuoteBySalesperson(dateFrom, dateTo, yards) {
       </tr>`;
     }).join('');
   } catch(e) {}
-}
 
   // Yard breakout
   loadYardBreakoutQSP(dateFrom, dateTo, yards);
+}
 
 /* ══════════════════════════════════════════════════════════════════
    QUOTE REVENUE FORECAST TAB
@@ -1417,9 +1421,9 @@ async function loadQuoteForecast(dateFrom, dateTo, yards) {
         });
       }
     }
+  } catch(e) {}
   // Yard breakout
   loadYardBreakoutQForecast(dateFrom, dateTo, yards);
-  } catch(e) {}
 }
 
 
@@ -1427,7 +1431,6 @@ async function loadQuoteForecast(dateFrom, dateTo, yards) {
    YARD BREAKOUT CHARTS
    ══════════════════════════════════════════════════════════════════ */
 
-const _yardBreakoutCharts = {};
 
 function _destroyYardChart(id) {
   if (_yardBreakoutCharts[id]) { _yardBreakoutCharts[id].destroy(); delete _yardBreakoutCharts[id]; }
