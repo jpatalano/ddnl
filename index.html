@@ -141,6 +141,42 @@
     }
     .dash-filter-bar input[type=date]:focus, .dash-filter-bar select:focus { outline: none; border-color: var(--teal); }
     .dash-sep { width: 1px; height: 28px; background: var(--border); }
+    /* Yard multi-select */
+    .yard-multiselect { position: relative; }
+    .yard-ms-trigger {
+      display: flex; align-items: center; gap: 6px;
+      padding: 6px 10px; border: 1.5px solid var(--border); border-radius: 7px;
+      font-size: 12.5px; background: var(--surface2); color: var(--text);
+      cursor: pointer; min-width: 130px; white-space: nowrap;
+    }
+    .yard-ms-trigger:focus { outline: none; border-color: var(--teal); }
+    .yard-ms-trigger span { flex: 1; text-align: left; }
+    .yard-ms-dropdown {
+      display: none; position: absolute; top: calc(100% + 4px); left: 0;
+      background: var(--surface); border: 1.5px solid var(--border);
+      border-radius: 8px; box-shadow: var(--shadow-lg); z-index: 200;
+      min-width: 160px; overflow: hidden;
+    }
+    .yard-ms-dropdown.open { display: block; }
+    .yard-ms-actions {
+      display: flex; gap: 0; border-bottom: 1px solid var(--border);
+    }
+    .yard-ms-actions button {
+      flex: 1; padding: 6px 8px; font-size: 11px; font-weight: 600;
+      background: var(--surface2); border: none; cursor: pointer;
+      color: var(--navy); transition: background .12s;
+    }
+    .yard-ms-actions button:first-child { border-right: 1px solid var(--border); }
+    .yard-ms-actions button:hover { background: var(--blue-pill); }
+    .yard-ms-options { padding: 4px 0; max-height: 200px; overflow-y: auto; }
+    .yard-ms-option {
+      display: flex; align-items: center; gap: 8px;
+      padding: 7px 12px; font-size: 12.5px; cursor: pointer;
+      transition: background .1s;
+    }
+    .yard-ms-option:hover { background: var(--blue-pill); }
+    .yard-ms-option input[type=checkbox] { accent-color: var(--teal); width: 14px; height: 14px; cursor: pointer; }
+
     .dash-apply-btn {
       background: var(--teal); border: none; color: #fff; border-radius: 8px;
       padding: 7px 18px; font-size: 13px; font-weight: 600; cursor: pointer; transition: background .15s;
@@ -463,9 +499,21 @@
           <input type="date" id="dash-date-to" />
         </div>
         <div class="dash-sep"></div>
-        <div class="dash-filter-group">
+        <div class="dash-filter-group" style="position:relative">
           <label>Yard</label>
-          <select id="dash-yard"><option value="">All Yards</option></select>
+          <div class="yard-multiselect" id="yard-ms-wrap">
+            <button type="button" class="yard-ms-trigger" id="yard-ms-trigger" onclick="toggleYardDropdown()">
+              <span id="yard-ms-label">All Yards</span>
+              <i data-lucide="chevron-down" style="width:13px;height:13px;flex-shrink:0"></i>
+            </button>
+            <div class="yard-ms-dropdown" id="yard-ms-dropdown">
+              <div class="yard-ms-actions">
+                <button type="button" onclick="yardSelectAll()">Select All</button>
+                <button type="button" onclick="yardClearAll()">Clear All</button>
+              </div>
+              <div class="yard-ms-options" id="yard-ms-options"></div>
+            </div>
+          </div>
         </div>
         <div class="dash-sep"></div>
         <button class="dash-apply-btn" onclick="refreshDashboard()">Apply</button>
@@ -534,6 +582,15 @@
               </div>
             </div>
           </div>
+          <div class="dash-chart-row">
+            <div class="chart-card" id="yard-breakout-pl-card">
+              <div class="chart-card-header"><div>
+                <div class="chart-card-title">Revenue &amp; Profit by Yard</div>
+                <div class="chart-card-sub">Grouped by yard</div>
+              </div></div>
+              <div class="chart-canvas-wrap medium"><canvas id="yard-breakout-pl-chart"></canvas></div>
+            </div>
+          </div>
         </div><!-- /job-panel-pl -->
 
         <!-- ═══ FINISH JOBS sub-panel ═══ -->
@@ -574,6 +631,15 @@
               </div>
             </div>
           </div>
+          <div class="dash-chart-row">
+            <div class="chart-card" id="yard-breakout-finish-card">
+              <div class="chart-card-header"><div>
+                <div class="chart-card-title">Jobs by Yard</div>
+                <div class="chart-card-sub">Count &amp; estimated value by yard</div>
+              </div></div>
+              <div class="chart-canvas-wrap medium"><canvas id="yard-breakout-finish-chart"></canvas></div>
+            </div>
+          </div>
         </div><!-- /job-panel-finish -->
 
         <!-- ═══ JOB PROFIT/LOSS sub-panel ═══ -->
@@ -604,6 +670,15 @@
               </div>
             </div>
           </div>
+          <div class="dash-chart-row">
+            <div class="chart-card" id="yard-breakout-jpl-card">
+              <div class="chart-card-header"><div>
+                <div class="chart-card-title">Revenue &amp; Net Profit by Yard</div>
+                <div class="chart-card-sub">Grouped by yard</div>
+              </div></div>
+              <div class="chart-canvas-wrap medium"><canvas id="yard-breakout-jpl-chart"></canvas></div>
+            </div>
+          </div>
         </div><!-- /job-panel-profitloss -->
 
         <!-- ═══ FORECAST sub-panel ═══ -->
@@ -625,6 +700,15 @@
                 <div class="chart-card-sub">Est. vs Actual gap</div>
               </div></div>
               <div class="chart-canvas-wrap tall"><canvas id="forecast-person-chart"></canvas></div>
+            </div>
+          </div>
+          <div class="dash-chart-row">
+            <div class="chart-card" id="yard-breakout-forecast-card">
+              <div class="chart-card-header"><div>
+                <div class="chart-card-title">Forecasted Revenue by Yard</div>
+                <div class="chart-card-sub">Estimated vs actual by yard</div>
+              </div></div>
+              <div class="chart-canvas-wrap medium"><canvas id="yard-breakout-forecast-chart"></canvas></div>
             </div>
           </div>
         </div><!-- /job-panel-forecast -->
@@ -655,6 +739,15 @@
                   <tbody id="rev-table-body"><tr><td colspan="5" style="text-align:center;padding:20px"><div class="spinner" style="margin:auto"></div></td></tr></tbody>
                 </table>
               </div>
+            </div>
+          </div>
+          <div class="dash-chart-row">
+            <div class="chart-card" id="yard-breakout-rev-card">
+              <div class="chart-card-header"><div>
+                <div class="chart-card-title">Revenue &amp; Profit by Yard</div>
+                <div class="chart-card-sub">Grouped by yard</div>
+              </div></div>
+              <div class="chart-canvas-wrap medium"><canvas id="yard-breakout-rev-chart"></canvas></div>
             </div>
           </div>
         </div><!-- /job-panel-revenue -->
@@ -727,6 +820,15 @@
             </div>
           </div>
         </div>
+          <div class="dash-chart-row">
+            <div class="chart-card" id="yard-breakout-qsummary-card">
+              <div class="chart-card-header"><div>
+                <div class="chart-card-title">Quotes by Yard</div>
+                <div class="chart-card-sub">Count &amp; value by yard</div>
+              </div></div>
+              <div class="chart-canvas-wrap medium"><canvas id="yard-breakout-qsummary-chart"></canvas></div>
+            </div>
+          </div>
         </div><!-- /quote-panel-summary -->
 
         <!-- ═══ BY STATUS sub-panel ═══ -->
@@ -762,6 +864,15 @@
               </div>
             </div>
           </div>
+          <div class="dash-chart-row">
+            <div class="chart-card" id="yard-breakout-qstatus-card">
+              <div class="chart-card-header"><div>
+                <div class="chart-card-title">Quotes by Yard</div>
+                <div class="chart-card-sub">Count by yard</div>
+              </div></div>
+              <div class="chart-canvas-wrap medium"><canvas id="yard-breakout-qstatus-chart"></canvas></div>
+            </div>
+          </div>
         </div><!-- /quote-panel-bystatus -->
 
         <!-- ═══ BY SALESPERSON sub-panel ═══ -->
@@ -787,6 +898,15 @@
               </div>
             </div>
           </div>
+          <div class="dash-chart-row">
+            <div class="chart-card" id="yard-breakout-qsp-card">
+              <div class="chart-card-header"><div>
+                <div class="chart-card-title">Quotes by Yard</div>
+                <div class="chart-card-sub">Count by yard</div>
+              </div></div>
+              <div class="chart-canvas-wrap medium"><canvas id="yard-breakout-qsp-chart"></canvas></div>
+            </div>
+          </div>
         </div><!-- /quote-panel-salesperson -->
 
         <!-- ═══ REVENUE FORECAST sub-panel ═══ -->
@@ -805,6 +925,15 @@
                 <div class="chart-card-sub">Volume trend</div>
               </div></div>
               <div class="chart-canvas-wrap tall"><canvas id="qf-count-chart"></canvas></div>
+            </div>
+          </div>
+          <div class="dash-chart-row">
+            <div class="chart-card" id="yard-breakout-qforecast-card">
+              <div class="chart-card-header"><div>
+                <div class="chart-card-title">Forecast by Yard</div>
+                <div class="chart-card-sub">Estimated revenue by yard</div>
+              </div></div>
+              <div class="chart-canvas-wrap medium"><canvas id="yard-breakout-qforecast-chart"></canvas></div>
             </div>
           </div>
         </div><!-- /quote-panel-forecast -->
