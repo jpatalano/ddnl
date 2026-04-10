@@ -530,14 +530,13 @@
       <div id="dash-jobs-content">
         <!-- Jobs sub-tabs -->
         <div class="dash-sub-tabs">
-          <button class="dash-sub-tab active" onclick="switchJobTab('pl')">P/L Dashboard</button>
-          <button class="dash-sub-tab" onclick="switchJobTab('finish')">Finish Jobs</button>
+          <button class="dash-sub-tab" onclick="switchJobTab('finish')" class="dash-sub-tab active">Finish Jobs</button>
           <button class="dash-sub-tab" onclick="switchJobTab('profitloss')">Job Profit/Loss</button>
           <button class="dash-sub-tab" onclick="switchJobTab('forecast')">Forecast</button>
           <button class="dash-sub-tab" onclick="switchJobTab('revenue')">Revenue Report</button>
         </div>
         <!-- ═══ P/L DASHBOARD sub-panel ═══ -->
-        <div id="job-panel-pl" class="job-sub-panel">
+        <div id="job-panel-pl" class="job-sub-panel" style="display:none">
           <div id="dash-kpi-row">
             <div class="dash-kpi-tile" style="grid-column:1/-1;justify-content:center"><div class="spinner"></div></div>
           </div>

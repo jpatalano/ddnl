@@ -35,6 +35,11 @@ async function initDashboard() {
   if (toEl   && !toEl.value)   toEl.value   = now.toISOString().slice(0,10);
 
   await Promise.all([ loadYardFilter(), refreshDashboard() ]);
+  // Finish Jobs is the default sub-tab — load it
+  const df = document.getElementById('dash-date-from')?.value || '';
+  const dt = document.getElementById('dash-date-to')?.value || '';
+  const dy = getSelectedYards();
+  loadFinishJobs(df, dt, dy);
 }
 
 /* ── Yard multi-select ──────────────────────────────────────────── */
@@ -126,28 +131,23 @@ async function refreshDashboard() {
 
   setDashLoading(true);
   try {
-    // Always reload the P/L Dashboard (Jobs) and Quotes Summary panels
+    // Always reload the Quotes Summary panel; Jobs default is Finish Jobs
     await Promise.all([
-      loadJobKpis(dateFrom, dateTo, yards),
-      loadMonthChart(dateFrom, dateTo, yards),
-      loadSalespersonPerf(dateFrom, dateTo, yards),
-      loadStatusBreakdown(dateFrom, dateTo, yards),
       loadQuoteKpis(dateFrom, dateTo, yards),
       loadQuoteMonthChart(dateFrom, dateTo, yards),
       loadQuoteStatusChart(dateFrom, dateTo, yards),
       loadQuoteSalespersonTable(dateFrom, dateTo, yards),
-      loadYardBreakoutPL(dateFrom, dateTo, yards),
       loadYardBreakoutQSummary(dateFrom, dateTo, yards),
     ]);
   } catch(e) { console.error('Dashboard refresh error:', e); }
   setDashLoading(false);
 
   // Mark the always-loaded tabs so they don't re-fire on tab switch
-  jobLoaded['pl']       = true;
+  jobLoaded['finish']   = true;
   quoteLoaded['summary'] = true;
 
   // Re-load whichever sub-tab is currently visible (if not the defaults)
-  if (activeJobTab !== 'pl') {
+  if (activeJobTab !== 'finish') {
     jobLoaded[activeJobTab] = true;
     loadJobSubTab(activeJobTab, dateFrom, dateTo, yards);
   }
@@ -723,11 +723,11 @@ function resetDashFilters() {
    JOB SUB-TAB SWITCHING + LAZY LOAD
    ══════════════════════════════════════════════════════════════════ */
 
-const JOB_TABS    = ['pl','finish','profitloss','forecast','revenue'];
+const JOB_TABS    = ['finish','profitloss','forecast','revenue'];
 const QUOTE_TABS  = ['summary','bystatus','salesperson','forecast'];
 const jobLoaded   = {};
 const quoteLoaded = {};
-let activeJobTab   = 'pl';
+let activeJobTab   = 'finish';
 let activeQuoteTab = 'summary';
 
 function switchJobTab(tab) {
