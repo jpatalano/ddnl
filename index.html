@@ -6,6 +6,7 @@
   <title>FCC Analytics</title>
   <script src="https://cdn.jsdelivr.net/npm/ag-grid-community@31.3.2/dist/ag-grid-community.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+  <script src="https://unpkg.com/lucide@1.8.0/dist/umd/lucide.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -251,7 +252,7 @@
 
     /* States */
     .state-box { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--text-muted); }
-    .state-icon { font-size: 48px; opacity: .4; }
+    .state-icon { font-size: 48px; opacity: .4; color: var(--navy); }
     .state-box h3 { font-size: 16px; font-weight: 600; color: var(--navy); }
     .state-box p { font-size: 13px; text-align: center; max-width: 320px; }
     .spinner { width: 36px; height: 36px; border: 3px solid var(--border); border-top-color: var(--teal); border-radius: 50%; animation: spin .7s linear infinite; }
@@ -336,7 +337,7 @@
 
 <!-- Top Bar -->
 <div id="topbar">
-  <div class="brand">⬡ <span>FCC</span> Analytics</div>
+  <div class="brand"><i data-lucide="truck" style="width:18px;height:18px;stroke-width:2.2"></i> <span>FCC</span> Analytics</div>
   <div class="brand-sep"></div>
   <div class="subnav">
     <button onclick="showView('dashboard')" id="nav-dashboard">Dashboard</button>
@@ -345,8 +346,8 @@
     <button onclick="showView('saved')"     id="nav-saved">Saved Reports</button>
   </div>
   <div class="topbar-right">
-    <button class="save-btn" onclick="openSaveModal()" id="save-btn" style="display:none">💾 Save Report</button>
-    <button class="run-btn"  onclick="runQuery()"      id="run-btn"  style="display:none" disabled>▶ Run</button>
+    <button class="save-btn" onclick="openSaveModal()" id="save-btn" style="display:none"><i data-lucide="bookmark" style="width:14px;height:14px"></i> Save Report</button>
+    <button class="run-btn"  onclick="runQuery()"      id="run-btn"  style="display:none" disabled><i data-lucide="play" style="width:13px;height:13px"></i> Run</button>
   </div>
 </div>
 
@@ -532,7 +533,7 @@
 
     <!-- States -->
     <div class="state-box" id="builder-empty" style="display:none">
-      <div class="state-icon">📊</div>
+      <div class="state-icon"><i data-lucide="bar-chart-2" style="width:40px;height:40px;stroke-width:1.4"></i></div>
       <h3>Configure your report</h3>
       <p>Choose segments to group by, select metrics, add filters — then hit Run.</p>
     </div>
@@ -555,7 +556,7 @@
 <div id="drilldown-drawer">
   <div id="drilldown-header">
     <h3 id="dd-title">Row Detail</h3>
-    <button onclick="closeDrilldown()">✕</button>
+    <button onclick="closeDrilldown()"><i data-lucide="x" style="width:16px;height:16px"></i></button>
   </div>
   <div id="drilldown-body"></div>
 </div>
@@ -565,7 +566,7 @@
   <div id="modal-box">
     <div class="modal-header">
       <h3>Save Report</h3>
-      <button onclick="closeModal()">✕</button>
+      <button onclick="closeModal()"><i data-lucide="x" style="width:16px;height:16px"></i></button>
     </div>
     <div class="modal-body">
       <div class="form-group">
@@ -612,10 +613,10 @@ let lastRowData    = [];
 let savedReports   = [];
 
 const ICONS = {
-  Jobs_By_Status:'🔧', Quote_Revenue_Forecast:'📈', Quotes_By_Status:'📋',
-  jobs_profit_by_invoice:'🧾', quote_profit_forecast:'💰', jobs_profit_loss:'⚖️',
-  Job_Revenue_Forecast:'📊', Equipment_Profit_Loss:'🚛', Equipment_Utilization:'⚙️',
-  Preventive_Maintenance:'🔩', WO_Dashboard:'🗂️'
+  Jobs_By_Status:'briefcase', Quote_Revenue_Forecast:'trending-up', Quotes_By_Status:'file-text',
+  jobs_profit_by_invoice:'receipt', quote_profit_forecast:'bar-chart-2', jobs_profit_loss:'scale',
+  Job_Revenue_Forecast:'line-chart', Equipment_Profit_Loss:'truck', Equipment_Utilization:'gauge',
+  Preventive_Maintenance:'wrench', WO_Dashboard:'layout-dashboard'
 };
 
 (async function init() {
@@ -623,6 +624,7 @@ const ICONS = {
   renderSavedList();
   showView('dashboard');
   initDashboard();
+  lucide.createIcons();
 })();
 
 async function loadDatasets() {
@@ -634,7 +636,7 @@ async function loadDatasets() {
     populateDatasetSelect();
   } catch(e) {
     document.getElementById('dataset-grid').innerHTML =
-      `<div class="state-box" style="grid-column:1/-1"><div class="state-icon">⚠️</div><h3>Could not load datasets</h3><p>${e.message}</p></div>`;
+      `<div class="state-box" style="grid-column:1/-1"><div class="state-icon"><i data-lucide="alert-triangle" style="width:40px;height:40px;stroke-width:1.4"></i></div><h3>Could not load datasets</h3><p>${e.message}</p></div>`;
   }
 }
 
@@ -643,7 +645,7 @@ function renderDatasetGrid() {
     <div class="dataset-card" onclick="selectDatasetFromCard('${ds.name}')">
       <div class="dc-header">
         <div class="dc-name">${fmtName(ds.name)}</div>
-        <div class="dc-icon">${ICONS[ds.name]||'📦'}</div>
+        <div class="dc-icon"><i data-lucide="${ICONS[ds.name]||'database'}" style="width:22px;height:22px;stroke-width:1.6"></i></div>
       </div>
       <div class="dc-desc">${ds.description}</div>
       <div class="dc-meta">
@@ -651,6 +653,7 @@ function renderDatasetGrid() {
         <span class="dc-pill metric">${ds.metricCount} metrics</span>
       </div>
     </div>`).join('');
+  lucide.createIcons();
 }
 
 function populateDatasetSelect() {
@@ -800,7 +803,7 @@ function renderKpis(data,mets) {
 }
 
 function renderGrid(rows,mets) {
-  if(!rows.length){document.getElementById('myGrid').innerHTML=`<div class="state-box" style="height:100%"><div class="state-icon">🔍</div><h3>No results</h3></div>`;return;}
+  if(!rows.length){document.getElementById('myGrid').innerHTML=`<div class="state-box" style="height:100%"><div class="state-icon"><i data-lucide="search" style="width:40px;height:40px;stroke-width:1.4"></i></div><h3>No results</h3></div>`;return;}
   const metNames=new Set(mets.map(m=>m.metricName));
   const metMap={};mets.forEach(m=>metMap[m.metricName]=m);
   const colDefs=Object.keys(rows[0]).map(key=>{
@@ -874,12 +877,13 @@ function saveReport() {
 
 function renderSavedList() {
   const list=document.getElementById('saved-list');
-  if(!savedReports.length){list.innerHTML=`<div class="state-box" style="padding:40px 0"><div class="state-icon">📂</div><h3>No saved reports</h3><p>Build a report and click Save Report.</p></div>`;return;}
+  if(!savedReports.length){list.innerHTML=`<div class="state-box" style="padding:40px 0"><div class="state-icon"><i data-lucide="folder" style="width:40px;height:40px;stroke-width:1.4"></i></div><h3>No saved reports</h3><p>Build a report and click Save Report.</p></div>`;lucide.createIcons();return;}
   list.innerHTML=savedReports.map(r=>`
     <div class="saved-card">
-      <div class="sc-info"><div class="sc-name">${r.name}</div><div class="sc-meta">${fmtName(r.config.datasetName)} · ${r.config.groupBySegments.length} segments · ${r.config.metrics.length} metrics · ${new Date(r.savedAt).toLocaleDateString()}${r.schedule?' · 🕐 '+r.schedule:''}</div></div>
-      <div class="sc-actions"><button class="sc-btn primary" onclick="loadReport(${r.id})">▶ Run</button><button class="sc-btn danger" onclick="deleteReport(${r.id})">✕</button></div>
+      <div class="sc-info"><div class="sc-name">${r.name}</div><div class="sc-meta">${fmtName(r.config.datasetName)} · ${r.config.groupBySegments.length} segments · ${r.config.metrics.length} metrics · ${new Date(r.savedAt).toLocaleDateString()}${r.schedule?' · '+r.schedule:''}</div></div>
+      <div class="sc-actions"><button class="sc-btn primary" onclick="loadReport(${r.id})"><i data-lucide="play" style="width:13px;height:13px"></i> Run</button><button class="sc-btn danger" onclick="deleteReport(${r.id})"><i data-lucide="trash-2" style="width:13px;height:13px"></i></button></div>
     </div>`).join('');
+  lucide.createIcons();
 }
 
 async function loadReport(id) {

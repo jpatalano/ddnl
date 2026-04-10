@@ -96,21 +96,22 @@ async function loadKpis(dateFrom, dateTo, yard) {
     const jobs = parseFloat(kv.JobCount      || 0);
     const pct  = rev > 0 ? (prof / rev * 100) : 0;
     const tiles = [
-      { label:'Job Revenue',    value: dFmtCur(rev),          color: NAVY,                      icon:'💵' },
-      { label:'Total Expenses', value: dFmtCur(exp),          color: '#dc2626',                 icon:'📤' },
-      { label:'Profit',         value: dFmtCur(prof),         color: prof>=0?'#16a34a':RED,     icon:'📈' },
-      { label:'Labor Hours',    value: dFmtNum(hrs,0)+' hrs', color: '#7c3aed',                 icon:'⏱'  },
-      { label:'Job Count',      value: dFmtNum(jobs,0),       color: '#0369a1',                 icon:'🔧' },
-      { label:'Profit %',       value: pct.toFixed(1)+'%',    color: pct>=50?'#16a34a':AMBER,   icon:'%'  },
+      { label:'Job Revenue',    value: dFmtCur(rev),          color: NAVY,                      icon:'dollar-sign'   },
+      { label:'Total Expenses', value: dFmtCur(exp),          color: '#dc2626',                 icon:'trending-down' },
+      { label:'Profit',         value: dFmtCur(prof),         color: prof>=0?'#16a34a':RED,     icon:'trending-up'   },
+      { label:'Labor Hours',    value: dFmtNum(hrs,0)+' hrs', color: '#7c3aed',                 icon:'clock'         },
+      { label:'Job Count',      value: dFmtNum(jobs,0),       color: '#0369a1',                 icon:'briefcase'     },
+      { label:'Profit %',       value: pct.toFixed(1)+'%',    color: pct>=50?'#16a34a':AMBER,   icon:'percent'       },
     ];
     document.getElementById('dash-kpi-row').innerHTML = tiles.map(t => `
       <div class="dash-kpi-tile">
-        <div class="dkt-icon" style="background:${t.color}20;color:${t.color}">${t.icon}</div>
+        <div class="dkt-icon" style="background:${t.color}20;color:${t.color}"><i data-lucide="${t.icon}" style="width:18px;height:18px;stroke-width:2"></i></div>
         <div class="dkt-body">
           <div class="dkt-label">${t.label}</div>
           <div class="dkt-value" style="color:${t.color}">${t.value}</div>
         </div>
       </div>`).join('');
+    lucide.createIcons();
   } catch(e) {
     document.getElementById('dash-kpi-row').innerHTML = `<div style="color:var(--text-muted);font-size:13px;grid-column:1/-1;padding:8px">Could not load KPIs</div>`;
   }
@@ -328,7 +329,8 @@ function showChartEmpty(ctx, msg) {
   const div = document.createElement('div');
   div.className = 'chart-empty';
   div.style.cssText = 'display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--text-muted);gap:6px;';
-  div.innerHTML = `<div style="font-size:32px;opacity:.3">📊</div><div style="font-size:12px">${msg}</div>`;
+  div.innerHTML = `<div style="opacity:.3;color:var(--navy,#003366)"><i data-lucide="bar-chart-2" style="width:36px;height:36px;stroke-width:1.4"></i></div><div style="font-size:12px">${msg}</div>`;
+  lucide.createIcons({ el: div });
   wrap.appendChild(div);
 }
 
