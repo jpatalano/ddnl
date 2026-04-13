@@ -352,12 +352,12 @@
     .dex-limit-select { padding: 5px 8px; border: 1.5px solid var(--border); border-radius: 6px; font-size: 12px; background: var(--surface); color: var(--text); outline: none; }
 
     /* Results */
-    .dex-results { flex: 1; overflow: auto; padding: 0; }
+    .dex-results { flex: 1; overflow: auto; padding: 0; display: flex; flex-direction: column; }
     .dex-results-toolbar { padding: 8px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; background: var(--surface); flex-shrink: 0; }
     .dex-results-meta { font-size: 11px; color: var(--text-muted); flex: 1; }
     .dex-export-btn { padding: 4px 12px; border: 1.5px solid var(--border); border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer; background: var(--surface); color: var(--text); transition: all .12s; }
     .dex-export-btn:hover { border-color: var(--navy); color: var(--navy); }
-    .dex-table-wrap { overflow: auto; max-height: 100%; }
+    .dex-table-wrap { overflow: auto; flex: 1; min-height: 0; }
     /* Visual / Chart Builder */
     .dex-visual { display:none; border-top:2px solid var(--border); background:var(--surface); }
     .dex-visual-header { display:flex; align-items:center; justify-content:space-between; padding:10px 16px; border-bottom:1px solid var(--border); }
@@ -1420,8 +1420,8 @@
               </div>
               <div id="dex-table-wrap" class="dex-table-wrap"></div>
 
-            <!-- ── Visual / Chart Builder ── -->
-            <div class="dex-visual" id="dex-visual">
+              <!-- ── Visual / Chart Builder ── -->
+              <div class="dex-visual" id="dex-visual">
               <div class="dex-visual-header">
                 <div class="dex-visual-title">
                   <i data-lucide="bar-chart-2" style="width:14px;height:14px"></i>
@@ -1463,7 +1463,7 @@
                   <canvas id="dex-chart-canvas"></canvas>
                 </div>
               </div>
-            </div>
+              </div>
             </div>
           </div>
         </div>
@@ -2175,12 +2175,12 @@ function dexShowQuery(endpoint, body) {
       return `<span style="${cls}">${match}</span>`;
     }
   );
-  // Always show panel, always open body
+  // Show panel, but keep body collapsed by default
   panel.style.display = '';
   const wrap = document.getElementById('dex-qp-body-wrap');
-  wrap.style.display = '';
+  wrap.style.display = 'none';
   const tog = document.getElementById('dex-qp-toggle');
-  if (tog) tog.style.transform = 'rotate(180deg)';
+  if (tog) tog.style.transform = '';
   lucide.createIcons({ el: panel });
 }
 
