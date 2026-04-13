@@ -2468,14 +2468,16 @@ function dexShowVisual(rows) {
   // Defaults: groupBy segs drive label+group, first metric drives value
   if (_dexSelSegs[0] && cols.includes(_dexSelSegs[0])) labelSel.value = _dexSelSegs[0];
   if (_dexSelMets[0] && cols.includes(_dexSelMets[0])) valSel.value   = _dexSelMets[0];
-  if (_dexSelSegs[1] && cols.includes(_dexSelSegs[1])) grpSel.value   = _dexSelSegs[1];
+  // Second group-by seg auto-wires as the color/group dimension (only if different from label)
+  const secondSeg = _dexSelSegs[1] && cols.includes(_dexSelSegs[1]) ? _dexSelSegs[1] : '';
+  grpSel.value = (secondSeg && secondSeg !== labelSel.value) ? secondSeg : '';
 
   // Auto-suggest chart type based on data shape
   if (!_dexChartTypeUserSet) {
     const hasGroup  = !!grpSel.value;
     const labelCard = new Set(rows.map(r => r[labelSel.value])).size;
     if (hasGroup)            _dexChartType = 'bar-stacked';
-    else if (labelCard <= 7) _dexChartType = 'doughnut';
+    else if (labelCard <= 8) _dexChartType = 'doughnut';
     else                     _dexChartType = 'bar-h';
     document.querySelectorAll('.dex-chart-type-btn').forEach(b => b.classList.remove('active'));
     document.getElementById('dex-ct-' + _dexChartType)?.classList.add('active');
@@ -2501,20 +2503,91 @@ function dexRenderChart() {
   const isHoriz   = _dexChartType === 'bar-h';
   const isStacked = _dexChartType === 'bar-stacked';
   const isPie     = _dexChartType === 'pie' || _dexChartType === 'doughnut';
-  const finalType = isPie ? _dexChartType : (_dexChartType === 'line' ? 'line' : 'bar');
+  const isDoughnut = _dexChartType === 'doughnut';
+  const finalType = isPie ? 'doughnut' : (_dexChartType === 'line' ? 'line' : 'bar');
 
-  // Exact same palette as dashboard PERF_COLORS
   const PAL = ['#00BFA5','#003366','#f59e0b','#6366f1','#ec4899','#14b8a6','#8b5cf6','#f97316','#06b6d4','#84cc16','#ef4444','#0369a1'];
-  const fmtTick = v => {
+  const hexAlpha = (hex, a) => hex + Math.round(a*255).toString(16).padStart(2,'0');
+  const fmtVal = v => {
     const n = parseFloat(v);
-    if (Math.abs(n) >= 1000000) return '$' + (n/1000000).toFixed(1) + 'M';
-    if (Math.abs(n) >= 1000)    return '$' + (n/1000).toFixed(0) + 'K';
-    return String(v);
+    if (isNaN(n)) return String(v);
+    if (Math.abs(n) >= 1000000) return (n/1000000).toFixed(1) + 'M';
+    if (Math.abs(n) >= 1000)    return (n/1000).toFixed(0) + 'K';
+    return n.toLocaleString(undefined, { maximumFractionDigits: 2 });
   };
 
-  let datasets, labels;
+  let datasets, labels, chartOptions;
 
-  if (grpCol && !isPie) {
+  // ── MULTI-RING DOUGHNUT: when pie/doughnut + grpCol set (and different from label) ──
+  if (isPie && grpCol && grpCol !== labelCol) {
+    // Outer ring: grpCol breakdown (color = unique grp values)
+    // Inner ring: labelCol breakdown, colored by parent grp
+    const grpVals  = [...new Set(rows.map(r => String(r[grpCol]  ?? '—')))];
+    const lblVals  = [...new Set(rows.map(r => String(r[labelCol] ?? '—')))];
+
+    // Sum value per grp (inner ring)
+    const innerData   = grpVals.map(g => rows.filter(r => String(r[grpCol] ?? '—') === g).reduce((s,r) => s + parseFloat(r[valCol]??0), 0));
+    const innerColors = grpVals.map((_,i) => PAL[i % PAL.length]);
+
+    // Outer ring: each label colored by its parent grp
+    const outerLabels = lblVals;
+    const outerData   = lblVals.map(l => rows.filter(r => String(r[labelCol] ?? '—') === l).reduce((s,r) => s + parseFloat(r[valCol]??0), 0));
+    const outerColors = lblVals.map(l => {
+      const row = rows.find(r => String(r[labelCol] ?? '—') === l);
+      const g   = row ? String(row[grpCol] ?? '—') : '—';
+      const idx = grpVals.indexOf(g);
+      return hexAlpha(PAL[idx < 0 ? 0 : idx % PAL.length], 0.65);
+    });
+
+    datasets = [
+      { label: grpCol,   data: innerData, backgroundColor: innerColors, borderColor: '#fff', borderWidth: 2, hoverOffset: 4 },
+      { label: labelCol, data: outerData, backgroundColor: outerColors, borderColor: '#fff', borderWidth: 1, hoverOffset: 4 },
+    ];
+    labels = grpVals; // inner ring labels for tooltip
+
+    chartOptions = {
+      responsive: true, maintainAspectRatio: false,
+      cutout: '40%',
+      plugins: {
+        legend: {
+          display: true, position: 'right',
+          labels: {
+            boxWidth: 10, font: { size: 11 }, padding: 14,
+            generateLabels: chart => [
+              ...grpVals.map((g,i) => ({ text: g, fillStyle: PAL[i%PAL.length], strokeStyle: '#fff', lineWidth: 1, hidden: false, index: i })),
+              ...outerLabels.map((l,i) => ({ text: '  ' + l, fillStyle: outerColors[i], strokeStyle: '#fff', lineWidth: 0, hidden: false, index: i + grpVals.length }))
+            ]
+          }
+        },
+        tooltip: {
+          callbacks: {
+            title: ctx => ctx[0].datasetIndex === 0 ? grpVals[ctx[0].dataIndex] : outerLabels[ctx[0].dataIndex],
+            label: ctx => ' ' + fmtVal(ctx.raw)
+          }
+        }
+      }
+    };
+
+  // ── SINGLE RING PIE/DOUGHNUT ──
+  } else if (isPie) {
+    labels   = rows.map(r => String(r[labelCol] ?? '—'));
+    const vals = rows.map(r => parseFloat(r[valCol] ?? 0));
+    datasets = [{
+      label: valCol, data: vals,
+      backgroundColor: rows.map((_,i) => PAL[i % PAL.length]),
+      borderColor: '#fff', borderWidth: 2, hoverOffset: 6,
+    }];
+    chartOptions = {
+      responsive: true, maintainAspectRatio: false,
+      cutout: isDoughnut ? '55%' : '0%',
+      plugins: {
+        legend: { display: true, position: 'right', labels: { boxWidth: 10, font: { size: 11 }, padding: 14 } },
+        tooltip: { callbacks: { label: c => ' ' + c.label + ': ' + fmtVal(c.raw) } }
+      }
+    };
+
+  // ── STACKED / GROUPED BAR ──
+  } else if (grpCol && grpCol !== labelCol) {
     const groups = [...new Set(rows.map(r => String(r[grpCol] ?? '—')))];
     labels = [...new Set(rows.map(r => String(r[labelCol] ?? '—')))];
     datasets = groups.map((g, gi) => ({
@@ -2523,64 +2596,51 @@ function dexRenderChart() {
         const row = rows.find(r => String(r[labelCol] ?? '—') === l && String(r[grpCol] ?? '—') === g);
         return row ? parseFloat(row[valCol] ?? 0) : 0;
       }),
-      backgroundColor: PAL[gi % PAL.length] + 'bb',
+      backgroundColor: hexAlpha(PAL[gi % PAL.length], 0.82),
       borderColor:     PAL[gi % PAL.length],
-      borderWidth: 1,
-      borderRadius: isHoriz ? 2 : 4,
-      tension: 0.35,
+      borderWidth: 1, borderRadius: isHoriz ? 2 : 4, tension: 0.35,
     }));
+    chartOptions = {
+      indexAxis: isHoriz ? 'y' : 'x',
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: true, position: 'bottom', labels: { boxWidth: 10, font: { size: 11 }, padding: 14 } },
+        tooltip: { callbacks: { label: c => ' ' + c.dataset.label + ': ' + fmtVal(c.raw) } }
+      },
+      scales: {
+        x: { stacked: isStacked, grid: { display: isHoriz, color: '#e2e8f0' }, ticks: { font: { size: 10 }, maxRotation: isHoriz ? 0 : 40, maxTicksLimit: 12, callback: isHoriz ? fmtVal : undefined } },
+        y: { stacked: isStacked, grid: { display: !isHoriz, color: '#e2e8f0' }, beginAtZero: true, ticks: { font: { size: 10 }, callback: isHoriz ? undefined : fmtVal } }
+      }
+    };
+
+  // ── SIMPLE BAR / LINE ──
   } else {
     labels = rows.map(r => String(r[labelCol] ?? '—'));
     const vals = rows.map(r => parseFloat(r[valCol] ?? 0));
     datasets = [{
-      label: valCol,
-      data: vals,
-      backgroundColor: isPie ? rows.map((_, i) => PAL[i % PAL.length]) : PAL[0] + 'bb',
-      borderColor:     isPie ? '#fff' : PAL[0],
-      borderWidth: isPie ? 2 : 1,
+      label: valCol, data: vals,
+      backgroundColor: hexAlpha(PAL[0], 0.82),
+      borderColor: PAL[0], borderWidth: 1,
       borderRadius: isHoriz ? 2 : 4,
-      hoverOffset: isPie ? 6 : 0,
-      tension: 0.35,
-      fill: false,
+      tension: 0.35, fill: false,
       pointRadius: finalType === 'line' ? 3 : 0,
       pointBackgroundColor: PAL[0],
     }];
+    chartOptions = {
+      indexAxis: isHoriz ? 'y' : 'x',
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: c => ' ' + fmtVal(c.raw) } }
+      },
+      scales: {
+        x: { grid: { display: isHoriz, color: '#e2e8f0' }, ticks: { font: { size: 10 }, maxRotation: isHoriz ? 0 : 40, maxTicksLimit: 12, callback: isHoriz ? fmtVal : undefined } },
+        y: { grid: { display: !isHoriz, color: '#e2e8f0' }, beginAtZero: true, ticks: { font: { size: 10 }, callback: isHoriz ? undefined : fmtVal } }
+      }
+    };
   }
 
-  _dexChart = new Chart(canvas, {
-    type: finalType,
-    data: { labels, datasets },
-    options: {
-      indexAxis: isHoriz ? 'y' : 'x',
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: {
-          display: isPie || !!grpCol,
-          position: isPie ? 'right' : 'bottom',
-          labels: { boxWidth: 10, font: { size: 11 }, padding: 14 }
-        },
-        tooltip: {
-          callbacks: {
-            label: c => ' ' + c.dataset.label + ': ' + parseFloat(c.raw).toLocaleString(undefined, { maximumFractionDigits: 2 })
-          }
-        }
-      },
-      scales: isPie ? {} : {
-        x: {
-          stacked: isStacked,
-          grid: { display: isHoriz, color: '#e2e8f0' },
-          ticks: { font: { size: 10 }, maxRotation: isHoriz ? 0 : 40, maxTicksLimit: 12, callback: isHoriz ? fmtTick : undefined }
-        },
-        y: {
-          stacked: isStacked,
-          grid: { display: !isHoriz, color: '#e2e8f0' },
-          beginAtZero: true,
-          ticks: { font: { size: 10 }, callback: isHoriz ? undefined : fmtTick }
-        }
-      }
-    }
-  });
+  _dexChart = new Chart(canvas, { type: finalType, data: { labels, datasets }, options: chartOptions });
 }
 function dexExportCsv() {
   if (!_dexResults.length) return;
