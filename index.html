@@ -1933,7 +1933,8 @@ async function dexSelectDataset(name) {
   try {
     const r = await fetch(`${BASE_URL}/bi/datasets/${name}`);
     const j = await r.json();
-    const ds = j.data?.dataset;
+    const ds      = j.data?.dataset;
+    const apiMets = j.data?.metrics || [];   // metrics live at j.data.metrics, not j.data.dataset
     _dexActive = { name, detail: ds };
 
     // Header
@@ -1951,9 +1952,8 @@ async function dexSelectDataset(name) {
     }));
     _dexActive.segments = segs;
 
-    // Metrics from schema with correct aggregation type
-    const schemaMetrics = ds.datasetMetrics || ds.metrics || [];
-    const mets = schemaMetrics
+    // Metrics — use schema aggregation types (COUNT/SUM/AVG)
+    const mets = apiMets
       .filter(m => m.isActive !== false)
       .map(m => ({ name: m.metricName, agg: m.aggregationType || 'SUM' }));
     // Fallback to DEX_METRICS if schema returns nothing
