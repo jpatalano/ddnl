@@ -367,7 +367,8 @@
     .dex-export-btn:hover { border-color: var(--navy); color: var(--navy); }
     .dex-table-wrap { overflow: auto; flex: 1; min-height: 0; }
     /* Visual / Chart Builder */
-    .dex-visual { display:none; border-top:2px solid var(--border); background:var(--surface); flex-shrink:0; overflow:hidden; }
+    .dex-visual { display:none; border-top:2px solid var(--border); background:var(--surface); flex-shrink:0; overflow:hidden; resize:vertical; min-height:120px; }
+    .dex-visual.visible { display:flex; flex-direction:column; }
     .dex-visual-header { display:flex; align-items:center; justify-content:space-between; padding:10px 16px; border-bottom:1px solid var(--border); }
     .dex-visual-title { font-size:12px; font-weight:700; color:var(--navy); display:flex; align-items:center; gap:7px; }
     .dex-visual-controls { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
@@ -377,8 +378,8 @@
     .dex-visual-selects { display:flex; align-items:center; gap:6px; padding:8px 16px; border-bottom:1px solid var(--border); background:var(--surface2); flex-wrap:wrap; }
     .dex-visual-selects label { font-size:11px; font-weight:600; color:var(--text-muted); }
     .dex-visual-selects select { font-size:11px; padding:3px 8px; border:1.5px solid var(--border); border-radius:6px; background:var(--surface); color:var(--text); cursor:pointer; }
-    .dex-chart-wrap { padding:16px; }
-    .dex-chart-canvas-wrap { position:relative; max-height:340px; }
+    .dex-chart-wrap { padding:16px; flex:1; display:flex; flex-direction:column; min-height:0; }
+    .dex-chart-canvas-wrap { position:relative; flex:1; min-height:80px; }
     /* Query preview panel */
     .dex-query-preview { display:none; background:#0f1923; border-radius:8px; margin:0 0 10px 0; overflow:hidden; border:1px solid rgba(255,255,255,.08); }
     .dex-qp-header { display:flex; align-items:center; justify-content:space-between; padding:7px 12px; background:#162030; cursor:pointer; user-select:none; }
@@ -2013,7 +2014,7 @@ async function dexSelectDataset(name) {
   document.getElementById('dex-results-meta').textContent = 'Run a query to see results';
   document.getElementById('dex-export-btn').style.display = 'none';
   document.getElementById('dex-query-preview').style.display = 'none';
-  document.getElementById('dex-visual').style.display = 'none';
+  document.getElementById('dex-visual').classList.remove('visible');
   _dexChartTypeUserSet = false; _dexChartType = 'bar';
   if (_dexChart) { _dexChart.destroy(); _dexChart = null; }
 
@@ -2483,7 +2484,8 @@ function dexShowVisual(rows) {
     document.getElementById('dex-ct-' + _dexChartType)?.classList.add('active');
   }
 
-  document.getElementById('dex-visual').style.display = 'block';
+  const dv = document.getElementById('dex-visual');
+  dv.classList.add('visible');
   lucide.createIcons({ el: document.getElementById('dex-visual') });
   dexRenderChart();
 }
