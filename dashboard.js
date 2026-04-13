@@ -41,10 +41,9 @@ async function initDashboard() {
   const df = document.getElementById('dash-date-from')?.value || '';
   const dt = document.getElementById('dash-date-to')?.value || '';
   const dy = getSelectedYards();
-  loadFinishJobs(df, dt, dy);
-  // Inject ⓘ buttons once initial data has rendered
+  await loadFinishJobs(df, dt, dy);
+  // ⓘ buttons injected inside each load function after data renders
   _setupInfoButtons();
-  setTimeout(_injectInfoButtons, 1500);
 }
 
 /* ── Yard multi-select ──────────────────────────────────────────── */
@@ -129,12 +128,10 @@ function switchDashTab(tab) {
   if (tab === 'equipment' && !equipLoaded[activeEquipTab]) {
     equipLoaded[activeEquipTab] = true;
     loadEquipSubTab(activeEquipTab, dateFrom, dateTo, yards);
-    setTimeout(_injectInfoButtons, 500);
   }
   if (tab === 'pm' && !pmLoaded) {
     pmLoaded = true;
     loadPM(dateFrom, dateTo, yards);
-    setTimeout(_injectInfoButtons, 500);
   }
 }
 
@@ -815,14 +812,12 @@ function loadJobSubTab(tab, dateFrom, dateTo, yards) {
   if (tab === 'profitloss') { loadJobProfitLoss(dateFrom, dateTo, yards); }
   if (tab === 'forecast')   { loadForecast(dateFrom, dateTo, yards); }
   if (tab === 'revenue')    { loadRevenueReport(dateFrom, dateTo, yards); }
-  setTimeout(_injectInfoButtons, 500);
 }
 
 function loadQuoteSubTab(tab, dateFrom, dateTo, yards) {
   if (tab === 'bystatus')   { loadQuoteByStatus(dateFrom, dateTo, yards); }
   if (tab === 'salesperson'){ loadQuoteBySalesperson(dateFrom, dateTo, yards); }
   if (tab === 'forecast')   { loadQuoteForecast(dateFrom, dateTo, yards); }
-  setTimeout(_injectInfoButtons, 500);
 }
 
 // (refreshDashboard consolidation — see master refresh above)
@@ -841,16 +836,12 @@ async function loadFinishJobs(dateFrom, dateTo, yards) {
 
   // KPIs
   try {
-    _reg('finish-kpi-row','Finish Jobs — KPIs','/bi/kpis',{ datasetName:'Jobs_By_Status', metrics:[
-      { metricName:'TotalJobs', aggregation:'COUNT', alias:'TotalJobs' },
-      { metricName:'TotalEstimatedValue', aggregation:'SUM', alias:'TotalEstimatedValue' },
-      { metricName:'AvgEstimatedValue', aggregation:'AVG', alias:'AvgEstimatedValue' },
-    ], filters });
     const kpiBody = { datasetName:'Jobs_By_Status', metrics:[
       { metricName:'TotalJobs', aggregation:'COUNT', alias:'TotalJobs' },
       { metricName:'TotalEstimatedValue', aggregation:'SUM', alias:'TotalEstimatedValue' },
       { metricName:'AvgEstimatedValue', aggregation:'AVG', alias:'AvgEstimatedValue' },
     ], filters };
+    _reg('finish-kpi-row','Finish Jobs — KPIs','/bi/kpis', kpiBody);
     const kr = await fetch(`${BASE_URL}/bi/kpis`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(kpiBody) });
     const kj = await kr.json();
     const kv = {}; (kj.data?.kpis||[]).forEach(k=>{ kv[k.name]=k.value; });
@@ -872,11 +863,11 @@ async function loadFinishJobs(dateFrom, dateTo, yards) {
   if (ctxS) {
     if (finishStatusChart) { finishStatusChart.destroy(); finishStatusChart=null; }
     try {
-      const r = await fetch(`${BASE_URL}/bi/query`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({
-        datasetName:'Jobs_By_Status', groupBySegments:['Status'],
+      const bodyS = { datasetName:'Jobs_By_Status', groupBySegments:['Status'],
         metrics:[{metricName:'TotalJobs',aggregation:'COUNT',alias:'TotalJobs'},{metricName:'TotalEstimatedValue',aggregation:'SUM',alias:'TotalEstimatedValue'}],
-        filters, orderBy:[{field:'TotalJobs',direction:'DESC'}], limit:15
-      })});
+        filters, orderBy:[{field:'TotalJobs',direction:'DESC'}], limit:15 };
+      _reg('chart-card-5','Finish Jobs — By Status','/bi/query', bodyS);
+      const r = await fetch(`${BASE_URL}/bi/query`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(bodyS)});
       const j = await r.json();
       const rows = j.data?.data||[];
       if (!rows.length) { showChartEmpty(ctxS,'No data'); }
@@ -924,11 +915,11 @@ async function loadFinishJobs(dateFrom, dateTo, yards) {
   if (ctxP) {
     if (finishPersonChart) { finishPersonChart.destroy(); finishPersonChart=null; }
     try {
-      const r = await fetch(`${BASE_URL}/bi/query`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({
-        datasetName:'Jobs_By_Status', groupBySegments:['SalesPerson'],
+      const bodyP = { datasetName:'Jobs_By_Status', groupBySegments:['SalesPerson'],
         metrics:[{metricName:'TotalJobs',aggregation:'COUNT',alias:'TotalJobs'},{metricName:'TotalEstimatedValue',aggregation:'SUM',alias:'TotalEstimatedValue'}],
-        filters, orderBy:[{field:'TotalEstimatedValue',direction:'DESC'}], limit:15
-      })});
+        filters, orderBy:[{field:'TotalEstimatedValue',direction:'DESC'}], limit:15 };
+      _reg('chart-card-6','Finish Jobs — By Salesperson','/bi/query', bodyP);
+      const r = await fetch(`${BASE_URL}/bi/query`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(bodyP)});
       const j = await r.json();
       const rows = j.data?.data||[];
       if (!rows.length) { showChartEmpty(ctxP,'No data'); }
@@ -957,6 +948,7 @@ async function loadFinishJobs(dateFrom, dateTo, yards) {
 
   // Yard breakout
   loadYardBreakoutFinish(dateFrom, dateTo, yards);
+  _injectInfoButtons();
 }
 
 /* ══════════════════════════════════════════════════════════════════
@@ -978,6 +970,7 @@ async function loadJobProfitLoss(dateFrom, dateTo, yards) {
       { metricName:'MaterialActual', aggregation:'SUM', alias:'MaterialActual' },
       { metricName:'LaborHours', aggregation:'SUM', alias:'LaborHours' },
     ], filters };
+    _reg('jpl-kpi-row','Job P/L — KPIs','/bi/kpis', kpiBody);
     const kr = await fetch(`${BASE_URL}/bi/kpis`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(kpiBody) });
     const kj = await kr.json();
     const kv = {}; (kj.data?.kpis||[]).forEach(k=>{ kv[k.name]=k.value; });
@@ -1003,15 +996,15 @@ async function loadJobProfitLoss(dateFrom, dateTo, yards) {
   if (ctx) {
     if (jplChart) { jplChart.destroy(); jplChart=null; }
     try {
-      const r = await fetch(`${BASE_URL}/bi/query`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({
-datasetName:'jobs_profit_by_invoice', groupBySegments:['SalesPersonName'],
+      const bodyJ = { datasetName:'jobs_profit_by_invoice', groupBySegments:['SalesPersonName'],
         metrics:[
           {metricName:'Revenue',aggregation:'SUM',alias:'Revenue'},
           {metricName:'LaborActual',aggregation:'SUM',alias:'LaborActual'},
           {metricName:'MaterialActual',aggregation:'SUM',alias:'MaterialActual'},
         ],
-        filters, orderBy:[{field:'Revenue',direction:'DESC'}], limit:15
-      })});
+        filters, orderBy:[{field:'Revenue',direction:'DESC'}], limit:15 };
+      _reg('chart-card-8','Job P/L — Revenue vs Labor by Salesperson','/bi/query', bodyJ);
+      const r = await fetch(`${BASE_URL}/bi/query`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(bodyJ)});
       const j = await r.json();
       const rows = j.data?.data||[];
       if (!rows.length) { showChartEmpty(ctx,'No data'); }
@@ -1054,6 +1047,7 @@ datasetName:'jobs_profit_by_invoice', groupBySegments:['SalesPersonName'],
 
   // Yard breakout
   loadYardBreakoutJPL(dateFrom, dateTo, yards);
+  _injectInfoButtons();
 }
 
 /* ══════════════════════════════════════════════════════════════════
@@ -1076,6 +1070,7 @@ async function loadForecast(dateFrom, dateTo, yards) {
       { metricName:'Variance',         aggregation:'SUM', alias:'Variance'         },
       { metricName:'JobCount',         aggregation:'COUNT', alias:'JobCount'       },
     ], filters };
+    _reg('forecast-kpi-row','Forecast — KPIs','/bi/kpis', kpiBody);
     const kr = await fetch(`${BASE_URL}/bi/kpis`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(kpiBody) });
     const kj = await kr.json();
     const kv = {}; (kj.data?.kpis||[]).forEach(k=>{ kv[k.name]=k.value; });
@@ -1099,15 +1094,15 @@ async function loadForecast(dateFrom, dateTo, yards) {
   if (ctx) {
     if (forecastChart) { forecastChart.destroy(); forecastChart=null; }
     try {
-      const r = await fetch(`${BASE_URL}/bi/query`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({
-        datasetName:'Job_Revenue_Forecast', groupBySegments:['Year','Month'],
+      const bodyF = { datasetName:'Job_Revenue_Forecast', groupBySegments:['Year','Month'],
         metrics:[
           {metricName:'EstimatedRevenue',aggregation:'SUM',alias:'EstimatedRevenue'},
           {metricName:'ActualRevenue',aggregation:'SUM',alias:'ActualRevenue'},
           {metricName:'Variance',aggregation:'SUM',alias:'Variance'},
         ],
-        filters, orderBy:[{field:'Year',direction:'ASC'},{field:'Month',direction:'ASC'}], limit:60
-      })});
+        filters, orderBy:[{field:'Year',direction:'ASC'},{field:'Month',direction:'ASC'}], limit:60 };
+      _reg('chart-card-10','Forecast — Est vs Actual by Month','/bi/query', bodyF);
+      const r = await fetch(`${BASE_URL}/bi/query`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(bodyF)});
       const j = await r.json();
       const rows = (j.data?.data||[]).filter(r=>r.Year&&r.Year>=2020);
       if (!rows.length) { showChartEmpty(ctx,'No forecast data'); }
@@ -1141,14 +1136,14 @@ async function loadForecast(dateFrom, dateTo, yards) {
   if (ctxP) {
     if (forecastPersonChart) { forecastPersonChart.destroy(); forecastPersonChart=null; }
     try {
-      const r = await fetch(`${BASE_URL}/bi/query`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({
-datasetName:'Job_Revenue_Forecast', groupBySegments:['SalesPerson'],
+      const bodyFP = { datasetName:'Job_Revenue_Forecast', groupBySegments:['SalesPerson'],
         metrics:[
           {metricName:'EstimatedRevenue',aggregation:'SUM',alias:'EstimatedRevenue'},
           {metricName:'ActualRevenue',aggregation:'SUM',alias:'ActualRevenue'},
         ],
-        filters, orderBy:[{field:'EstimatedRevenue',direction:'DESC'}], limit:15
-      })});
+        filters, orderBy:[{field:'EstimatedRevenue',direction:'DESC'}], limit:15 };
+      _reg('chart-card-11','Forecast — Variance by Salesperson','/bi/query', bodyFP);
+      const r = await fetch(`${BASE_URL}/bi/query`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(bodyFP)});
       const j = await r.json();
       const rows = j.data?.data||[];
       if (!rows.length) { showChartEmpty(ctxP,'No data'); }
@@ -1176,6 +1171,7 @@ datasetName:'Job_Revenue_Forecast', groupBySegments:['SalesPerson'],
 
   // Yard breakout
   loadYardBreakoutForecast(dateFrom, dateTo, yards);
+  _injectInfoButtons();
 }
 
 /* ══════════════════════════════════════════════════════════════════

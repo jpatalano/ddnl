@@ -293,20 +293,88 @@
     }
 
     /* ════════════════════════════════════════════════════════════════
-       HOME SCREEN
+       HOME SCREEN — DATASET EXPLORER
     ════════════════════════════════════════════════════════════════ */
-    #home-screen { flex: 1; overflow-y: auto; padding: 28px 32px; display: none; }
-    #home-screen h2 { font-size: 22px; font-weight: 700; color: var(--navy); margin-bottom: 6px; }
-    #home-screen p { color: var(--text-muted); font-size: 13.5px; margin-bottom: 24px; }
+    #home-screen { flex: 1; display: none; overflow: hidden; }
+    .dex-layout { display: grid; grid-template-columns: 280px 1fr; height: 100%; overflow: hidden; }
+
+    /* Left: dataset list */
+    .dex-list { border-right: 1px solid var(--border); overflow-y: auto; background: var(--surface2); }
+    .dex-list-header { padding: 16px 16px 10px; border-bottom: 1px solid var(--border); }
+    .dex-list-header h3 { font-size: 13px; font-weight: 700; color: var(--navy); margin: 0 0 8px; text-transform: uppercase; letter-spacing: .06em; }
+    .dex-list-header input { width: 100%; box-sizing: border-box; padding: 6px 10px; border: 1.5px solid var(--border); border-radius: 6px; font-size: 12px; background: var(--surface); color: var(--text); outline: none; }
+    .dex-list-header input:focus { border-color: var(--teal); }
+    .dex-ds-item { padding: 12px 16px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background .12s; }
+    .dex-ds-item:hover { background: rgba(0,191,165,.06); }
+    .dex-ds-item.active { background: rgba(0,51,102,.07); border-left: 3px solid var(--navy); padding-left: 13px; }
+    .dex-ds-name { font-size: 12.5px; font-weight: 700; color: var(--navy); line-height: 1.3; word-break: break-all; }
+    .dex-ds-desc { font-size: 11px; color: var(--text-muted); margin-top: 2px; line-height: 1.4; }
+    .dex-ds-pills { display: flex; gap: 6px; margin-top: 5px; }
+    .dex-pill { border-radius: 10px; padding: 1px 7px; font-size: 10px; font-weight: 600; }
+    .dex-pill.seg { background: var(--blue-pill); color: var(--navy); }
+    .dex-pill.met { background: #ede9fe; color: #6b21a8; }
+
+    /* Right: explorer */
+    .dex-main { display: flex; flex-direction: column; overflow: hidden; }
+    .dex-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; color: var(--text-muted); }
+    .dex-empty i { opacity: .3; }
+    .dex-empty p { font-size: 13px; }
+
+    /* Explorer panel when dataset selected */
+    .dex-panel { display: none; flex-direction: column; overflow: hidden; height: 100%; }
+    .dex-panel.visible { display: flex; }
+    .dex-panel-header { padding: 14px 20px; border-bottom: 1px solid var(--border); background: var(--surface); display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+    .dex-panel-header h2 { font-size: 15px; font-weight: 700; color: var(--navy); margin: 0; }
+    .dex-panel-header p  { font-size: 12px; color: var(--text-muted); margin: 0; flex: 1; }
+    .dex-badge { background: var(--navy); color: #fff; border-radius: 6px; padding: 2px 8px; font-size: 11px; font-weight: 600; }
+
+    .dex-body { display: grid; grid-template-rows: auto 1fr; overflow: hidden; flex: 1; }
+
+    /* Schema row */
+    .dex-schema { display: grid; grid-template-columns: 1fr 1fr; gap: 0; border-bottom: 1px solid var(--border); max-height: 200px; overflow: hidden; flex-shrink: 0; }
+    .dex-schema-col { overflow-y: auto; padding: 12px 16px; }
+    .dex-schema-col + .dex-schema-col { border-left: 1px solid var(--border); }
+    .dex-schema-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--text-muted); margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+    .dex-field-tag { display: inline-flex; align-items: center; gap: 4px; background: var(--surface2); border: 1px solid var(--border); border-radius: 14px; padding: 2px 9px; font-size: 11px; color: var(--text); margin: 2px; cursor: pointer; transition: all .12s; }
+    .dex-field-tag:hover { border-color: var(--teal); color: var(--teal); }
+    .dex-field-tag.selected { background: var(--teal); border-color: var(--teal); color: #fff; }
+    .dex-field-tag .tag-type { font-size: 9px; opacity: .6; }
+
+    /* Query builder */
+    .dex-qbuilder { border-bottom: 1px solid var(--border); padding: 12px 16px; background: #f8fafb; flex-shrink: 0; }
+    .dex-qbuilder-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .dex-qb-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); white-space: nowrap; min-width: 60px; }
+    .dex-qb-input { padding: 5px 9px; border: 1.5px solid var(--border); border-radius: 6px; font-size: 12px; background: var(--surface); color: var(--text); outline: none; }
+    .dex-qb-input:focus { border-color: var(--teal); }
+    .dex-run-btn { background: var(--teal); color: #fff; border: none; border-radius: 6px; padding: 6px 16px; font-size: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: opacity .15s; margin-left: auto; }
+    .dex-run-btn:hover { opacity: .88; }
+    .dex-run-btn:disabled { opacity: .5; cursor: default; }
+    .dex-limit-select { padding: 5px 8px; border: 1.5px solid var(--border); border-radius: 6px; font-size: 12px; background: var(--surface); color: var(--text); outline: none; }
+
+    /* Results */
+    .dex-results { flex: 1; overflow: auto; padding: 0; }
+    .dex-results-toolbar { padding: 8px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; background: var(--surface); flex-shrink: 0; }
+    .dex-results-meta { font-size: 11px; color: var(--text-muted); flex: 1; }
+    .dex-export-btn { padding: 4px 12px; border: 1.5px solid var(--border); border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer; background: var(--surface); color: var(--text); transition: all .12s; }
+    .dex-export-btn:hover { border-color: var(--navy); color: var(--navy); }
+    .dex-table-wrap { overflow: auto; max-height: 100%; }
+    .dex-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .dex-table thead tr { background: var(--navy); color: #fff; position: sticky; top: 0; z-index: 2; }
+    .dex-table thead th { padding: 8px 12px; text-align: left; font-weight: 600; white-space: nowrap; }
+    .dex-table tbody tr:nth-child(even) { background: var(--surface2); }
+    .dex-table tbody tr:hover { background: rgba(0,191,165,.06); }
+    .dex-table tbody td { padding: 6px 12px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+    .dex-table tbody td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    .dex-no-data { padding: 40px; text-align: center; color: var(--text-muted); font-size: 13px; }
+    .dex-spinner-wrap { padding: 40px; text-align: center; color: var(--text-muted); }
+
+    /* dataset-grid retained for compatibility */
     .dataset-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
-    .dataset-card {
-      background: var(--surface); border-radius: var(--radius); border: 1.5px solid var(--border);
-      padding: 18px 20px; cursor: pointer; transition: all .18s; display: flex; flex-direction: column; gap: 8px;
-    }
+    .dataset-card { background: var(--surface); border-radius: var(--radius); border: 1.5px solid var(--border); padding: 18px 20px; cursor: pointer; transition: all .18s; display: flex; flex-direction: column; gap: 8px; }
     .dataset-card:hover { border-color: var(--teal); box-shadow: var(--shadow); transform: translateY(-1px); }
     .dc-header { display: flex; align-items: flex-start; justify-content: space-between; }
     .dc-name { font-size: 14px; font-weight: 700; color: var(--navy); line-height: 1.3; }
-    .dc-icon { width: 36px; height: 36px; background: var(--navy); border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 16px; }
+    .dc-icon { width: 36px; height: 36px; background: var(--navy); border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
     .dc-desc { font-size: 12px; color: var(--text-muted); line-height: 1.5; }
     .dc-meta { display: flex; gap: 10px; margin-top: 4px; }
     .dc-pill { background: var(--blue-pill); color: var(--navy); border-radius: 10px; padding: 2px 9px; font-size: 11px; font-weight: 600; }
@@ -1206,11 +1274,101 @@
 
     <!-- ═══ HOME ═══ -->
     <div id="home-screen">
-      <h2>Business Intelligence</h2>
-      <p>Select a dataset to start building a report, or open the Dashboard for an overview.</p>
-      <div class="dataset-grid" id="dataset-grid">
-        <div class="state-box" style="grid-column:1/-1;padding:40px 0">
-          <div class="spinner"></div><p>Loading datasets...</p>
+      <div class="dex-layout">
+        <!-- Left: dataset list -->
+        <div class="dex-list">
+          <div class="dex-list-header">
+            <h3>Datasets</h3>
+            <input type="text" id="dex-search" placeholder="Search datasets..." oninput="dexFilterList(this.value)">
+          </div>
+          <div id="dex-ds-list"><div style="padding:20px;color:var(--text-muted);font-size:12px">Loading...</div></div>
+        </div>
+
+        <!-- Right: explorer -->
+        <div class="dex-main">
+          <!-- Empty state -->
+          <div class="dex-empty" id="dex-empty">
+            <i data-lucide="database" style="width:48px;height:48px;stroke-width:1.2"></i>
+            <p>Select a dataset to explore its schema and run queries</p>
+          </div>
+
+          <!-- Active explorer panel -->
+          <div class="dex-panel" id="dex-panel">
+            <!-- Header -->
+            <div class="dex-panel-header">
+              <div>
+                <h2 id="dex-panel-name">&mdash;</h2>
+                <p id="dex-panel-desc"></p>
+              </div>
+              <span id="dex-seg-badge" class="dex-badge" style="background:var(--navy)">0 segments</span>
+              <span id="dex-met-badge" class="dex-badge" style="background:#6b21a8">0 metrics</span>
+            </div>
+
+            <!-- Schema: segments + known metrics -->
+            <div class="dex-schema">
+              <div class="dex-schema-col">
+                <div class="dex-schema-title">
+                  <i data-lucide="tag" style="width:11px;height:11px"></i> Segments (Group By / Filter)
+                </div>
+                <div id="dex-seg-tags"></div>
+              </div>
+              <div class="dex-schema-col">
+                <div class="dex-schema-title">
+                  <i data-lucide="bar-chart-2" style="width:11px;height:11px"></i> Metrics (click to select)
+                </div>
+                <div id="dex-met-tags"></div>
+              </div>
+            </div>
+
+            <!-- Query builder -->
+            <div class="dex-qbuilder">
+              <div class="dex-qbuilder-row" style="margin-bottom:8px">
+                <span class="dex-qb-label">Group By</span>
+                <div id="dex-qb-groupby" style="display:flex;gap:6px;flex-wrap:wrap;flex:1">
+                  <span style="font-size:11px;color:var(--text-muted)">Click segments above to add</span>
+                </div>
+              </div>
+              <div class="dex-qbuilder-row" style="margin-bottom:8px">
+                <span class="dex-qb-label">Metrics</span>
+                <div id="dex-qb-metrics" style="display:flex;gap:6px;flex-wrap:wrap;flex:1">
+                  <span style="font-size:11px;color:var(--text-muted)">Click metrics above to add</span>
+                </div>
+              </div>
+              <div class="dex-qbuilder-row">
+                <span class="dex-qb-label">Dates</span>
+                <input type="date" class="dex-qb-input" id="dex-date-from">
+                <span style="font-size:11px;color:var(--text-muted)">to</span>
+                <input type="date" class="dex-qb-input" id="dex-date-to">
+                <span class="dex-qb-label" style="margin-left:8px">Date field</span>
+                <select class="dex-qb-input dex-limit-select" id="dex-date-seg" style="max-width:160px">
+                  <option value="">(none)</option>
+                </select>
+                <span class="dex-qb-label" style="margin-left:8px">Yard</span>
+                <select class="dex-qb-input dex-limit-select" id="dex-yard-filter" style="max-width:160px"></select>
+                <span class="dex-qb-label" style="margin-left:8px">Limit</span>
+                <select class="dex-limit-select" id="dex-limit">
+                  <option value="25">25</option>
+                  <option value="100" selected>100</option>
+                  <option value="500">500</option>
+                  <option value="1000">1000</option>
+                </select>
+                <button class="dex-run-btn" id="dex-run-btn" onclick="dexRunQuery()">
+                  <i data-lucide="play" style="width:13px;height:13px"></i> Run Query
+                </button>
+              </div>
+            </div>
+
+            <!-- Results -->
+            <div class="dex-results" id="dex-results">
+              <div class="dex-results-toolbar">
+                <span class="dex-results-meta" id="dex-results-meta">Run a query to see results</span>
+                <button class="dex-export-btn" onclick="dexExportCsv()" id="dex-export-btn" style="display:none">
+                  <i data-lucide="download" style="width:12px;height:12px"></i> CSV
+                </button>
+              </div>
+              <div id="dex-table-wrap" class="dex-table-wrap"></div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -1617,7 +1775,7 @@ function showView(view) {
     document.getElementById(`nav-${v}`)?.classList.toggle('active',v===view);
   });
   document.getElementById('dashboard-screen').style.display = view==='dashboard' ? 'flex' : 'none';
-  document.getElementById('home-screen').style.display      = view==='home'       ? ''     : 'none';
+  document.getElementById('home-screen').style.display      = view==='home'       ? 'flex'  : 'none';
   document.getElementById('saved-screen').style.display     = view==='saved'      ? ''     : 'none';
   document.getElementById('builder-panel').classList.toggle('collapsed', view!=='builder');
 
@@ -1635,12 +1793,357 @@ function showView(view) {
     document.getElementById('loading-state').style.display='none';
   }
   if(view==='saved') renderSavedList();
+  if(view==='home') dexInit();
 }
 
 function showResultsArea() { document.getElementById('results-area').style.display='flex'; document.getElementById('builder-empty').style.display='none'; document.getElementById('loading-state').style.display='none'; }
 function showBuilderEmpty() { document.getElementById('results-area').style.display='none'; document.getElementById('builder-empty').style.display='flex'; document.getElementById('loading-state').style.display='none'; }
 function showLoadingState(msg='Loading...') { document.getElementById('results-area').style.display='none'; document.getElementById('builder-empty').style.display='none'; document.getElementById('loading-state').style.display='flex'; document.getElementById('loading-msg').textContent=msg; }
 function toggleSection(id) { const el=document.getElementById(id); el.style.display=el.style.display==='none'?'':'none'; }
+
+/* ══════════════════════════════════════════════════════════════════
+   DATASET EXPLORER
+══════════════════════════════════════════════════════════════════ */
+
+let _dexDatasets = [];       // full list from /bi/datasets
+let _dexActive   = null;     // currently selected dataset detail
+let _dexSelSegs  = [];       // selected groupBy segments
+let _dexSelMets  = [];       // selected metrics
+let _dexResults  = [];       // last query results
+let _dexInited   = false;
+
+// Known metrics per dataset (from API exploration)
+const DEX_METRICS = {
+  jobs_profit_loss:        ['JobRevenue','Profit','TotalExpenses','LaborHours','LaborExpenses','MaterialsExpenses','LaborBurden','LaborWC','LaborUnion','MaterialsBurden','JobCount'],
+  jobs_profit_by_invoice:  ['Revenue','LaborActual','MaterialActual','LaborHours','PartsCost','Overhead','LaborBurden','Net','JobCount','InvoiceCount','MaterialBurden'],
+  Job_Revenue_Forecast:    ['EstimatedRevenue','ActualRevenue','Variance','EstimatedHours','ActualHours','HoursVariance','EstimatedProfit','ActualProfit','ProfitVariance','JobCount','VariancePct'],
+  Jobs_By_Status:          ['TotalJobs','TotalEstimatedValue','AvgEstimatedValue'],
+  Quotes_By_Status:        ['TotalQuotes','TotalValue','AvgValue','ConversionRate'],
+  Quote_Revenue_Forecast:  ['EstimatedRevenue','ActualRevenue','EstimatedHours','ActualHours'],
+  quote_profit_forecast:   ['EstimatedRevenue','ActualRevenue','EstimatedCost','ActualCost','EstimatedProfit','ActualProfit','EstimatedHours','ActualHours','Variance','VariancePct'],
+  Equipment_Profit_Loss:   ['TotalRevenue','TotalExpenses','TotalProfit','LaborCost','MaterialCost','AvgMargin','UnitCount','JobCount'],
+  Equipment_Utilization:   ['TotalTargetHours','TotalAvailableHours','TotalDowntimeHours','AvgUtilization','UnitCount','ScheduledCount'],
+  WO_Dashboard:            ['TotalWorkOrders','TotalLaborCost','TotalMaterialCost','TotalWOCost','AvgWOCost','OpenCount','ClosedCount','AvgDaysOpen','UnitCount'],
+  Preventive_Maintenance:  ['TotalActivities','PastDueCount','ComingDueCount','UnitCount'],
+};
+
+async function dexInit() {
+  if (_dexInited) return;
+  _dexInited = true;
+  try {
+    const r = await fetch(`${BASE_URL}/bi/datasets`);
+    const j = await r.json();
+    _dexDatasets = j.data?.datasets || [];
+    dexRenderList(_dexDatasets);
+    // Pre-populate yard filter from segment-values
+    dexLoadYardOptions();
+  } catch(e) {
+    document.getElementById('dex-ds-list').innerHTML = '<div style="padding:20px;color:var(--red);font-size:12px">Failed to load datasets</div>';
+  }
+}
+
+function dexRenderList(datasets) {
+  document.getElementById('dex-ds-list').innerHTML = datasets.length
+    ? datasets.map(ds => `
+      <div class="dex-ds-item" id="dex-item-${ds.name}" onclick="dexSelectDataset('${ds.name}')">
+        <div class="dex-ds-name">${ds.name}</div>
+        <div class="dex-ds-desc">${ds.description || ''}</div>
+        <div class="dex-ds-pills">
+          <span class="dex-pill seg">${ds.segmentCount} segments</span>
+          <span class="dex-pill met">${ds.metricCount} metrics</span>
+        </div>
+      </div>`).join('')
+    : '<div style="padding:20px;color:var(--text-muted);font-size:12px">No datasets found</div>';
+}
+
+function dexFilterList(q) {
+  const filtered = q ? _dexDatasets.filter(ds =>
+    ds.name.toLowerCase().includes(q.toLowerCase()) ||
+    (ds.description||'').toLowerCase().includes(q.toLowerCase())
+  ) : _dexDatasets;
+  dexRenderList(filtered);
+  // Re-highlight active
+  if (_dexActive) {
+    document.getElementById(`dex-item-${_dexActive.name}`)?.classList.add('active');
+  }
+}
+
+async function dexSelectDataset(name) {
+  // Highlight in list
+  document.querySelectorAll('.dex-ds-item').forEach(el => el.classList.remove('active'));
+  document.getElementById(`dex-item-${name}`)?.classList.add('active');
+
+  // Reset selections
+  _dexSelSegs = [];
+  _dexSelMets = [];
+  _dexResults = [];
+
+  // Show loading state
+  document.getElementById('dex-empty').style.display = 'none';
+  document.getElementById('dex-panel').classList.add('visible');
+  document.getElementById('dex-panel-name').textContent = name;
+  document.getElementById('dex-panel-desc').textContent = 'Loading schema...';
+  document.getElementById('dex-seg-tags').innerHTML = '<span style="font-size:11px;color:var(--text-muted)">Loading...</span>';
+  document.getElementById('dex-met-tags').innerHTML = '';
+  document.getElementById('dex-table-wrap').innerHTML = '';
+  document.getElementById('dex-results-meta').textContent = 'Run a query to see results';
+  document.getElementById('dex-export-btn').style.display = 'none';
+
+  try {
+    const r = await fetch(`${BASE_URL}/bi/datasets/${name}`);
+    const j = await r.json();
+    const ds = j.data?.dataset;
+    _dexActive = { name, detail: ds };
+
+    // Header
+    const summary = _dexDatasets.find(x => x.name === name);
+    document.getElementById('dex-panel-desc').textContent = ds.description || '';
+    document.getElementById('dex-seg-badge').textContent = `${ds.datasetSegments?.length || 0} segments`;
+    document.getElementById('dex-met-badge').textContent = `${summary?.metricCount || 0} metrics`;
+
+    // Segments
+    const segs = (ds.datasetSegments || []).map(s => ({
+      name: s.segment?.segmentName || s.columnName,
+      col:  s.columnName,
+      type: s.segment?.segmentType || 'string',
+      cat:  s.segment?.category || '',
+    }));
+    _dexActive.segments = segs;
+
+    // Metrics from known list
+    const mets = (DEX_METRICS[name] || []).map(m => ({ name: m }));
+    _dexActive.metrics = mets;
+
+    // Render segment tags
+    document.getElementById('dex-seg-tags').innerHTML = segs.map(s =>
+      `<span class="dex-field-tag" id="dex-seg-${s.name}" onclick="dexToggleSeg('${s.name}')">
+        ${s.name}<span class="tag-type">${s.type==='date'?'📅':s.cat==='Entity'?'👤':''}</span>
+      </span>`).join('');
+
+    // Render metric tags
+    document.getElementById('dex-met-tags').innerHTML = mets.length
+      ? mets.map(m =>
+        `<span class="dex-field-tag" id="dex-met-${m.name}" onclick="dexToggleMet('${m.name}')">${m.name}</span>`
+        ).join('')
+      : '<span style="font-size:11px;color:var(--text-muted)">No known metrics — run a query with segments only to explore</span>';
+
+    // Populate date segment dropdown
+    const dateSegs = segs.filter(s => s.type === 'date');
+    const dateSel  = document.getElementById('dex-date-seg');
+    dateSel.innerHTML = '<option value="">(no date filter)</option>' +
+      dateSegs.map(s => `<option value="${s.name}">${s.name}</option>`).join('');
+    // Auto-select a sensible default
+    const preferredDate = ['JobStartDate','QuoteDate','InvoiceDate','ForecastDate','CreatedDate'];
+    for (const p of preferredDate) {
+      if (dateSegs.find(s => s.name === p)) { dateSel.value = p; break; }
+    }
+
+    // Sync dates from dashboard
+    const df = document.getElementById('dash-date-from')?.value;
+    const dt = document.getElementById('dash-date-to')?.value;
+    if (df) document.getElementById('dex-date-from').value = df;
+    if (dt) document.getElementById('dex-date-to').value   = dt;
+
+    // Sync yard from dashboard
+    dexSyncYardFilter(name, segs);
+
+    // Update query builder display
+    dexUpdateQBuilder();
+
+    lucide.createIcons({ el: document.getElementById('dex-panel') });
+  } catch(e) {
+    document.getElementById('dex-panel-desc').textContent = 'Error loading schema: ' + e.message;
+  }
+}
+
+async function dexLoadYardOptions() {
+  try {
+    const r = await fetch(`${BASE_URL}/bi/segment-values?datasetName=jobs_profit_loss&segmentName=Yard&limit=100`);
+    const j = await r.json();
+    const vals = (j.data?.values || []).map(v => v.value || v);
+    const sel = document.getElementById('dex-yard-filter');
+    sel.innerHTML = '<option value="">All Yards</option>' +
+      vals.map(v => `<option value="${v}">${v}</option>`).join('');
+    // Pre-select yards from dashboard
+    const dashYards = typeof getSelectedYards === 'function' ? getSelectedYards() : [];
+    if (dashYards.length === 1) sel.value = dashYards[0];
+  } catch(e) {}
+}
+
+function dexSyncYardFilter(dsName, segs) {
+  // Check if this dataset has a Yard segment
+  const hasYard = segs.some(s => s.name === 'Yard' || s.name === 'YardName');
+  const yardRow = document.getElementById('dex-yard-filter').closest('span, select')?.parentElement;
+  // Just leave the control visible always — it'll be ignored if Yard segment doesn't exist
+}
+
+function dexToggleSeg(name) {
+  const idx = _dexSelSegs.indexOf(name);
+  if (idx >= 0) { _dexSelSegs.splice(idx, 1); }
+  else           { _dexSelSegs.push(name); }
+  document.getElementById(`dex-seg-${name}`)?.classList.toggle('selected', _dexSelSegs.includes(name));
+  dexUpdateQBuilder();
+}
+
+function dexToggleMet(name) {
+  const idx = _dexSelMets.indexOf(name);
+  if (idx >= 0) { _dexSelMets.splice(idx, 1); }
+  else           { _dexSelMets.push(name); }
+  document.getElementById(`dex-met-${name}`)?.classList.toggle('selected', _dexSelMets.includes(name));
+  dexUpdateQBuilder();
+}
+
+function dexUpdateQBuilder() {
+  const gbWrap = document.getElementById('dex-qb-groupby');
+  const mWrap  = document.getElementById('dex-qb-metrics');
+
+  gbWrap.innerHTML = _dexSelSegs.length
+    ? _dexSelSegs.map(s =>
+        `<span style="display:inline-flex;align-items:center;gap:4px;background:rgba(0,51,102,.1);border-radius:12px;padding:2px 8px;font-size:11px;font-weight:600;color:var(--navy)">
+          ${s}
+          <span onclick="dexToggleSeg('${s}')" style="cursor:pointer;opacity:.6;font-size:10px">×</span>
+        </span>`).join('')
+    : '<span style="font-size:11px;color:var(--text-muted)">Click segments above to add</span>';
+
+  mWrap.innerHTML = _dexSelMets.length
+    ? _dexSelMets.map(m =>
+        `<span style="display:inline-flex;align-items:center;gap:4px;background:rgba(107,33,168,.1);border-radius:12px;padding:2px 8px;font-size:11px;font-weight:600;color:#6b21a8">
+          ${m}
+          <span onclick="dexToggleMet('${m}')" style="cursor:pointer;opacity:.6;font-size:10px">×</span>
+        </span>`).join('')
+    : '<span style="font-size:11px;color:var(--text-muted)">Click metrics above to add</span>';
+}
+
+async function dexRunQuery() {
+  if (!_dexActive) return;
+  const dsName = _dexActive.name;
+  const btn = document.getElementById('dex-run-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<i data-lucide="loader" style="width:13px;height:13px"></i> Running...';
+  lucide.createIcons({ el: btn });
+
+  document.getElementById('dex-table-wrap').innerHTML =
+    '<div class="dex-spinner-wrap"><div class="spinner"></div><p>Querying...</p></div>';
+  document.getElementById('dex-export-btn').style.display = 'none';
+
+  try {
+    const dateFrom = document.getElementById('dex-date-from').value;
+    const dateTo   = document.getElementById('dex-date-to').value;
+    const dateSeg  = document.getElementById('dex-date-seg').value;
+    const yard     = document.getElementById('dex-yard-filter').value;
+    const limit    = parseInt(document.getElementById('dex-limit').value) || 100;
+
+    const filters = [];
+    if (dateSeg && dateFrom && dateTo) {
+      filters.push({ segmentName: dateSeg, operator: 'between', value: dateFrom, secondValue: dateTo });
+    } else if (dateSeg && dateFrom) {
+      filters.push({ segmentName: dateSeg, operator: 'gte', value: dateFrom });
+    }
+    // Yard filter — detect correct segment name
+    if (yard) {
+      const segs = _dexActive.segments || [];
+      const yardSeg = segs.find(s => s.name === 'Yard') ? 'Yard'
+                    : segs.find(s => s.name === 'YardName') ? 'YardName' : null;
+      if (yardSeg) filters.push({ segmentName: yardSeg, operator: 'eq', value: yard });
+    }
+
+    let data, meta;
+    if (_dexSelMets.length === 0 && _dexSelSegs.length === 0) {
+      // Raw browse — use /bi/query with no groupBy or metrics to get sample rows
+      // Build body with all known metrics and first few segs as groupBy
+      const defaultSegs = (_dexActive.segments || []).slice(0,4).map(s => s.name);
+      const defaultMets = (DEX_METRICS[dsName] || []).slice(0,5);
+      const body = {
+        datasetName: dsName,
+        groupBySegments: defaultSegs,
+        metrics: defaultMets.map(m => ({ metricName: m, aggregation: 'SUM', alias: m })),
+        filters, limit
+      };
+      const r = await fetch(`${BASE_URL}/bi/query`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+      const j = await r.json();
+      data = j.data?.data || [];
+      meta = j.data?.metadata;
+    } else if (_dexSelMets.length === 0) {
+      // Segment-only: segment values
+      const body = {
+        datasetName: dsName,
+        groupBySegments: _dexSelSegs,
+        metrics: [],
+        filters, limit
+      };
+      const r = await fetch(`${BASE_URL}/bi/query`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+      const j = await r.json();
+      data = j.data?.data || [];
+      meta = j.data?.metadata;
+    } else {
+      // Full query
+      const body = {
+        datasetName: dsName,
+        groupBySegments: _dexSelSegs,
+        metrics: _dexSelMets.map(m => ({ metricName: m, aggregation: 'SUM', alias: m })),
+        filters, limit,
+        orderBy: _dexSelMets.length ? [{ field: _dexSelMets[0], direction: 'DESC' }] : undefined
+      };
+      const r = await fetch(`${BASE_URL}/bi/query`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+      const j = await r.json();
+      data = j.data?.data || [];
+      meta = j.data?.metadata;
+    }
+
+    _dexResults = data;
+    dexRenderTable(data, meta);
+  } catch(e) {
+    document.getElementById('dex-table-wrap').innerHTML =
+      `<div class="dex-no-data" style="color:var(--red)">Query error: ${e.message}</div>`;
+    document.getElementById('dex-results-meta').textContent = 'Error';
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i data-lucide="play" style="width:13px;height:13px"></i> Run Query';
+    lucide.createIcons({ el: btn });
+  }
+}
+
+function dexRenderTable(rows, meta) {
+  const metaStr = meta
+    ? `${meta.totalRows ?? rows.length} rows · ${meta.executionTimeMs}ms${meta.cacheHit ? ' (cached)' : ''}`
+    : `${rows.length} rows`;
+  document.getElementById('dex-results-meta').textContent = metaStr;
+
+  if (!rows.length) {
+    document.getElementById('dex-table-wrap').innerHTML = '<div class="dex-no-data">No data returned for the selected filters.</div>';
+    return;
+  }
+
+  document.getElementById('dex-export-btn').style.display = '';
+  const cols = Object.keys(rows[0]);
+  const isNum = v => v !== null && v !== '' && !isNaN(parseFloat(v));
+
+  const html = `<table class="dex-table">
+    <thead><tr>${cols.map(c => `<th>${c}</th>`).join('')}</tr></thead>
+    <tbody>${rows.map(row =>
+      `<tr>${cols.map(c => {
+        const v = row[c];
+        const num = isNum(v);
+        const display = num && Math.abs(parseFloat(v)) >= 1000
+          ? parseFloat(v).toLocaleString(undefined, {minimumFractionDigits:0,maximumFractionDigits:2})
+          : (v ?? '—');
+        return `<td${num?' class="num"':''}>${display}</td>`;
+      }).join('')}</tr>`
+    ).join('')}</tbody>
+  </table>`;
+
+  document.getElementById('dex-table-wrap').innerHTML = html;
+}
+
+function dexExportCsv() {
+  if (!_dexResults.length) return;
+  const keys = Object.keys(_dexResults[0]);
+  const csv  = [keys.join(','), ..._dexResults.map(r => keys.map(k => JSON.stringify(r[k] ?? '')).join(','))].join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download = `${_dexActive?.name || 'dataset'}_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+}
 </script>
 
 <!-- ═══ Query Inspector Panel ═══ -->
