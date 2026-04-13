@@ -227,6 +227,11 @@
     #quote-kpi-row { grid-template-columns: repeat(3, 1fr); }
     #finish-kpi-row, #forecast-kpi-row, #rev-kpi-row { grid-template-columns: repeat(4, 1fr); }
     #jpl-kpi-row { grid-template-columns: repeat(5, 1fr); }
+    #epl-kpi-row { grid-template-columns: repeat(5, 1fr); }
+    #util-kpi-row { grid-template-columns: repeat(4, 1fr); }
+    #wo-kpi-row   { grid-template-columns: repeat(5, 1fr); }
+    #pm-kpi-row   { grid-template-columns: repeat(4, 1fr); }
+    .equip-sub-panel { display: block; }
     .dash-kpi-tile {
       background: var(--surface); border-radius: var(--radius); border: 1px solid var(--border);
       padding: 14px 16px; display: flex; align-items: center; gap: 12px; box-shadow: var(--shadow);
@@ -522,8 +527,10 @@
 
       <!-- Jobs / Quotes Tab Switcher -->
       <div class="dash-type-tabs">
-        <button id="dash-tab-jobs"   class="dash-type-tab active" onclick="switchDashTab('jobs')">Jobs</button>
-        <button id="dash-tab-quotes" class="dash-type-tab"        onclick="switchDashTab('quotes')">Quotes</button>
+        <button id="dash-tab-jobs"      class="dash-type-tab active" onclick="switchDashTab('jobs')">Jobs</button>
+        <button id="dash-tab-quotes"   class="dash-type-tab"        onclick="switchDashTab('quotes')">Quotes</button>
+        <button id="dash-tab-equipment" class="dash-type-tab"       onclick="switchDashTab('equipment')">Equipment</button>
+        <button id="dash-tab-pm"        class="dash-type-tab"       onclick="switchDashTab('pm')">Preventive Maint.</button>
       </div>
 
       <!-- ── JOBS CONTENT ── -->
@@ -938,6 +945,169 @@
         </div><!-- /quote-panel-forecast -->
 
       </div><!-- /dash-quotes-content -->
+
+
+      <!-- ── EQUIPMENT CONTENT ── -->
+      <div id="dash-equipment-content" style="display:none">
+        <div class="dash-sub-tabs">
+          <button class="dash-sub-tab active" onclick="switchEquipTab('pl')">P&amp;L</button>
+          <button class="dash-sub-tab"        onclick="switchEquipTab('utilization')">Utilization</button>
+          <button class="dash-sub-tab"        onclick="switchEquipTab('workorders')">Work Orders</button>
+        </div>
+
+        <!-- ═══ EQUIPMENT P/L sub-panel ═══ -->
+        <div id="equip-panel-pl" class="equip-sub-panel">
+          <div class="kpi-row" id="epl-kpi-row"></div>
+          <div class="dash-chart-row">
+            <div class="chart-card">
+              <div class="chart-card-header"><div>
+                <div class="chart-card-title">Revenue, Expenses &amp; Profit by Yard</div>
+                <div class="chart-card-sub">Equipment P&amp;L dataset</div>
+              </div></div>
+              <div class="chart-canvas-wrap tall"><canvas id="epl-yard-chart"></canvas></div>
+            </div>
+            <div class="chart-card">
+              <div class="chart-card-header"><div>
+                <div class="chart-card-title">Expense Breakdown</div>
+                <div class="chart-card-sub">Labor · Material · Overhead</div>
+              </div></div>
+              <div class="chart-canvas-wrap tall"><canvas id="epl-expense-chart"></canvas></div>
+            </div>
+          </div>
+          <div class="dash-chart-row">
+            <div class="chart-card full-width">
+              <div class="chart-card-header"><div>
+                <div class="chart-card-title">Top Units by Revenue</div>
+                <div class="chart-card-sub">Unit · Revenue · Expenses · Profit · Margin %</div>
+              </div></div>
+              <div class="table-scroll">
+                <table class="data-table">
+                  <thead><tr>
+                    <th>Unit</th><th>Type</th><th>Yard</th>
+                    <th>Revenue</th><th>Expenses</th><th>Profit</th><th>Margin %</th>
+                  </tr></thead>
+                  <tbody id="epl-table-body"><tr><td colspan="7" style="text-align:center;padding:20px"><div class="spinner" style="margin:auto"></div></td></tr></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div><!-- /equip-panel-pl -->
+
+        <!-- ═══ UTILIZATION sub-panel ═══ -->
+        <div id="equip-panel-utilization" class="equip-sub-panel" style="display:none">
+          <div class="kpi-row" id="util-kpi-row"></div>
+          <div class="dash-chart-row">
+            <div class="chart-card">
+              <div class="chart-card-header"><div>
+                <div class="chart-card-title">Utilization % by Yard</div>
+                <div class="chart-card-sub">Avg utilization across fleet</div>
+              </div></div>
+              <div class="chart-canvas-wrap tall"><canvas id="util-yard-chart"></canvas></div>
+            </div>
+            <div class="chart-card">
+              <div class="chart-card-header"><div>
+                <div class="chart-card-title">Downtime Hours by Yard</div>
+                <div class="chart-card-sub">Total downtime hours</div>
+              </div></div>
+              <div class="chart-canvas-wrap tall"><canvas id="util-downtime-chart"></canvas></div>
+            </div>
+          </div>
+          <div class="dash-chart-row">
+            <div class="chart-card full-width">
+              <div class="chart-card-header"><div>
+                <div class="chart-card-title">Unit Utilization Detail</div>
+                <div class="chart-card-sub">Target Hours · Available · Downtime · Utilization %</div>
+              </div></div>
+              <div class="table-scroll">
+                <table class="data-table">
+                  <thead><tr>
+                    <th>Unit</th><th>Type</th><th>Yard</th>
+                    <th>Target Hrs</th><th>Available Hrs</th><th>Downtime Hrs</th><th>Utilization %</th>
+                  </tr></thead>
+                  <tbody id="util-table-body"><tr><td colspan="7" style="text-align:center;padding:20px"><div class="spinner" style="margin:auto"></div></td></tr></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div><!-- /equip-panel-utilization -->
+
+        <!-- ═══ WORK ORDERS sub-panel ═══ -->
+        <div id="equip-panel-workorders" class="equip-sub-panel" style="display:none">
+          <div class="kpi-row" id="wo-kpi-row"></div>
+          <div class="dash-chart-row">
+            <div class="chart-card">
+              <div class="chart-card-header"><div>
+                <div class="chart-card-title">Work Orders by Yard</div>
+                <div class="chart-card-sub">Count &amp; total cost</div>
+              </div></div>
+              <div class="chart-canvas-wrap tall"><canvas id="wo-yard-chart"></canvas></div>
+            </div>
+            <div class="chart-card">
+              <div class="chart-card-header"><div>
+                <div class="chart-card-title">Cost Breakdown by Yard</div>
+                <div class="chart-card-sub">Labor vs Material</div>
+              </div></div>
+              <div class="chart-canvas-wrap tall"><canvas id="wo-cost-chart"></canvas></div>
+            </div>
+          </div>
+          <div class="dash-chart-row">
+            <div class="chart-card full-width">
+              <div class="chart-card-header"><div>
+                <div class="chart-card-title">Work Order Detail by Unit</div>
+                <div class="chart-card-sub">Unit · WOs · Labor · Material · Total Cost · Avg Cost</div>
+              </div></div>
+              <div class="table-scroll">
+                <table class="data-table">
+                  <thead><tr>
+                    <th>Unit</th><th>Type</th><th>Yard</th>
+                    <th>WOs</th><th>Labor Cost</th><th>Material Cost</th><th>Total Cost</th><th>Avg Cost</th>
+                  </tr></thead>
+                  <tbody id="wo-table-body"><tr><td colspan="8" style="text-align:center;padding:20px"><div class="spinner" style="margin:auto"></div></td></tr></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div><!-- /equip-panel-workorders -->
+
+      </div><!-- /dash-equipment-content -->
+
+      <!-- ── PM CONTENT ── -->
+      <div id="dash-pm-content" style="display:none">
+        <div class="kpi-row" id="pm-kpi-row"></div>
+        <div class="dash-chart-row">
+          <div class="chart-card">
+            <div class="chart-card-header"><div>
+              <div class="chart-card-title">Activities by Schedule Type</div>
+              <div class="chart-card-sub">Coming Due vs Past Due</div>
+            </div></div>
+            <div class="chart-canvas-wrap tall"><canvas id="pm-type-chart"></canvas></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-card-header"><div>
+              <div class="chart-card-title">Due Status by Yard</div>
+              <div class="chart-card-sub">Units with past due &amp; coming due PM</div>
+            </div></div>
+            <div class="chart-canvas-wrap tall"><canvas id="pm-yard-chart"></canvas></div>
+          </div>
+        </div>
+        <div class="dash-chart-row">
+          <div class="chart-card full-width">
+            <div class="chart-card-header"><div>
+              <div class="chart-card-title">PM Activities Detail</div>
+              <div class="chart-card-sub">Unit · Type · Yard · Activity · Schedule · Status</div>
+            </div></div>
+            <div class="table-scroll">
+              <table class="data-table">
+                <thead><tr>
+                  <th>Unit</th><th>Type</th><th>Yard</th>
+                  <th>Activity</th><th>Schedule Type</th><th>Status</th><th>Count</th>
+                </tr></thead>
+                <tbody id="pm-table-body"><tr><td colspan="7" style="text-align:center;padding:20px"><div class="spinner" style="margin:auto"></div></td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div><!-- /dash-pm-content -->
 
     </div><!-- /dashboard-screen -->
 

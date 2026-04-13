@@ -13,7 +13,7 @@ let qPerfChart    = null;
 
 const _yardBreakoutCharts = {};
 
-let activeDashTab = 'jobs'; // 'jobs' | 'quotes'
+let activeDashTab = 'jobs'; // 'jobs' | 'quotes' | 'equipment' | 'pm'
 
 const TEAL  = '#00BFA5';
 const NAVY  = '#003366';
@@ -115,10 +115,22 @@ function buildYardFilter(yards) {
 /* ── Tab switching ────────────────────────────────────────────────── */
 function switchDashTab(tab) {
   activeDashTab = tab;
-  document.getElementById('dash-tab-jobs').classList.toggle('active', tab === 'jobs');
-  document.getElementById('dash-tab-quotes').classList.toggle('active', tab === 'quotes');
-  document.getElementById('dash-jobs-content').style.display   = tab === 'jobs'   ? '' : 'none';
-  document.getElementById('dash-quotes-content').style.display = tab === 'quotes' ? '' : 'none';
+  ['jobs','quotes','equipment','pm'].forEach(t => {
+    document.getElementById(`dash-tab-${t}`)?.classList.toggle('active', t === tab);
+    document.getElementById(`dash-${t}-content`).style.display = t === tab ? '' : 'none';
+  });
+  // Lazy-load equipment / pm on first visit
+  const dateFrom = document.getElementById('dash-date-from')?.value || '';
+  const dateTo   = document.getElementById('dash-date-to')?.value   || '';
+  const yards    = getSelectedYards();
+  if (tab === 'equipment' && !equipLoaded[activeEquipTab]) {
+    equipLoaded[activeEquipTab] = true;
+    loadEquipSubTab(activeEquipTab, dateFrom, dateTo, yards);
+  }
+  if (tab === 'pm' && !pmLoaded) {
+    pmLoaded = true;
+    loadPM(dateFrom, dateTo, yards);
+  }
 }
 
 /* ── Master refresh ───────────────────────────────────────────────── */
@@ -130,6 +142,8 @@ async function refreshDashboard() {
   // Reset lazy-load flags so sub-tabs re-fetch with new filters
   JOB_TABS.forEach(t   => { jobLoaded[t]   = false; });
   QUOTE_TABS.forEach(t => { quoteLoaded[t] = false; });
+  EQUIP_TABS.forEach(t => { equipLoaded[t] = false; });
+  pmLoaded = false;
 
   setDashLoading(true);
   try {
@@ -156,6 +170,14 @@ async function refreshDashboard() {
   if (activeQuoteTab !== 'summary') {
     quoteLoaded[activeQuoteTab] = true;
     loadQuoteSubTab(activeQuoteTab, dateFrom, dateTo, yards);
+  }
+  if (activeDashTab === 'equipment') {
+    equipLoaded[activeEquipTab] = true;
+    loadEquipSubTab(activeEquipTab, dateFrom, dateTo, yards);
+  }
+  if (activeDashTab === 'pm') {
+    pmLoaded = true;
+    loadPM(dateFrom, dateTo, yards);
   }
 }
 
@@ -727,8 +749,12 @@ function resetDashFilters() {
 
 const JOB_TABS    = ['finish','profitloss','forecast','revenue'];
 const QUOTE_TABS  = ['summary','bystatus','salesperson','forecast'];
+const EQUIP_TABS  = ['pl','utilization','workorders'];
 const jobLoaded   = {};
 const quoteLoaded = {};
+const equipLoaded = {};
+let   pmLoaded    = false;
+let   activeEquipTab = 'pl';
 let activeJobTab   = 'finish';
 let activeQuoteTab = 'summary';
 
@@ -1605,4 +1631,564 @@ async function loadYardBreakoutQForecast(dateFrom, dateTo, yards) {
     labels: ['Estimated Revenue'],
     colors: [TEAL],
   });
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   EQUIPMENT P/L TAB
+   ══════════════════════════════════════════════════════════════════ */
+
+let eplYardChart = null, eplExpenseChart = null;
+
+function buildEquipFilters(dateFrom, dateTo, yards) {
+  const f = [];
+  if (dateFrom && dateTo) f.push({ segmentName:'InvoiceDate', operator:'between', value: dateFrom, secondValue: dateTo });
+  else if (dateFrom)      f.push({ segmentName:'InvoiceDate', operator:'gte', value: dateFrom });
+  else if (dateTo)        f.push({ segmentName:'InvoiceDate', operator:'lte', value: dateTo });
+  f.push(...buildYardFilter(yards));
+  return f;
+}
+
+async function loadEquipPL(dateFrom, dateTo, yards) {
+  const filters = buildEquipFilters(dateFrom, dateTo, yards);
+
+  // KPIs
+  try {
+    const kpiBody = {
+      datasetName: 'Equipment_Profit_Loss',
+      metrics: [
+        { metricName:'TotalRevenue',     aggregation:'SUM',          alias:'TotalRevenue'   },
+        { metricName:'TotalExpenses',    aggregation:'SUM',          alias:'TotalExpenses'  },
+        { metricName:'TotalProfit',      aggregation:'SUM',          alias:'TotalProfit'    },
+        { metricName:'AvgProfitPercent', aggregation:'AVG',          alias:'AvgMargin'      },
+        { metricName:'UnitCount',        aggregation:'COUNT_DISTINCT',alias:'UnitCount'     },
+      ],
+      filters
+    };
+    const kr = await fetch(`${BASE_URL}/bi/kpis`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(kpiBody) });
+    const kj = await kr.json();
+    const kpis = kj.data?.kpis || [];
+    const fmt = (n, pfx='$') => {
+      const v = parseFloat(n||0);
+      if (Math.abs(v)>=1e6) return `${pfx}${(v/1e6).toFixed(1)}M`;
+      if (Math.abs(v)>=1000) return `${pfx}${(v/1000).toFixed(1)}K`;
+      return `${pfx}${v.toFixed(0)}`;
+    };
+    const get = name => parseFloat(kpis.find(k=>k.name===name)?.value||0);
+    const rev = get('TotalRevenue'), exp = get('TotalExpenses'), profit = get('TotalProfit'),
+          margin = get('AvgMargin'), units = get('UnitCount');
+    document.getElementById('epl-kpi-row').innerHTML = `
+      <div class="kpi-card"><div class="kpi-icon-wrap"><i data-lucide="dollar-sign"></i></div><div class="kpi-body"><div class="kpi-label">Revenue</div><div class="kpi-value">${fmt(rev)}</div></div></div>
+      <div class="kpi-card"><div class="kpi-icon-wrap"><i data-lucide="trending-down"></i></div><div class="kpi-body"><div class="kpi-label">Expenses</div><div class="kpi-value">${fmt(exp)}</div></div></div>
+      <div class="kpi-card"><div class="kpi-icon-wrap" style="background:${profit>=0?'rgba(34,197,94,.12)':'rgba(239,68,68,.12)'}"><i data-lucide="${profit>=0?'trending-up':'trending-down'}"></i></div><div class="kpi-body"><div class="kpi-label">Profit</div><div class="kpi-value" style="color:${profit>=0?'var(--green)':'var(--red)'}">${fmt(profit)}</div></div></div>
+      <div class="kpi-card"><div class="kpi-icon-wrap"><i data-lucide="percent"></i></div><div class="kpi-body"><div class="kpi-label">Avg Margin</div><div class="kpi-value">${margin.toFixed(1)}%</div></div></div>
+      <div class="kpi-card"><div class="kpi-icon-wrap"><i data-lucide="package"></i></div><div class="kpi-body"><div class="kpi-label">Units</div><div class="kpi-value">${units.toFixed(0)}</div></div></div>
+    `;
+    lucide.createIcons({ el: document.getElementById('epl-kpi-row') });
+  } catch(e) { console.error('EPL KPI error', e); }
+
+  // Yard bar chart
+  try {
+    const r = await fetch(`${BASE_URL}/bi/query`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({
+      datasetName:'Equipment_Profit_Loss', groupBySegments:['Yard'],
+      metrics:[
+        { metricName:'TotalRevenue',  aggregation:'SUM', alias:'Revenue'  },
+        { metricName:'TotalExpenses', aggregation:'SUM', alias:'Expenses' },
+        { metricName:'TotalProfit',   aggregation:'SUM', alias:'Profit'   },
+      ],
+      filters, orderBy:[{field:'Revenue',direction:'DESC'}], limit:15
+    })});
+    const j = await r.json();
+    const rows = j.data?.data || [];
+    if (eplYardChart) { eplYardChart.destroy(); eplYardChart = null; }
+    const canvas = document.getElementById('epl-yard-chart');
+    if (canvas && rows.length) {
+      eplYardChart = new Chart(canvas, {
+        type:'bar',
+        data:{
+          labels: rows.map(r=>r.Yard||'?'),
+          datasets:[
+            { label:'Revenue',  data: rows.map(r=>parseFloat(r.Revenue||0)),  backgroundColor: TEAL,                borderRadius:4 },
+            { label:'Expenses', data: rows.map(r=>parseFloat(r.Expenses||0)), backgroundColor: '#e2a03f',           borderRadius:4 },
+            { label:'Profit',   data: rows.map(r=>parseFloat(r.Profit||0)),   backgroundColor: NAVY,                borderRadius:4 },
+          ]
+        },
+        options:{ responsive:true, maintainAspectRatio:false,
+          plugins:{ legend:{ position:'top', labels:{ font:{size:11}, boxWidth:12 }}},
+          scales:{ x:{ grid:{display:false}, ticks:{font:{size:11}}},
+            y:{ ticks:{ font:{size:10}, callback: v => v>=1000?`$${(v/1000).toFixed(0)}K`:v }}}
+        }
+      });
+    }
+  } catch(e) { console.error('EPL yard chart error', e); }
+
+  // Expense donut
+  try {
+    const r = await fetch(`${BASE_URL}/bi/query`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({
+      datasetName:'Equipment_Profit_Loss', groupBySegments:['Yard'],
+      metrics:[
+        { metricName:'LaborExpenses',    aggregation:'SUM', alias:'Labor'    },
+        { metricName:'MaterialExpenses', aggregation:'SUM', alias:'Material' },
+        { metricName:'OverheadExpenses', aggregation:'SUM', alias:'Overhead' },
+      ],
+      filters, limit:1
+    })});
+    const j = await r.json();
+    const totals = (j.data?.data||[]).reduce((acc,row)=>{
+      acc.Labor    += parseFloat(row.Labor   ||0);
+      acc.Material += parseFloat(row.Material||0);
+      acc.Overhead += parseFloat(row.Overhead||0);
+      return acc;
+    }, {Labor:0, Material:0, Overhead:0});
+    if (eplExpenseChart) { eplExpenseChart.destroy(); eplExpenseChart = null; }
+    const canvas = document.getElementById('epl-expense-chart');
+    if (canvas) {
+      eplExpenseChart = new Chart(canvas, {
+        type:'doughnut',
+        data:{
+          labels:['Labor','Material','Overhead'],
+          datasets:[{ data:[totals.Labor, totals.Material, totals.Overhead],
+            backgroundColor:[TEAL, NAVY, '#e2a03f'], borderWidth:2 }]
+        },
+        options:{ responsive:true, maintainAspectRatio:false,
+          plugins:{ legend:{ position:'bottom', labels:{ font:{size:11}, boxWidth:12 }}}}
+      });
+    }
+  } catch(e) { console.error('EPL expense chart error', e); }
+
+  // Top units table
+  try {
+    const r = await fetch(`${BASE_URL}/bi/query`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({
+      datasetName:'Equipment_Profit_Loss', groupBySegments:['UnitCode','UnitType','Yard'],
+      metrics:[
+        { metricName:'TotalRevenue',     aggregation:'SUM', alias:'Revenue'  },
+        { metricName:'TotalExpenses',    aggregation:'SUM', alias:'Expenses' },
+        { metricName:'TotalProfit',      aggregation:'SUM', alias:'Profit'   },
+        { metricName:'AvgProfitPercent', aggregation:'AVG', alias:'Margin'   },
+      ],
+      filters, orderBy:[{field:'Revenue',direction:'DESC'}], limit:50
+    })});
+    const j = await r.json();
+    const rows = j.data?.data || [];
+    const fmt = (v,pfx='$') => { const n=parseFloat(v||0); return n>=1000?`${pfx}${(n/1000).toFixed(1)}K`:`${pfx}${n.toFixed(0)}`; };
+    const tbody = document.getElementById('epl-table-body');
+    if (tbody) tbody.innerHTML = rows.length
+      ? rows.map(r=>`<tr>
+          <td>${r.UnitCode||'—'}</td><td>${r.UnitType||'—'}</td><td>${r.Yard||'—'}</td>
+          <td>${fmt(r.Revenue)}</td><td>${fmt(r.Expenses)}</td>
+          <td style="color:${parseFloat(r.Profit||0)>=0?'var(--green)':'var(--red)'}">${fmt(r.Profit)}</td>
+          <td>${parseFloat(r.Margin||0).toFixed(1)}%</td>
+        </tr>`).join('')
+      : '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:20px">No data</td></tr>';
+  } catch(e) { console.error('EPL table error', e); }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   EQUIPMENT UTILIZATION TAB
+   ══════════════════════════════════════════════════════════════════ */
+
+let utilYardChart = null, utilDowntimeChart = null;
+
+async function loadEquipUtilization(dateFrom, dateTo, yards) {
+  // Utilization uses Year/Month not a date field — skip date filter, use yard only
+  const filters = buildYardFilter(yards);
+
+  // KPIs
+  try {
+    const kpiBody = {
+      datasetName: 'Equipment_Utilization',
+      metrics: [
+        { metricName:'TotalTargetHours',    aggregation:'SUM', alias:'TargetHours'    },
+        { metricName:'TotalAvailableHours', aggregation:'SUM', alias:'AvailableHours' },
+        { metricName:'TotalDowntimeHours',  aggregation:'SUM', alias:'DowntimeHours'  },
+        { metricName:'AvgUtilization',      aggregation:'AVG', alias:'AvgUtil'        },
+      ],
+      filters
+    };
+    const kr = await fetch(`${BASE_URL}/bi/kpis`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(kpiBody) });
+    const kj = await kr.json();
+    const kpis = kj.data?.kpis || [];
+    const get = name => parseFloat(kpis.find(k=>k.name===name)?.value||0);
+    const target = get('TargetHours'), avail = get('AvailableHours'),
+          down = get('DowntimeHours'), util = get('AvgUtil');
+    const fmtH = v => { const n=parseFloat(v||0); return n>=1000?`${(n/1000).toFixed(1)}K hrs`:`${n.toFixed(0)} hrs`; };
+    document.getElementById('util-kpi-row').innerHTML = `
+      <div class="kpi-card"><div class="kpi-icon-wrap"><i data-lucide="clock"></i></div><div class="kpi-body"><div class="kpi-label">Target Hours</div><div class="kpi-value">${fmtH(target)}</div></div></div>
+      <div class="kpi-card"><div class="kpi-icon-wrap"><i data-lucide="check-circle"></i></div><div class="kpi-body"><div class="kpi-label">Available Hours</div><div class="kpi-value">${fmtH(avail)}</div></div></div>
+      <div class="kpi-card"><div class="kpi-icon-wrap" style="background:rgba(239,68,68,.12)"><i data-lucide="alert-triangle"></i></div><div class="kpi-body"><div class="kpi-label">Downtime Hours</div><div class="kpi-value" style="color:var(--red)">${fmtH(down)}</div></div></div>
+      <div class="kpi-card"><div class="kpi-icon-wrap"><i data-lucide="activity"></i></div><div class="kpi-body"><div class="kpi-label">Avg Utilization</div><div class="kpi-value">${util.toFixed(1)}%</div></div></div>
+    `;
+    lucide.createIcons({ el: document.getElementById('util-kpi-row') });
+  } catch(e) { console.error('Util KPI error', e); }
+
+  // Utilization % by Yard
+  try {
+    const r = await fetch(`${BASE_URL}/bi/query`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({
+      datasetName:'Equipment_Utilization', groupBySegments:['Yard'],
+      metrics:[
+        { metricName:'AvgUtilization',      aggregation:'AVG', alias:'UtilPct'    },
+        { metricName:'TotalTargetHours',    aggregation:'SUM', alias:'Target'     },
+        { metricName:'TotalAvailableHours', aggregation:'SUM', alias:'Available'  },
+      ],
+      filters, orderBy:[{field:'UtilPct',direction:'DESC'}], limit:15
+    })});
+    const j = await r.json();
+    const rows = j.data?.data || [];
+    if (utilYardChart) { utilYardChart.destroy(); utilYardChart = null; }
+    const canvas = document.getElementById('util-yard-chart');
+    if (canvas && rows.length) {
+      utilYardChart = new Chart(canvas, {
+        type:'bar',
+        data:{
+          labels: rows.map(r=>r.Yard||'?'),
+          datasets:[
+            { label:'Utilization %', data: rows.map(r=>parseFloat(r.UtilPct||0)), backgroundColor: TEAL, borderRadius:4, yAxisID:'y' },
+          ]
+        },
+        options:{ responsive:true, maintainAspectRatio:false,
+          plugins:{ legend:{ position:'top', labels:{ font:{size:11}, boxWidth:12 }}},
+          scales:{
+            x:{ grid:{display:false}, ticks:{font:{size:11}}},
+            y:{ max:100, ticks:{ font:{size:10}, callback: v => `${v}%` }}
+          }
+        }
+      });
+    }
+  } catch(e) { console.error('Util yard chart error', e); }
+
+  // Downtime by Yard
+  try {
+    const r = await fetch(`${BASE_URL}/bi/query`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({
+      datasetName:'Equipment_Utilization', groupBySegments:['Yard'],
+      metrics:[
+        { metricName:'TotalDowntimeHours', aggregation:'SUM', alias:'DownHrs'  },
+        { metricName:'TotalDowntimeDays',  aggregation:'SUM', alias:'DownDays' },
+      ],
+      filters, orderBy:[{field:'DownHrs',direction:'DESC'}], limit:15
+    })});
+    const j = await r.json();
+    const rows = j.data?.data || [];
+    if (utilDowntimeChart) { utilDowntimeChart.destroy(); utilDowntimeChart = null; }
+    const canvas = document.getElementById('util-downtime-chart');
+    if (canvas && rows.length) {
+      utilDowntimeChart = new Chart(canvas, {
+        type:'bar',
+        data:{
+          labels: rows.map(r=>r.Yard||'?'),
+          datasets:[
+            { label:'Downtime Hours', data: rows.map(r=>parseFloat(r.DownHrs||0)),  backgroundColor:'#ef4444', borderRadius:4 },
+            { label:'Downtime Days',  data: rows.map(r=>parseFloat(r.DownDays||0)), backgroundColor:'#f97316', borderRadius:4 },
+          ]
+        },
+        options:{ responsive:true, maintainAspectRatio:false,
+          plugins:{ legend:{ position:'top', labels:{ font:{size:11}, boxWidth:12 }}},
+          scales:{ x:{ grid:{display:false}, ticks:{font:{size:11}}},
+            y:{ ticks:{ font:{size:10} }}}
+        }
+      });
+    }
+  } catch(e) { console.error('Util downtime chart error', e); }
+
+  // Unit detail table
+  try {
+    const r = await fetch(`${BASE_URL}/bi/query`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({
+      datasetName:'Equipment_Utilization', groupBySegments:['UnitCode','UnitType','Yard'],
+      metrics:[
+        { metricName:'TotalTargetHours',    aggregation:'SUM', alias:'Target'    },
+        { metricName:'TotalAvailableHours', aggregation:'SUM', alias:'Available' },
+        { metricName:'TotalDowntimeHours',  aggregation:'SUM', alias:'Downtime'  },
+        { metricName:'AvgUtilization',      aggregation:'AVG', alias:'UtilPct'   },
+      ],
+      filters, orderBy:[{field:'UtilPct',direction:'ASC'}], limit:100
+    })});
+    const j = await r.json();
+    const rows = j.data?.data || [];
+    const fmtH = v => `${parseFloat(v||0).toFixed(0)} hrs`;
+    const tbody = document.getElementById('util-table-body');
+    const utilColor = pct => parseFloat(pct||0) >= 80 ? 'var(--green)' : parseFloat(pct||0) >= 50 ? 'var(--amber)' : 'var(--red)';
+    if (tbody) tbody.innerHTML = rows.length
+      ? rows.map(r=>`<tr>
+          <td>${r.UnitCode||'—'}</td><td>${r.UnitType||'—'}</td><td>${r.Yard||'—'}</td>
+          <td>${fmtH(r.Target)}</td><td>${fmtH(r.Available)}</td>
+          <td style="color:var(--red)">${fmtH(r.Downtime)}</td>
+          <td style="color:${utilColor(r.UtilPct)};font-weight:600">${parseFloat(r.UtilPct||0).toFixed(1)}%</td>
+        </tr>`).join('')
+      : '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:20px">No data</td></tr>';
+  } catch(e) { console.error('Util table error', e); }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   WORK ORDERS TAB
+   ══════════════════════════════════════════════════════════════════ */
+
+let woYardChart = null, woCostChart = null;
+
+function buildWOFilters(dateFrom, dateTo, yards) {
+  // WO_Dashboard uses InvoiceDate — check if it has a date segment
+  // For now use yard only as WO doesn't expose a date segment in its schema
+  return buildYardFilter(yards);
+}
+
+async function loadWorkOrders(dateFrom, dateTo, yards) {
+  const filters = buildWOFilters(dateFrom, dateTo, yards);
+
+  // KPIs
+  try {
+    const kpiBody = {
+      datasetName: 'WO_Dashboard',
+      metrics: [
+        { metricName:'TotalWorkOrders',  aggregation:'COUNT', alias:'TotalWOs'    },
+        { metricName:'TotalLaborCost',   aggregation:'SUM',   alias:'LaborCost'   },
+        { metricName:'TotalMaterialCost',aggregation:'SUM',   alias:'MatCost'     },
+        { metricName:'TotalWOCost',      aggregation:'SUM',   alias:'TotalCost'   },
+        { metricName:'AvgWOCost',        aggregation:'AVG',   alias:'AvgCost'     },
+      ],
+      filters
+    };
+    const kr = await fetch(`${BASE_URL}/bi/kpis`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(kpiBody) });
+    const kj = await kr.json();
+    const kpis = kj.data?.kpis || [];
+    const get = name => parseFloat(kpis.find(k=>k.name===name)?.value||0);
+    const wos=get('TotalWOs'), labor=get('LaborCost'), mat=get('MatCost'), total=get('TotalCost'), avg=get('AvgCost');
+    const fmt = v => { const n=parseFloat(v||0); return n>=1000?`$${(n/1000).toFixed(1)}K`:`$${n.toFixed(0)}`; };
+    document.getElementById('wo-kpi-row').innerHTML = `
+      <div class="kpi-card"><div class="kpi-icon-wrap"><i data-lucide="wrench"></i></div><div class="kpi-body"><div class="kpi-label">Work Orders</div><div class="kpi-value">${wos.toFixed(0)}</div></div></div>
+      <div class="kpi-card"><div class="kpi-icon-wrap"><i data-lucide="users"></i></div><div class="kpi-body"><div class="kpi-label">Labor Cost</div><div class="kpi-value">${fmt(labor)}</div></div></div>
+      <div class="kpi-card"><div class="kpi-icon-wrap"><i data-lucide="package"></i></div><div class="kpi-body"><div class="kpi-label">Material Cost</div><div class="kpi-value">${fmt(mat)}</div></div></div>
+      <div class="kpi-card"><div class="kpi-icon-wrap"><i data-lucide="dollar-sign"></i></div><div class="kpi-body"><div class="kpi-label">Total Cost</div><div class="kpi-value">${fmt(total)}</div></div></div>
+      <div class="kpi-card"><div class="kpi-icon-wrap"><i data-lucide="bar-chart-2"></i></div><div class="kpi-body"><div class="kpi-label">Avg WO Cost</div><div class="kpi-value">${fmt(avg)}</div></div></div>
+    `;
+    lucide.createIcons({ el: document.getElementById('wo-kpi-row') });
+  } catch(e) { console.error('WO KPI error', e); }
+
+  // WOs by Yard
+  try {
+    const r = await fetch(`${BASE_URL}/bi/query`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({
+      datasetName:'WO_Dashboard', groupBySegments:['Yard'],
+      metrics:[
+        { metricName:'TotalWorkOrders', aggregation:'COUNT', alias:'WOs'   },
+        { metricName:'TotalWOCost',     aggregation:'SUM',   alias:'Cost'  },
+      ],
+      filters, orderBy:[{field:'WOs',direction:'DESC'}], limit:15
+    })});
+    const j = await r.json();
+    const rows = j.data?.data || [];
+    if (woYardChart) { woYardChart.destroy(); woYardChart = null; }
+    const canvas = document.getElementById('wo-yard-chart');
+    if (canvas && rows.length) {
+      woYardChart = new Chart(canvas, {
+        type:'bar',
+        data:{
+          labels: rows.map(r=>r.Yard||'?'),
+          datasets:[
+            { label:'Work Orders', data: rows.map(r=>parseFloat(r.WOs||0)), backgroundColor: TEAL, borderRadius:4, yAxisID:'y' },
+          ]
+        },
+        options:{ responsive:true, maintainAspectRatio:false,
+          plugins:{ legend:{ position:'top', labels:{ font:{size:11}, boxWidth:12 }}},
+          scales:{ x:{ grid:{display:false}, ticks:{font:{size:11}}},
+            y:{ ticks:{ font:{size:10} }}}
+        }
+      });
+    }
+  } catch(e) { console.error('WO yard chart error', e); }
+
+  // Cost breakdown by Yard
+  try {
+    const r = await fetch(`${BASE_URL}/bi/query`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({
+      datasetName:'WO_Dashboard', groupBySegments:['Yard'],
+      metrics:[
+        { metricName:'TotalLaborCost',    aggregation:'SUM', alias:'Labor'    },
+        { metricName:'TotalMaterialCost', aggregation:'SUM', alias:'Material' },
+      ],
+      filters, orderBy:[{field:'Labor',direction:'DESC'}], limit:15
+    })});
+    const j = await r.json();
+    const rows = j.data?.data || [];
+    if (woCostChart) { woCostChart.destroy(); woCostChart = null; }
+    const canvas = document.getElementById('wo-cost-chart');
+    if (canvas && rows.length) {
+      woCostChart = new Chart(canvas, {
+        type:'bar',
+        data:{
+          labels: rows.map(r=>r.Yard||'?'),
+          datasets:[
+            { label:'Labor',    data: rows.map(r=>parseFloat(r.Labor   ||0)), backgroundColor: TEAL,      borderRadius:4 },
+            { label:'Material', data: rows.map(r=>parseFloat(r.Material||0)), backgroundColor: '#e2a03f', borderRadius:4 },
+          ]
+        },
+        options:{ responsive:true, maintainAspectRatio:false,
+          plugins:{ legend:{ position:'top', labels:{ font:{size:11}, boxWidth:12 }}},
+          scales:{ x:{ grid:{display:false}, ticks:{font:{size:11}}},
+            y:{ ticks:{ font:{size:10}, callback: v => v>=1000?`$${(v/1000).toFixed(0)}K`:v }}}
+        }
+      });
+    }
+  } catch(e) { console.error('WO cost chart error', e); }
+
+  // Unit detail table
+  try {
+    const r = await fetch(`${BASE_URL}/bi/query`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({
+      datasetName:'WO_Dashboard', groupBySegments:['UnitCode','UnitType','Yard'],
+      metrics:[
+        { metricName:'TotalWorkOrders',   aggregation:'COUNT', alias:'WOs'      },
+        { metricName:'TotalLaborCost',    aggregation:'SUM',   alias:'Labor'    },
+        { metricName:'TotalMaterialCost', aggregation:'SUM',   alias:'Material' },
+        { metricName:'TotalWOCost',       aggregation:'SUM',   alias:'Total'    },
+        { metricName:'AvgWOCost',         aggregation:'AVG',   alias:'Avg'      },
+      ],
+      filters, orderBy:[{field:'Total',direction:'DESC'}], limit:100
+    })});
+    const j = await r.json();
+    const rows = j.data?.data || [];
+    const fmt = v => { const n=parseFloat(v||0); return n>=1000?`$${(n/1000).toFixed(1)}K`:`$${n.toFixed(0)}`; };
+    const tbody = document.getElementById('wo-table-body');
+    if (tbody) tbody.innerHTML = rows.length
+      ? rows.map(r=>`<tr>
+          <td>${r.UnitCode||'—'}</td><td>${r.UnitType||'—'}</td><td>${r.Yard||'—'}</td>
+          <td>${parseFloat(r.WOs||0).toFixed(0)}</td>
+          <td>${fmt(r.Labor)}</td><td>${fmt(r.Material)}</td>
+          <td>${fmt(r.Total)}</td><td>${fmt(r.Avg)}</td>
+        </tr>`).join('')
+      : '<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:20px">No data</td></tr>';
+  } catch(e) { console.error('WO table error', e); }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   PREVENTIVE MAINTENANCE TAB
+   ══════════════════════════════════════════════════════════════════ */
+
+// DueStatus: 0 = Coming Due, 1 = Past Due (no friendly name at API level yet)
+const PM_STATUS_LABELS = { 0: 'Coming Due', 1: 'Past Due' };
+
+let pmTypeChart = null, pmYardChart = null;
+
+async function loadPM(dateFrom, dateTo, yards) {
+  const filters = buildYardFilter(yards);
+
+  // KPIs
+  try {
+    const kpiBody = {
+      datasetName: 'Preventive_Maintenance',
+      metrics: [
+        { metricName:'TotalActivities', aggregation:'COUNT',          alias:'Total'    },
+        { metricName:'PastDueCount',    aggregation:'SUM',            alias:'PastDue'  },
+        { metricName:'ComingDueCount',  aggregation:'SUM',            alias:'ComingDue'},
+        { metricName:'UnitCount',       aggregation:'COUNT_DISTINCT', alias:'Units'    },
+      ],
+      filters
+    };
+    const kr = await fetch(`${BASE_URL}/bi/kpis`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(kpiBody) });
+    const kj = await kr.json();
+    const kpis = kj.data?.kpis || [];
+    const get = name => parseFloat(kpis.find(k=>k.name===name)?.value||0);
+    const total=get('Total'), pastDue=get('PastDue'), comingDue=get('ComingDue'), units=get('Units');
+    document.getElementById('pm-kpi-row').innerHTML = `
+      <div class="kpi-card"><div class="kpi-icon-wrap"><i data-lucide="clipboard-list"></i></div><div class="kpi-body"><div class="kpi-label">Total Activities</div><div class="kpi-value">${total.toFixed(0)}</div></div></div>
+      <div class="kpi-card"><div class="kpi-icon-wrap" style="background:rgba(239,68,68,.12)"><i data-lucide="alert-circle"></i></div><div class="kpi-body"><div class="kpi-label">Past Due</div><div class="kpi-value" style="color:var(--red)">${pastDue.toFixed(0)}</div></div></div>
+      <div class="kpi-card"><div class="kpi-icon-wrap" style="background:rgba(245,158,11,.12)"><i data-lucide="clock"></i></div><div class="kpi-body"><div class="kpi-label">Coming Due</div><div class="kpi-value" style="color:var(--amber)">${comingDue.toFixed(0)}</div></div></div>
+      <div class="kpi-card"><div class="kpi-icon-wrap"><i data-lucide="package"></i></div><div class="kpi-body"><div class="kpi-label">Units Affected</div><div class="kpi-value">${units.toFixed(0)}</div></div></div>
+    `;
+    lucide.createIcons({ el: document.getElementById('pm-kpi-row') });
+  } catch(e) { console.error('PM KPI error', e); }
+
+  // Activities by ScheduleType (grouped bar: Coming Due vs Past Due)
+  try {
+    const r = await fetch(`${BASE_URL}/bi/query`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({
+      datasetName:'Preventive_Maintenance', groupBySegments:['ScheduleType','DueStatus'],
+      metrics:[{ metricName:'TotalActivities', aggregation:'COUNT', alias:'Count' }],
+      filters, orderBy:[{field:'Count',direction:'DESC'}], limit:50
+    })});
+    const j = await r.json();
+    const rows = j.data?.data || [];
+    // Pivot: scheduleType → { comingDue, pastDue }
+    const schedules = [...new Set(rows.map(r=>r.ScheduleType||'?'))];
+    const pivot = {};
+    rows.forEach(r => {
+      const s = r.ScheduleType||'?';
+      if (!pivot[s]) pivot[s] = { comingDue:0, pastDue:0 };
+      if (r.DueStatus==0) pivot[s].comingDue += parseFloat(r.Count||0);
+      if (r.DueStatus==1) pivot[s].pastDue   += parseFloat(r.Count||0);
+    });
+    if (pmTypeChart) { pmTypeChart.destroy(); pmTypeChart = null; }
+    const canvas = document.getElementById('pm-type-chart');
+    if (canvas && schedules.length) {
+      pmTypeChart = new Chart(canvas, {
+        type:'bar',
+        data:{
+          labels: schedules,
+          datasets:[
+            { label:'Coming Due', data: schedules.map(s=>pivot[s]?.comingDue||0), backgroundColor:'#f59e0b', borderRadius:4 },
+            { label:'Past Due',   data: schedules.map(s=>pivot[s]?.pastDue||0),   backgroundColor:'#ef4444', borderRadius:4 },
+          ]
+        },
+        options:{ responsive:true, maintainAspectRatio:false,
+          plugins:{ legend:{ position:'top', labels:{ font:{size:11}, boxWidth:12 }}},
+          scales:{ x:{ grid:{display:false}, ticks:{font:{size:11}}},
+            y:{ ticks:{ font:{size:10} }}}
+        }
+      });
+    }
+  } catch(e) { console.error('PM type chart error', e); }
+
+  // Due status by Yard
+  try {
+    const r = await fetch(`${BASE_URL}/bi/query`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({
+      datasetName:'Preventive_Maintenance', groupBySegments:['Yard','DueStatus'],
+      metrics:[
+        { metricName:'TotalActivities', aggregation:'COUNT',          alias:'Count' },
+        { metricName:'UnitCount',       aggregation:'COUNT_DISTINCT', alias:'Units' },
+      ],
+      filters, limit:50
+    })});
+    const j = await r.json();
+    const rows = j.data?.data || [];
+    const yards2 = [...new Set(rows.map(r=>r.Yard||'?'))];
+    const pivot = {};
+    rows.forEach(r => {
+      const y = r.Yard||'?';
+      if (!pivot[y]) pivot[y] = { comingDue:0, pastDue:0 };
+      if (r.DueStatus==0) pivot[y].comingDue += parseFloat(r.Units||0);
+      if (r.DueStatus==1) pivot[y].pastDue   += parseFloat(r.Units||0);
+    });
+    if (pmYardChart) { pmYardChart.destroy(); pmYardChart = null; }
+    const canvas = document.getElementById('pm-yard-chart');
+    if (canvas && yards2.length) {
+      pmYardChart = new Chart(canvas, {
+        type:'bar',
+        data:{
+          labels: yards2,
+          datasets:[
+            { label:'Coming Due (units)', data: yards2.map(y=>pivot[y]?.comingDue||0), backgroundColor:'#f59e0b', borderRadius:4 },
+            { label:'Past Due (units)',   data: yards2.map(y=>pivot[y]?.pastDue||0),   backgroundColor:'#ef4444', borderRadius:4 },
+          ]
+        },
+        options:{ responsive:true, maintainAspectRatio:false,
+          plugins:{ legend:{ position:'top', labels:{ font:{size:11}, boxWidth:12 }}},
+          scales:{ x:{ grid:{display:false}, ticks:{font:{size:11}}},
+            y:{ ticks:{ font:{size:10} }}}
+        }
+      });
+    }
+  } catch(e) { console.error('PM yard chart error', e); }
+
+  // PM detail table
+  try {
+    const r = await fetch(`${BASE_URL}/bi/query`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({
+      datasetName:'Preventive_Maintenance', groupBySegments:['UnitCode','UnitType','Yard','Activity','ScheduleType','DueStatus'],
+      metrics:[{ metricName:'TotalActivities', aggregation:'COUNT', alias:'Count' }],
+      filters, orderBy:[{field:'Count',direction:'DESC'}], limit:200
+    })});
+    const j = await r.json();
+    const rows = j.data?.data || [];
+    const statusColor = s => s==1 ? 'var(--red)' : 'var(--amber)';
+    const tbody = document.getElementById('pm-table-body');
+    if (tbody) tbody.innerHTML = rows.length
+      ? rows.map(r=>`<tr>
+          <td>${r.UnitCode||'—'}</td><td>${r.UnitType||'—'}</td><td>${r.Yard||'—'}</td>
+          <td>${r.Activity||'—'}</td><td>${r.ScheduleType||'—'}</td>
+          <td style="color:${statusColor(r.DueStatus)};font-weight:600">${PM_STATUS_LABELS[r.DueStatus]||r.DueStatus}</td>
+          <td>${parseFloat(r.Count||0).toFixed(0)}</td>
+        </tr>`).join('')
+      : '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:20px">No data</td></tr>';
+  } catch(e) { console.error('PM table error', e); }
 }
