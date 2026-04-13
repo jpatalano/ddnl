@@ -26,17 +26,51 @@ const PERF_COLORS = [
   '#14b8a6','#8b5cf6','#f97316','#06b6d4','#84cc16'
 ];
 
+/* ── Global Filter State ──────────────────────────────────────────── */
+let _gf = { dateFrom: '', dateTo: '', yards: [] };
+
+function _gfSave() {
+  localStorage.setItem('fcc_gf', JSON.stringify(_gf));
+}
+
+function _gfLoad() {
+  try {
+    const raw = localStorage.getItem('fcc_gf');
+    if (raw) { _gf = JSON.parse(raw); return true; }
+  } catch(e) {}
+  return false;
+}
+
 /* ── Boot ─────────────────────────────────────────────────────────── */
 async function initDashboard() {
-  // Default: last 90 days
   const now  = new Date();
   const ago  = new Date(now); ago.setDate(ago.getDate() - 90);
   const fromEl = document.getElementById('dash-date-from');
   const toEl   = document.getElementById('dash-date-to');
-  if (fromEl && !fromEl.value) fromEl.value = ago.toISOString().slice(0,10);
-  if (toEl   && !toEl.value)   toEl.value   = now.toISOString().slice(0,10);
 
-  await Promise.all([ loadYardFilter(), refreshDashboard() ]);
+  // Restore from localStorage or fall back to last 90 days
+  const hadSaved = _gfLoad();
+  if (hadSaved && _gf.dateFrom) {
+    if (fromEl) fromEl.value = _gf.dateFrom;
+    if (toEl)   toEl.value   = _gf.dateTo || now.toISOString().slice(0,10);
+  } else {
+    if (fromEl && !fromEl.value) fromEl.value = ago.toISOString().slice(0,10);
+    if (toEl   && !toEl.value)   toEl.value   = now.toISOString().slice(0,10);
+    _gf.dateFrom = fromEl?.value || '';
+    _gf.dateTo   = toEl?.value   || '';
+  }
+
+  await loadYardFilter();
+
+  // Restore yard checkbox states after loadYardFilter populates DOM
+  if (hadSaved && _gf.yards && _gf.yards.length > 0) {
+    document.querySelectorAll('#yard-ms-options input[type=checkbox]').forEach(cb => {
+      cb.checked = _gf.yards.includes(cb.value);
+    });
+    updateYardLabel();
+  }
+
+  await refreshDashboard();
   // Finish Jobs is the default sub-tab — load it
   const df = document.getElementById('dash-date-from')?.value || '';
   const dt = document.getElementById('dash-date-to')?.value || '';
@@ -81,8 +115,10 @@ document.addEventListener('click', function(e) {
 });
 
 function getSelectedYards() {
-  return Array.from(document.querySelectorAll('#yard-ms-options input[type=checkbox]:checked'))
+  const yards = Array.from(document.querySelectorAll('#yard-ms-options input[type=checkbox]:checked'))
     .map(cb => cb.value);
+  _gf.yards = yards;
+  return yards;
 }
 
 function updateYardLabel() {
@@ -140,6 +176,12 @@ async function refreshDashboard() {
   const dateFrom = document.getElementById('dash-date-from')?.value || '';
   const dateTo   = document.getElementById('dash-date-to')?.value   || '';
   const yards    = getSelectedYards();
+
+  // Update and persist global filter state
+  _gf.dateFrom = dateFrom;
+  _gf.dateTo   = dateTo;
+  _gf.yards    = yards;
+  _gfSave();
 
   // Reset lazy-load flags so sub-tabs re-fetch with new filters
   JOB_TABS.forEach(t   => { jobLoaded[t]   = false; });

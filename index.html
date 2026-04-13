@@ -617,6 +617,113 @@
     .qi-kpi-tile-value { font-size: 15px; font-weight: 700; color: var(--navy); }
     .qi-spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,.4); border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; }
 
+
+    /* ════════════════════════════════════════════════════════════════
+       MY DASHBOARDS SCREEN
+    ════════════════════════════════════════════════════════════════ */
+    #my-dash-screen { flex: 1; overflow-y: auto; padding: 28px 32px; display: none; flex-direction: column; gap: 24px; }
+    .myd-header { display: flex; align-items: center; justify-content: space-between; }
+    .myd-title { font-size: 22px; font-weight: 700; color: var(--navy); }
+    .myd-btn { background: var(--teal); border: none; color: #fff; border-radius: 8px; padding: 8px 18px; font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 7px; transition: background .15s; }
+    .myd-btn:hover { background: var(--teal-dim); }
+    .myd-btn-sec { background: var(--surface2); border: 1.5px solid var(--border); color: var(--text); border-radius: 8px; padding: 7px 14px; font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all .15s; }
+    .myd-btn-sec:hover { border-color: var(--navy); color: var(--navy); }
+    .myd-dash-cards { display: flex; flex-direction: column; gap: 10px; }
+    .myd-dash-card { background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius); padding: 16px 20px; display: flex; align-items: center; gap: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.06); cursor: pointer; transition: border-color .15s, box-shadow .15s; }
+    .myd-dash-card:hover { border-color: var(--teal); box-shadow: var(--shadow); }
+    .myd-dash-card-info { flex: 1; }
+    .myd-dash-card-name { font-size: 15px; font-weight: 700; color: var(--navy); }
+    .myd-dash-card-meta { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
+    .myd-dash-card-actions { display: flex; gap: 8px; flex-shrink: 0; }
+    .myd-icon-btn { width: 32px; height: 32px; border-radius: 7px; border: 1.5px solid var(--border); background: var(--surface2); color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all .15s; }
+    .myd-icon-btn:hover { border-color: var(--navy); color: var(--navy); }
+    .myd-icon-btn.danger:hover { border-color: var(--red); color: var(--red); }
+    .myd-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--text-muted); padding: 60px 0; }
+    .myd-empty i { opacity: .3; }
+    .myd-empty h3 { font-size: 16px; font-weight: 600; color: var(--navy); }
+    .myd-empty p { font-size: 13px; text-align: center; max-width: 320px; }
+
+    /* Editor mode */
+    .myd-back-bar { display: flex; align-items: center; gap: 12px; }
+    .myd-inline-name { font-size: 20px; font-weight: 700; color: var(--navy); border: none; background: transparent; outline: none; min-width: 200px; padding: 2px 6px; border-radius: 6px; transition: background .15s; }
+    .myd-inline-name:hover, .myd-inline-name:focus { background: var(--surface2); }
+    .myd-page-tabs-bar { display: flex; align-items: center; gap: 6px; border-bottom: 2px solid var(--border); padding-bottom: 0; flex-wrap: wrap; }
+    .myd-page-tab { background: none; border: none; border-bottom: 2px solid transparent; margin-bottom: -2px; padding: 8px 16px; font-size: 13px; font-weight: 600; color: var(--text-muted); cursor: pointer; transition: color .15s, border-color .15s; border-radius: 6px 6px 0 0; }
+    .myd-page-tab:hover { color: var(--navy); }
+    .myd-page-tab.active { color: var(--navy); border-bottom-color: var(--teal); }
+    .myd-page-tab-add { background: none; border: none; padding: 8px 10px; font-size: 13px; color: var(--teal); cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 4px; }
+    .myd-page-tab-add:hover { opacity: .75; }
+    .myd-panels { display: flex; flex-direction: column; gap: 18px; margin-top: 18px; }
+    .myd-panel-card { background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius); padding: 16px 20px; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+    .myd-panel-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+    .myd-panel-title-input { flex: 1; font-size: 14px; font-weight: 700; color: var(--navy); border: none; background: transparent; outline: none; padding: 2px 6px; border-radius: 5px; }
+    .myd-panel-title-input:hover, .myd-panel-title-input:focus { background: var(--surface2); }
+    .myd-layout-pills { display: flex; gap: 4px; }
+    .myd-layout-pill { padding: 3px 10px; border: 1.5px solid var(--border); border-radius: 14px; font-size: 11px; font-weight: 600; cursor: pointer; background: var(--surface); color: var(--text-muted); transition: all .15s; }
+    .myd-layout-pill.active { background: var(--navy); border-color: var(--navy); color: #fff; }
+    .myd-tiles { display: grid; gap: 10px; margin-bottom: 12px; }
+    .myd-tiles.cols-1 { grid-template-columns: 1fr; }
+    .myd-tiles.cols-2 { grid-template-columns: 1fr 1fr; }
+    .myd-tiles.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+    .myd-tile-card { background: var(--surface2); border: 1.5px solid var(--border); border-radius: 8px; padding: 10px 12px; display: flex; align-items: center; gap: 8px; }
+    .myd-tile-name { flex: 1; font-size: 12.5px; font-weight: 600; color: var(--navy); }
+    .myd-tile-sub { font-size: 11px; color: var(--text-muted); }
+    .myd-tile-remove { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 16px; line-height: 1; padding: 0 2px; transition: color .12s; }
+    .myd-tile-remove:hover { color: var(--red); }
+    .myd-add-tile-btn { display: flex; align-items: center; gap: 6px; padding: 7px 14px; border: 1.5px dashed var(--border); border-radius: 8px; background: transparent; color: var(--text-muted); font-size: 12px; cursor: pointer; transition: all .15s; }
+    .myd-add-tile-btn:hover { border-color: var(--teal); color: var(--teal); }
+    .myd-add-panel-btn { display: flex; align-items: center; gap: 6px; padding: 10px 18px; border: 2px dashed var(--border); border-radius: 10px; background: transparent; color: var(--text-muted); font-size: 13px; cursor: pointer; width: 100%; justify-content: center; transition: all .15s; }
+    .myd-add-panel-btn:hover { border-color: var(--teal); color: var(--teal); }
+    .myd-panel-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 4px; }
+    .myd-panel-remove { background: none; border: none; color: var(--text-muted); font-size: 12px; cursor: pointer; padding: 4px 8px; border-radius: 5px; transition: all .15s; }
+    .myd-panel-remove:hover { background: #fee2e2; color: var(--red); }
+
+    /* View mode */
+    .myd-view-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+    .myd-view-title { font-size: 20px; font-weight: 700; color: var(--navy); }
+    .myd-view-panels { display: flex; flex-direction: column; gap: 20px; margin-top: 18px; }
+    .myd-view-panel { background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius); padding: 18px 20px; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+    .myd-view-panel-title { font-size: 14px; font-weight: 700; color: var(--navy); margin-bottom: 14px; }
+    .myd-view-tiles { display: grid; gap: 14px; }
+    .myd-view-tiles.cols-1 { grid-template-columns: 1fr; }
+    .myd-view-tiles.cols-2 { grid-template-columns: 1fr 1fr; }
+    .myd-view-tiles.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+    .myd-view-tile { background: var(--surface); border: 1.5px solid var(--border); border-radius: 10px; padding: 14px 16px; box-shadow: 0 1px 3px rgba(0,0,0,.06); display: flex; flex-direction: column; gap: 10px; min-height: 240px; }
+    .myd-view-tile-title { font-size: 13px; font-weight: 700; color: var(--navy); }
+    .myd-view-tile-chart { flex: 1; position: relative; min-height: 180px; }
+    .myd-tile-spinner { display: flex; align-items: center; justify-content: center; height: 100%; }
+
+    /* Tile Picker Modal */
+    #tile-picker-overlay { position: fixed; inset: 0; background: rgba(0,31,64,.45); z-index: 300; display: none; align-items: center; justify-content: center; }
+    #tile-picker-overlay.open { display: flex; }
+    #tile-picker-modal { background: var(--surface); border-radius: 14px; width: 520px; max-width: 96vw; max-height: 80vh; box-shadow: var(--shadow-lg); display: flex; flex-direction: column; overflow: hidden; }
+    .tp-header { background: var(--navy); padding: 16px 20px; color: #fff; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+    .tp-header h3 { font-size: 15px; font-weight: 700; }
+    .tp-header button { background: none; border: none; color: rgba(255,255,255,.7); cursor: pointer; font-size: 18px; }
+    .tp-search { padding: 12px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+    .tp-search input { width: 100%; padding: 8px 12px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 13px; background: var(--surface2); color: var(--text); outline: none; }
+    .tp-search input:focus { border-color: var(--teal); }
+    .tp-list { overflow-y: auto; flex: 1; padding: 8px 12px 12px; }
+    .tp-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 8px; cursor: pointer; border: 1.5px solid transparent; transition: all .12s; }
+    .tp-item:hover { background: var(--surface2); border-color: var(--border); }
+    .tp-item-icon { width: 36px; height: 36px; border-radius: 8px; background: var(--navy); color: #fff; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .tp-item-info { flex: 1; }
+    .tp-item-name { font-size: 13px; font-weight: 700; color: var(--navy); }
+    .tp-item-meta { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+    .tp-empty { padding: 40px; text-align: center; color: var(--text-muted); font-size: 13px; }
+
+    /* Save Chart inline form */
+    .dex-save-chart-btn { display:inline-flex; align-items:center; gap:5px; padding:5px 11px; border:1.5px solid var(--teal); border-radius:20px; font-size:11px; font-weight:600; cursor:pointer; background:var(--surface); color:var(--teal); transition:all .15s; white-space:nowrap; }
+    .dex-save-chart-btn:hover { background:var(--teal); color:#fff; }
+    .dex-save-inline-form { display:none; align-items:center; gap:8px; padding:6px 16px; border-top:1px solid var(--border); background:var(--surface2); flex-wrap:wrap; }
+    .dex-save-inline-form.visible { display:flex; }
+    .dex-save-inline-form input { padding:5px 10px; border:1.5px solid var(--border); border-radius:6px; font-size:12px; background:var(--surface); color:var(--text); outline:none; min-width:200px; flex:1; }
+    .dex-save-inline-form input:focus { border-color:var(--teal); }
+    .dex-save-confirm-btn { padding:5px 14px; border:none; border-radius:6px; font-size:12px; font-weight:700; cursor:pointer; background:var(--teal); color:#fff; transition:opacity .15s; }
+    .dex-save-confirm-btn:hover { opacity:.85; }
+    .dex-save-cancel-btn { padding:5px 10px; border:1.5px solid var(--border); border-radius:6px; font-size:12px; cursor:pointer; background:var(--surface); color:var(--text-muted); }
+    .dex-save-ok-msg { font-size:12px; font-weight:600; color:var(--teal); }
+
   </style>
 </head>
 <body>
@@ -627,6 +734,7 @@
   <div class="brand-sep"></div>
   <div class="subnav">
     <button onclick="showView('dashboard')" id="nav-dashboard">Dashboard</button>
+    <button onclick="showView('myDash')"    id="nav-myDash">My Dashboards</button>
     <button onclick="showView('home')"      id="nav-home">Datasets</button>
     <button onclick="showView('builder')"   id="nav-builder">Report Builder</button>
     <button onclick="showView('saved')"     id="nav-saved">Saved Reports</button>
@@ -1467,7 +1575,18 @@
                   <button class="dex-chart-type-btn" onclick="dexSetChartType('doughnut')" id="dex-ct-doughnut" title="Donut">
                     <i data-lucide="circle" style="width:12px;height:12px"></i> Donut
                   </button>
+                  <button class="dex-save-chart-btn" onclick="dexOpenSaveForm()" id="dex-save-chart-btn" title="Save this chart">
+                    <i data-lucide="bookmark-plus" style="width:12px;height:12px"></i> Save Chart
+                  </button>
                 </div>
+              </div>
+              <!-- Save Chart inline form -->
+              <div class="dex-save-inline-form" id="dex-save-inline-form">
+                <i data-lucide="bookmark" style="width:13px;height:13px;color:var(--teal)"></i>
+                <input type="text" id="dex-save-chart-name" placeholder="Chart name, e.g. Revenue by Salesperson" />
+                <button class="dex-save-confirm-btn" onclick="dexConfirmSaveChart()">Save</button>
+                <button class="dex-save-cancel-btn" onclick="dexCloseSaveForm()">Cancel</button>
+                <span class="dex-save-ok-msg" id="dex-save-ok-msg" style="display:none">Saved!</span>
               </div>
               <div class="dex-visual-selects">
                 <label>Label axis</label>
@@ -1489,6 +1608,12 @@
           </div>
         </div>
       </div>
+    </div>
+
+
+    <!-- ═══ MY DASHBOARDS ═══ -->
+    <div id="my-dash-screen">
+      <!-- Content rendered by JS -->
     </div>
 
     <!-- ═══ BUILDER RESULTS ═══ -->
@@ -1889,12 +2014,13 @@ function deleteReport(id) {
 
 /* ── View management ── */
 function showView(view) {
-  ['dashboard','home','builder','saved'].forEach(v=>{
+  ['dashboard','home','builder','saved','myDash'].forEach(v=>{
     document.getElementById(`nav-${v}`)?.classList.toggle('active',v===view);
   });
   document.getElementById('dashboard-screen').style.display = view==='dashboard' ? 'flex' : 'none';
   document.getElementById('home-screen').style.display      = view==='home'       ? 'flex'  : 'none';
   document.getElementById('saved-screen').style.display     = view==='saved'      ? ''     : 'none';
+  document.getElementById('my-dash-screen').style.display   = view==='myDash'     ? 'flex' : 'none';
   document.getElementById('builder-panel').classList.toggle('collapsed', view!=='builder');
 
   if(view==='builder') {
@@ -1912,6 +2038,7 @@ function showView(view) {
   }
   if(view==='saved') renderSavedList();
   if(view==='home') dexInit();
+  if(view==='myDash') myDashInit();
 }
 
 function showResultsArea() { document.getElementById('results-area').style.display='flex'; document.getElementById('builder-empty').style.display='none'; document.getElementById('loading-state').style.display='none'; }
@@ -2653,6 +2780,681 @@ function dexRenderChart() {
 
   _dexChart = new Chart(canvas, { type: finalType, data: { labels, datasets }, options: chartOptions });
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   SAVE CHART (Dataset Explorer)
+═══════════════════════════════════════════════════════════════════ */
+let _savedCharts = [];
+
+function _loadSavedCharts() {
+  try {
+    const raw = localStorage.getItem('fcc_saved_charts');
+    if (raw) { _savedCharts = JSON.parse(raw); }
+  } catch(e) { _savedCharts = []; }
+}
+
+function _persistSavedCharts() {
+  localStorage.setItem('fcc_saved_charts', JSON.stringify(_savedCharts));
+}
+
+_loadSavedCharts();
+
+function dexOpenSaveForm() {
+  const form = document.getElementById('dex-save-inline-form');
+  const okMsg = document.getElementById('dex-save-ok-msg');
+  if (form) {
+    form.classList.add('visible');
+    okMsg.style.display = 'none';
+    // Pre-fill with dataset + groupby as default name
+    const dsName = _dexActive?.name || '';
+    const segsStr = _dexSelSegs.join(' + ') || '';
+    document.getElementById('dex-save-chart-name').value =
+      (dsName ? dsName.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase()) : '') +
+      (segsStr ? ' — ' + segsStr : '');
+    document.getElementById('dex-save-chart-name').focus();
+  }
+}
+
+function dexCloseSaveForm() {
+  const form = document.getElementById('dex-save-inline-form');
+  if (form) form.classList.remove('visible');
+}
+
+function dexConfirmSaveChart() {
+  const name = document.getElementById('dex-save-chart-name').value.trim();
+  if (!name) { document.getElementById('dex-save-chart-name').focus(); return; }
+  if (!_dexActive) return;
+
+  const chart = {
+    id: crypto.randomUUID(),
+    name,
+    dataset: _dexActive.name,
+    groupBySegments: [..._dexSelSegs],
+    metrics: (_dexActive.metrics || [])
+      .filter(m => _dexSelMets.includes(m.name))
+      .map(m => ({ name: m.name, aggregationType: m.agg || 'SUM' })),
+    dateSegment: document.getElementById('dex-date-seg')?.value || '',
+    chartType: _dexChartType || 'bar',
+    labelCol: document.getElementById('dex-chart-label-col')?.value || '',
+    valueCol: document.getElementById('dex-chart-value-col')?.value || '',
+    groupCol: document.getElementById('dex-chart-group-col')?.value || '',
+    createdAt: new Date().toISOString()
+  };
+
+  _loadSavedCharts();
+  _savedCharts.unshift(chart);
+  _persistSavedCharts();
+
+  // Show confirmation
+  const okMsg = document.getElementById('dex-save-ok-msg');
+  okMsg.style.display = '';
+  setTimeout(() => {
+    okMsg.style.display = 'none';
+    dexCloseSaveForm();
+  }, 1800);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   MY DASHBOARDS — Config schema
+═══════════════════════════════════════════════════════════════════ */
+let _dashConfig = { dashboards: [] };
+let _myDashMode = 'list'; // 'list' | 'edit' | 'view'
+let _myDashActive = null;  // active dashboard object
+let _myDashActivePage = 0; // active page index
+let _tilePanelCtx = null;  // { dashId, pageIdx, panelIdx }
+let _tileViewCharts = {};  // { tileId: Chart instance }
+
+function _loadDashConfig() {
+  try {
+    const raw = localStorage.getItem('fcc_dash_config');
+    if (raw) { _dashConfig = JSON.parse(raw); }
+  } catch(e) { _dashConfig = { dashboards: [] }; }
+}
+
+function _saveDashConfig() {
+  localStorage.setItem('fcc_dash_config', JSON.stringify(_dashConfig));
+}
+
+_loadDashConfig();
+
+/* ── Init / render ── */
+function myDashInit() {
+  _loadDashConfig();
+  _loadSavedCharts();
+  _myDashMode = 'list';
+  _myDashActivePage = 0;
+  myDashRender();
+}
+
+function myDashRender() {
+  const screen = document.getElementById('my-dash-screen');
+  if (!screen) return;
+  if (_myDashMode === 'list') {
+    myDashRenderList(screen);
+  } else if (_myDashMode === 'edit') {
+    myDashRenderEdit(screen);
+  } else if (_myDashMode === 'view') {
+    myDashRenderView(screen);
+  }
+  lucide.createIcons({ el: screen });
+}
+
+/* ── MODE A: Dashboard List ── */
+function myDashRenderList(screen) {
+  const dashes = _dashConfig.dashboards;
+  screen.innerHTML = `
+    <div class="myd-header">
+      <div class="myd-title">My Dashboards</div>
+      <button class="myd-btn" onclick="myDashNew()">
+        <i data-lucide="plus" style="width:15px;height:15px"></i> New Dashboard
+      </button>
+    </div>
+    <div class="myd-dash-cards" id="myd-dash-cards">
+      ${dashes.length === 0 ? `
+        <div class="myd-empty">
+          <i data-lucide="layout-dashboard" style="width:48px;height:48px;stroke-width:1.2"></i>
+          <h3>No dashboards yet</h3>
+          <p>Create a dashboard to arrange your saved charts into a custom view.</p>
+          <button class="myd-btn" onclick="myDashNew()">
+            <i data-lucide="plus" style="width:15px;height:15px"></i> Create Your First Dashboard
+          </button>
+        </div>` :
+        dashes.map(d => `
+          <div class="myd-dash-card" onclick="myDashOpenEdit('${d.id}')">
+            <div class="myd-dash-card-info">
+              <div class="myd-dash-card-name">${escHtml(d.name)}</div>
+              <div class="myd-dash-card-meta">${d.pages.length} page${d.pages.length !== 1 ? 's' : ''} · ${d.pages.reduce((sum,p)=>sum+p.panels.length,0)} panel${d.pages.reduce((sum,p)=>sum+p.panels.length,0)!==1?'s':''}</div>
+            </div>
+            <div class="myd-dash-card-actions" onclick="event.stopPropagation()">
+              <button class="myd-icon-btn" onclick="myDashOpenView('${d.id}')" title="View">
+                <i data-lucide="eye" style="width:14px;height:14px"></i>
+              </button>
+              <button class="myd-icon-btn" onclick="myDashOpenEdit('${d.id}')" title="Edit">
+                <i data-lucide="pencil" style="width:14px;height:14px"></i>
+              </button>
+              <button class="myd-icon-btn danger" onclick="myDashDelete('${d.id}')" title="Delete">
+                <i data-lucide="x" style="width:14px;height:14px"></i>
+              </button>
+            </div>
+          </div>`).join('')
+      }
+    </div>
+  `;
+}
+
+function myDashNew() {
+  const id = crypto.randomUUID();
+  const dash = {
+    id,
+    name: 'New Dashboard',
+    pages: [{
+      id: crypto.randomUUID(),
+      name: 'Page 1',
+      panels: []
+    }]
+  };
+  _dashConfig.dashboards.unshift(dash);
+  _saveDashConfig();
+  myDashOpenEdit(id);
+}
+
+function myDashDelete(dashId) {
+  if (!confirm('Delete this dashboard?')) return;
+  _dashConfig.dashboards = _dashConfig.dashboards.filter(d => d.id !== dashId);
+  _saveDashConfig();
+  myDashRender();
+}
+
+function myDashOpenEdit(dashId) {
+  _myDashActive = _dashConfig.dashboards.find(d => d.id === dashId);
+  if (!_myDashActive) return;
+  _myDashMode = 'edit';
+  _myDashActivePage = 0;
+  myDashRender();
+}
+
+function myDashOpenView(dashId) {
+  _myDashActive = _dashConfig.dashboards.find(d => d.id === dashId);
+  if (!_myDashActive) return;
+  _myDashMode = 'view';
+  _myDashActivePage = 0;
+  myDashRender();
+}
+
+/* ── MODE B: Dashboard Editor ── */
+function myDashRenderEdit(screen) {
+  const dash = _myDashActive;
+  if (!dash) { _myDashMode = 'list'; myDashRender(); return; }
+
+  const pages = dash.pages;
+  const pageIdx = Math.min(_myDashActivePage, pages.length - 1);
+  const page = pages[pageIdx];
+
+  screen.innerHTML = `
+    <div class="myd-back-bar">
+      <button class="myd-btn-sec" onclick="myDashGoList()">
+        <i data-lucide="arrow-left" style="width:14px;height:14px"></i> Back
+      </button>
+      <input class="myd-inline-name" type="text" value="${escHtml(dash.name)}" onchange="myDashRenameDash(this.value)" title="Click to rename">
+      <div style="flex:1"></div>
+      <button class="myd-btn" onclick="myDashOpenView('${dash.id}')">
+        <i data-lucide="eye" style="width:15px;height:15px"></i> View Dashboard
+      </button>
+    </div>
+    <div class="myd-page-tabs-bar" id="myd-page-tabs">
+      ${pages.map((p, i) => `
+        <button class="myd-page-tab${i === pageIdx ? ' active' : ''}" onclick="myDashSelectPage(${i})"
+          ondblclick="myDashRenamePage(${i})">
+          ${escHtml(p.name)}
+          ${pages.length > 1 ? `<span onclick="event.stopPropagation();myDashDeletePage(${i})" style="margin-left:5px;opacity:.4;cursor:pointer" title="Remove page">×</span>` : ''}
+        </button>`).join('')}
+      <button class="myd-page-tab-add" onclick="myDashAddPage()">
+        <i data-lucide="plus" style="width:13px;height:13px"></i> Add Page
+      </button>
+    </div>
+    <div class="myd-panels" id="myd-panels">
+      ${page.panels.map((panel, pi) => myDashRenderPanelCard(panel, pi, pageIdx)).join('')}
+    </div>
+    <button class="myd-add-panel-btn" onclick="myDashAddPanel(${pageIdx})">
+      <i data-lucide="plus" style="width:16px;height:16px"></i> Add Panel
+    </button>
+  `;
+}
+
+function myDashRenderPanelCard(panel, pi, pageIdx) {
+  const cols = panel.layout === '3col' ? 3 : panel.layout === '2col' ? 2 : 1;
+  return `
+    <div class="myd-panel-card" id="myd-panel-${pi}">
+      <div class="myd-panel-header">
+        <input class="myd-panel-title-input" type="text" value="${escHtml(panel.title)}"
+          onchange="myDashRenamePanel(${pageIdx},${pi},this.value)" title="Click to rename">
+        <div class="myd-layout-pills">
+          <button class="myd-layout-pill${panel.layout==='1col'?' active':''}" onclick="myDashSetLayout(${pageIdx},${pi},'1col')">1 col</button>
+          <button class="myd-layout-pill${panel.layout==='2col'?' active':''}" onclick="myDashSetLayout(${pageIdx},${pi},'2col')">2 col</button>
+          <button class="myd-layout-pill${panel.layout==='3col'?' active':''}" onclick="myDashSetLayout(${pageIdx},${pi},'3col')">3 col</button>
+        </div>
+      </div>
+      <div class="myd-tiles cols-${cols}" id="myd-tiles-${pi}">
+        ${panel.tiles.map((t, ti) => myDashRenderTileItem(t, pi, ti, pageIdx)).join('')}
+      </div>
+      <div class="myd-panel-footer">
+        <button class="myd-add-tile-btn" onclick="openTilePicker('${_myDashActive.id}',${pageIdx},${pi})">
+          <i data-lucide="plus-circle" style="width:14px;height:14px"></i> Add Tile
+        </button>
+        <button class="myd-panel-remove" onclick="myDashRemovePanel(${pageIdx},${pi})">
+          <i data-lucide="trash-2" style="width:13px;height:13px"></i> Remove Panel
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+function myDashRenderTileItem(tile, pi, ti, pageIdx) {
+  const sc = _savedCharts.find(c => c.id === tile.savedChartId);
+  const name = sc ? escHtml(sc.name) : '(Chart deleted)';
+  const meta = sc ? `${sc.dataset} · ${sc.chartType}` : '';
+  return `
+    <div class="myd-tile-card">
+      <div style="display:flex;flex-direction:column;flex:1;min-width:0">
+        <span class="myd-tile-name">${name}</span>
+        ${meta ? `<span class="myd-tile-sub">${meta}</span>` : ''}
+      </div>
+      <div style="display:flex;gap:4px">
+        ${ti > 0 ? `<button class="myd-icon-btn" style="width:24px;height:24px" onclick="myDashMoveTile(${pageIdx},${pi},${ti},'up')" title="Move up">↑</button>` : ''}
+        ${ti < (_myDashActive.pages[pageIdx].panels[pi].tiles.length-1) ? `<button class="myd-icon-btn" style="width:24px;height:24px" onclick="myDashMoveTile(${pageIdx},${pi},${ti},'down')" title="Move down">↓</button>` : ''}
+        <button class="myd-tile-remove" onclick="myDashRemoveTile(${pageIdx},${pi},${ti})" title="Remove">×</button>
+      </div>
+    </div>
+  `;
+}
+
+/* ── Edit mode helpers ── */
+function myDashGoList() {
+  _myDashMode = 'list';
+  _myDashActive = null;
+  myDashRender();
+}
+
+function myDashRenameDash(name) {
+  if (!_myDashActive) return;
+  _myDashActive.name = name.trim() || 'Dashboard';
+  _saveDashConfig();
+}
+
+function myDashSelectPage(idx) {
+  _myDashActivePage = idx;
+  myDashRender();
+}
+
+function myDashAddPage() {
+  if (!_myDashActive) return;
+  const page = { id: crypto.randomUUID(), name: `Page ${_myDashActive.pages.length + 1}`, panels: [] };
+  _myDashActive.pages.push(page);
+  _saveDashConfig();
+  _myDashActivePage = _myDashActive.pages.length - 1;
+  myDashRender();
+}
+
+function myDashDeletePage(idx) {
+  if (!_myDashActive) return;
+  if (_myDashActive.pages.length <= 1) { alert('A dashboard must have at least one page.'); return; }
+  if (!confirm('Remove this page and all its panels?')) return;
+  _myDashActive.pages.splice(idx, 1);
+  _saveDashConfig();
+  _myDashActivePage = Math.min(_myDashActivePage, _myDashActive.pages.length - 1);
+  myDashRender();
+}
+
+function myDashRenamePage(idx) {
+  if (!_myDashActive) return;
+  const p = _myDashActive.pages[idx];
+  const name = prompt('Rename page:', p.name);
+  if (name && name.trim()) {
+    p.name = name.trim();
+    _saveDashConfig();
+    myDashRender();
+  }
+}
+
+function myDashAddPanel(pageIdx) {
+  if (!_myDashActive) return;
+  const panel = {
+    id: crypto.randomUUID(),
+    title: 'New Panel',
+    layout: '2col',
+    tiles: []
+  };
+  _myDashActive.pages[pageIdx].panels.push(panel);
+  _saveDashConfig();
+  myDashRender();
+}
+
+function myDashRemovePanel(pageIdx, pi) {
+  if (!_myDashActive) return;
+  if (!confirm('Remove this panel?')) return;
+  _myDashActive.pages[pageIdx].panels.splice(pi, 1);
+  _saveDashConfig();
+  myDashRender();
+}
+
+function myDashRenamePanel(pageIdx, pi, name) {
+  if (!_myDashActive) return;
+  _myDashActive.pages[pageIdx].panels[pi].title = name.trim() || 'Panel';
+  _saveDashConfig();
+}
+
+function myDashSetLayout(pageIdx, pi, layout) {
+  if (!_myDashActive) return;
+  _myDashActive.pages[pageIdx].panels[pi].layout = layout;
+  _saveDashConfig();
+  myDashRender();
+}
+
+function myDashRemoveTile(pageIdx, pi, ti) {
+  if (!_myDashActive) return;
+  _myDashActive.pages[pageIdx].panels[pi].tiles.splice(ti, 1);
+  _saveDashConfig();
+  myDashRender();
+}
+
+function myDashMoveTile(pageIdx, pi, ti, dir) {
+  if (!_myDashActive) return;
+  const tiles = _myDashActive.pages[pageIdx].panels[pi].tiles;
+  const newIdx = dir === 'up' ? ti - 1 : ti + 1;
+  if (newIdx < 0 || newIdx >= tiles.length) return;
+  [tiles[ti], tiles[newIdx]] = [tiles[newIdx], tiles[ti]];
+  _saveDashConfig();
+  myDashRender();
+}
+
+/* ── Tile Picker ── */
+function openTilePicker(dashId, pageIdx, pi) {
+  _tilePanelCtx = { dashId, pageIdx, panelIdx: pi };
+  _loadSavedCharts();
+  document.getElementById('tp-search-input').value = '';
+  tpFilterCharts('');
+  document.getElementById('tile-picker-overlay').classList.add('open');
+  lucide.createIcons({ el: document.getElementById('tile-picker-modal') });
+}
+
+function closeTilePicker() {
+  document.getElementById('tile-picker-overlay').classList.remove('open');
+  _tilePanelCtx = null;
+}
+
+function tpFilterCharts(q) {
+  const list = document.getElementById('tp-list');
+  const charts = q
+    ? _savedCharts.filter(c => c.name.toLowerCase().includes(q.toLowerCase()) || c.dataset.toLowerCase().includes(q.toLowerCase()))
+    : _savedCharts;
+
+  if (!charts.length) {
+    list.innerHTML = `<div class="tp-empty">${_savedCharts.length === 0
+      ? 'No saved charts yet. Build one in the Datasets tab.'
+      : 'No charts match your search.'}</div>`;
+    return;
+  }
+
+  list.innerHTML = charts.map(c => `
+    <div class="tp-item" onclick="tpSelectChart('${c.id}')">
+      <div class="tp-item-icon">
+        <i data-lucide="bar-chart-2" style="width:18px;height:18px;stroke-width:1.6"></i>
+      </div>
+      <div class="tp-item-info">
+        <div class="tp-item-name">${escHtml(c.name)}</div>
+        <div class="tp-item-meta">${c.dataset} · ${c.chartType} · ${c.groupBySegments.join(', ') || 'no segments'}</div>
+      </div>
+    </div>`).join('');
+  lucide.createIcons({ el: list });
+}
+
+function tpSelectChart(chartId) {
+  if (!_tilePanelCtx) return;
+  const { dashId, pageIdx, panelIdx } = _tilePanelCtx;
+  const dash = _dashConfig.dashboards.find(d => d.id === dashId);
+  if (!dash) return;
+  const panel = dash.pages[pageIdx].panels[panelIdx];
+  panel.tiles.push({
+    id: crypto.randomUUID(),
+    type: 'chart',
+    savedChartId: chartId
+  });
+  _saveDashConfig();
+  closeTilePicker();
+  // Re-render editor
+  _myDashActive = dash;
+  myDashRender();
+}
+
+/* ── MODE C: Dashboard Viewer ── */
+function myDashRenderView(screen) {
+  const dash = _myDashActive;
+  if (!dash) { _myDashMode = 'list'; myDashRender(); return; }
+
+  const pages = dash.pages;
+  const pageIdx = Math.min(_myDashActivePage, pages.length - 1);
+  const page = pages[pageIdx];
+
+  screen.innerHTML = `
+    <div class="myd-view-header">
+      <div style="display:flex;align-items:center;gap:12px">
+        <button class="myd-btn-sec" onclick="myDashGoList()">
+          <i data-lucide="arrow-left" style="width:14px;height:14px"></i> Back
+        </button>
+        <div class="myd-view-title">${escHtml(dash.name)}</div>
+      </div>
+      <button class="myd-btn-sec" onclick="myDashOpenEdit('${dash.id}')">
+        <i data-lucide="pencil" style="width:14px;height:14px"></i> Edit
+      </button>
+    </div>
+    <div class="myd-page-tabs-bar">
+      ${pages.map((p, i) => `
+        <button class="myd-page-tab${i === pageIdx ? ' active' : ''}" onclick="myDashViewSelectPage(${i})">
+          ${escHtml(p.name)}
+        </button>`).join('')}
+    </div>
+    <div class="myd-view-panels" id="myd-view-panels">
+      ${page.panels.map((panel, pi) => myDashRenderViewPanel(panel, pi)).join('')}
+    </div>
+  `;
+
+  lucide.createIcons({ el: screen });
+
+  // After rendering tiles, fetch data for each
+  page.panels.forEach((panel, pi) => {
+    panel.tiles.forEach((tile, ti) => {
+      myDashFetchTile(tile, pi, ti);
+    });
+  });
+}
+
+function myDashRenderViewPanel(panel, pi) {
+  const cols = panel.layout === '3col' ? 3 : panel.layout === '2col' ? 2 : 1;
+  return `
+    <div class="myd-view-panel">
+      <div class="myd-view-panel-title">${escHtml(panel.title)}</div>
+      <div class="myd-view-tiles cols-${cols}">
+        ${panel.tiles.length === 0
+          ? `<div style="color:var(--text-muted);font-size:13px;padding:20px 0">No tiles added to this panel.</div>`
+          : panel.tiles.map((tile, ti) => `
+            <div class="myd-view-tile" id="myd-view-tile-${pi}-${ti}">
+              <div class="myd-view-tile-title">${escHtml(myDashGetTileTitle(tile))}</div>
+              <div class="myd-view-tile-chart" id="myd-tile-chart-${pi}-${ti}">
+                <div class="myd-tile-spinner"><div class="spinner"></div></div>
+              </div>
+            </div>`).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function myDashGetTileTitle(tile) {
+  const sc = _savedCharts.find(c => c.id === tile.savedChartId);
+  return sc ? sc.name : 'Tile';
+}
+
+async function myDashFetchTile(tile, pi, ti) {
+  const chartEl = document.getElementById(`myd-tile-chart-${pi}-${ti}`);
+  if (!chartEl) return;
+
+  const sc = _savedCharts.find(c => c.id === tile.savedChartId);
+  if (!sc) {
+    chartEl.innerHTML = '<div style="color:var(--text-muted);font-size:12px;padding:20px;text-align:center">Chart configuration not found.</div>';
+    return;
+  }
+
+  try {
+    // Build filters from saved chart + global filter state
+    const filters = [];
+    if (sc.dateSegment && _gf.dateFrom && _gf.dateTo) {
+      filters.push({ segmentName: sc.dateSegment, operator: 'between', value: _gf.dateFrom, secondValue: _gf.dateTo });
+    } else if (sc.dateSegment && _gf.dateFrom) {
+      filters.push({ segmentName: sc.dateSegment, operator: 'gte', value: _gf.dateFrom });
+    }
+    // Inject yard filter if the dataset has a Yard segment
+    if (_gf.yards && _gf.yards.length > 0 && typeof buildYardFilter === 'function') {
+      const yardFilters = buildYardFilter(_gf.yards);
+      filters.push(...yardFilters);
+    }
+
+    const body = {
+      datasetName: sc.dataset,
+      groupBySegments: sc.groupBySegments,
+      metrics: sc.metrics.map(m => ({ metricName: m.name, aggregation: m.aggregationType || 'SUM', alias: m.name })),
+      filters,
+      limit: 200,
+      orderBy: sc.metrics.length ? [{ field: sc.metrics[0].name, direction: 'DESC' }] : undefined
+    };
+
+    const r = await fetch(`${BASE_URL}/bi/query`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const j = await r.json();
+    const rows = j.data?.data || [];
+
+    if (!rows.length) {
+      chartEl.innerHTML = '<div style="color:var(--text-muted);font-size:12px;padding:20px;text-align:center">No data for the selected filters.</div>';
+      return;
+    }
+
+    // Render chart
+    chartEl.innerHTML = '<canvas id="myd-canvas-' + pi + '-' + ti + '" style="width:100%;height:100%"></canvas>';
+    const canvas = document.getElementById(`myd-canvas-${pi}-${ti}`);
+    if (canvas) {
+      myDashDrawChart(canvas, rows, sc);
+    }
+  } catch(e) {
+    chartEl.innerHTML = `<div style="color:var(--red);font-size:12px;padding:20px;text-align:center">Error: ${e.message}</div>`;
+  }
+}
+
+function myDashDrawChart(canvas, rows, sc) {
+  const labelCol = sc.labelCol || (sc.groupBySegments[0] || Object.keys(rows[0])[0]);
+  const valCol   = sc.valueCol || (sc.metrics[0]?.name || Object.keys(rows[0])[1]);
+  const grpCol   = sc.groupCol || '';
+  const chartType = sc.chartType || 'bar';
+
+  const PAL = PERF_COLORS || ['#00BFA5','#003366','#f59e0b','#6366f1','#ec4899','#14b8a6','#8b5cf6','#f97316','#06b6d4','#84cc16'];
+  const hexAlpha = (hex, a) => hex + Math.round(a*255).toString(16).padStart(2,'0');
+  const fmtVal = v => {
+    const n = parseFloat(v);
+    if (isNaN(n)) return String(v);
+    if (Math.abs(n) >= 1e6) return (n/1e6).toFixed(1)+'M';
+    if (Math.abs(n) >= 1e3) return (n/1e3).toFixed(0)+'K';
+    return n.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  };
+
+  const isHoriz   = chartType === 'bar-h';
+  const isStacked = chartType === 'bar-stacked';
+  const isPie     = chartType === 'pie' || chartType === 'doughnut';
+  const finalType = isPie ? 'doughnut' : (chartType === 'line' ? 'line' : 'bar');
+
+  let labels, datasets, options;
+
+  if (isPie) {
+    labels   = rows.map(r => String(r[labelCol] ?? '—'));
+    datasets = [{
+      label: valCol,
+      data: rows.map(r => parseFloat(r[valCol] ?? 0)),
+      backgroundColor: rows.map((_,i) => PAL[i % PAL.length]),
+      borderColor: '#fff', borderWidth: 2, hoverOffset: 6
+    }];
+    options = {
+      responsive: true, maintainAspectRatio: false,
+      cutout: chartType === 'doughnut' ? '55%' : '0%',
+      plugins: {
+        legend: { display: true, position: 'right', labels: { boxWidth: 10, font: { size: 11 }, padding: 12 } },
+        tooltip: { callbacks: { label: c => ' ' + c.label + ': ' + fmtVal(c.raw) } }
+      }
+    };
+  } else if (grpCol && grpCol !== labelCol) {
+    const groups = [...new Set(rows.map(r => String(r[grpCol] ?? '—')))];
+    labels = [...new Set(rows.map(r => String(r[labelCol] ?? '—')))];
+    datasets = groups.map((g, gi) => ({
+      label: g,
+      data: labels.map(l => {
+        const row = rows.find(r => String(r[labelCol]??'—')===l && String(r[grpCol]??'—')===g);
+        return { x: l, y: row ? parseFloat(row[valCol]??0) : 0 };
+      }),
+      backgroundColor: hexAlpha(PAL[gi % PAL.length], 0.82),
+      borderColor: PAL[gi % PAL.length],
+      borderWidth: 1, borderRadius: 4, tension: 0.35
+    }));
+    options = {
+      indexAxis: isHoriz ? 'y' : 'x',
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: true, position: 'bottom', labels: { boxWidth: 10, font: { size: 10 }, padding: 10 } },
+        tooltip: { callbacks: { label: c => ' '+c.dataset.label+': '+fmtVal(c.parsed.y??c.parsed.x) } }
+      },
+      scales: {
+        x: { type: isHoriz?'linear':'category', stacked: isStacked, grid: { display: isHoriz, color: '#e2e8f0' }, ticks: { font: { size: 10 }, maxRotation: isHoriz?0:40, maxTicksLimit: 12, callback: isHoriz?fmtVal:undefined } },
+        y: { type: isHoriz?'category':'linear', stacked: isStacked, grid: { display: !isHoriz, color: '#e2e8f0' }, beginAtZero: true, ticks: { font: { size: 10 }, callback: isHoriz?undefined:fmtVal } }
+      }
+    };
+  } else {
+    labels = rows.map(r => String(r[labelCol] ?? '—'));
+    datasets = [{
+      label: valCol,
+      data: rows.map(r => ({ x: String(r[labelCol]??'—'), y: parseFloat(r[valCol]??0) })),
+      backgroundColor: hexAlpha(PAL[0], 0.82),
+      borderColor: PAL[0], borderWidth: 1,
+      borderRadius: isHoriz ? 2 : 4, tension: 0.35, fill: false,
+      pointRadius: finalType === 'line' ? 3 : 0,
+      pointBackgroundColor: PAL[0]
+    }];
+    options = {
+      indexAxis: isHoriz ? 'y' : 'x',
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: c => ' '+fmtVal(c.parsed.y??c.parsed.x) } }
+      },
+      scales: {
+        x: { type: isHoriz?'linear':'category', grid: { display: isHoriz, color: '#e2e8f0' }, ticks: { font: { size: 10 }, maxRotation: isHoriz?0:40, maxTicksLimit: 12, callback: isHoriz?fmtVal:undefined } },
+        y: { type: isHoriz?'category':'linear', grid: { display: !isHoriz, color: '#e2e8f0' }, beginAtZero: true, ticks: { font: { size: 10 }, callback: isHoriz?undefined:fmtVal } }
+      }
+    };
+  }
+
+  new Chart(canvas, { type: finalType, data: { labels, datasets }, options });
+}
+
+function myDashViewSelectPage(idx) {
+  _myDashActivePage = idx;
+  // Destroy any existing chart instances in view
+  Object.values(_tileViewCharts).forEach(c => { try { c.destroy(); } catch(e) {} });
+  _tileViewCharts = {};
+  myDashRender();
+}
+
+/* ── Utility ── */
+function escHtml(str) {
+  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
 function dexExportCsv() {
   if (!_dexResults.length) return;
   const keys = Object.keys(_dexResults[0]);
@@ -2663,6 +3465,20 @@ function dexExportCsv() {
   a.click();
 }
 </script>
+
+<!-- ═══ Tile Picker Modal ═══ -->
+<div id="tile-picker-overlay">
+  <div id="tile-picker-modal">
+    <div class="tp-header">
+      <h3>Add Chart Tile</h3>
+      <button onclick="closeTilePicker()"><i data-lucide="x" style="width:16px;height:16px"></i></button>
+    </div>
+    <div class="tp-search">
+      <input type="text" id="tp-search-input" placeholder="Search saved charts..." oninput="tpFilterCharts(this.value)">
+    </div>
+    <div class="tp-list" id="tp-list"></div>
+  </div>
+</div>
 
 <!-- ═══ Query Inspector Panel ═══ -->
 <div id="query-inspector-overlay" onclick="closeQueryInspector()"></div>
