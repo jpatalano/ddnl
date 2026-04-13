@@ -1947,6 +1947,7 @@ async function dexSelectDataset(name) {
     // Auto-select all non-date segments by default; exclude date segments from groupBy
     _dexSelSegs = segs.filter(s => s.type !== 'date').map(s => s.name);
     _dexSelMets = mets.map(m => m.name);
+    console.log('[DEX] auto-selected segs:', _dexSelSegs, 'mets:', _dexSelMets);
 
     // Render segment tags (pre-highlighted)
     document.getElementById('dex-seg-tags').innerHTML = segs.map(s =>
@@ -1984,6 +1985,7 @@ async function dexSelectDataset(name) {
     // Update query builder display
     dexUpdateQBuilder();
 
+    dexUpdateQBuilder();
     lucide.createIcons({ el: document.getElementById('dex-panel') });
   } catch(e) {
     document.getElementById('dex-panel-desc').textContent = 'Error loading schema: ' + e.message;
@@ -2074,10 +2076,8 @@ function dexShowQuery(endpoint, body) {
     }
   );
   panel.style.display = '';
-  // Keep open on first show, stay in current open/close state after
+  // Always open the body on each run so user can see the latest query
   const wrap = document.getElementById('dex-qp-body-wrap');
-  if (wrap.style.display === '') return; // already open
-  // Auto-open on first query
   wrap.style.display = '';
   document.getElementById('dex-qp-toggle').classList.add('open');
   lucide.createIcons({ el: panel });
@@ -2192,8 +2192,12 @@ function dexRenderTable(rows, meta) {
 
   document.getElementById('dex-export-btn').style.display = '';
   const cols = Object.keys(rows[0]);
-  const isNum = v => v !== null && v !== '' && !isNaN(parseFloat(v));
+  // Detect which columns are truly numeric (all non-null values are numbers)
+  const isNumCol = col => rows.every(r => r[col] === null || r[col] === '' || (!isNaN(parseFloat(r[col])) && !/[a-zA-Z]/.test(String(r[col]))));
+  const numCols = new Set(cols.filter(isNumCol));
   const DATE_COL = /date|Date/i;
+  // String segment names should always be text regardless of value
+  const STRING_SEGS = new Set(['Customer','CustomerLocation','SalesPerson','SalesPersonName','Status','Yard','YardCode','YardName','Customer','JobStatus','QuoteStatus','UnitNumber','Description','Type']);
   const fmtDate = v => {
     if (!v) return '—';
     // API returns year as integer (e.g. 2026) or full ISO string
@@ -2210,11 +2214,11 @@ function dexRenderTable(rows, meta) {
       `<tr>${cols.map(c => {
         const v = row[c];
         if (DATE_COL.test(c)) return `<td>${fmtDate(v)}</td>`;
-        const num = isNum(v);
-        const display = num && Math.abs(parseFloat(v)) >= 1000
+        if (STRING_SEGS.has(c) || !numCols.has(c)) return `<td>${v ?? '—'}</td>`;
+        const display = v !== null && v !== '' && Math.abs(parseFloat(v)) >= 1000
           ? parseFloat(v).toLocaleString(undefined, {minimumFractionDigits:0,maximumFractionDigits:2})
           : (v ?? '—');
-        return `<td${num?' class="num"':''}>${display}</td>`;
+        return `<td class="num">${display}</td>`;
       }).join('')}</tr>`
     ).join('')}</tbody>
   </table>`;
