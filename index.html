@@ -724,6 +724,54 @@
     .dex-save-cancel-btn { padding:5px 10px; border:1.5px solid var(--border); border-radius:6px; font-size:12px; cursor:pointer; background:var(--surface); color:var(--text-muted); }
     .dex-save-ok-msg { font-size:12px; font-weight:600; color:var(--teal); }
 
+    /* ── Tree Grid ─────────────────────────────────────────────── */
+    .tree-grid-wrap { overflow: auto; height: 100%; }
+    .tree-grid { width: 100%; border-collapse: collapse; font-size: 12.5px; table-layout: fixed; }
+    .tree-grid colgroup col { box-sizing: border-box; }
+    .tree-grid thead { position: sticky; top: 0; z-index: 2; }
+    .tree-grid th {
+      background: var(--navy); color: #fff; padding: 9px 14px;
+      text-align: left; font-size: 11px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .05em;
+      white-space: nowrap; position: relative;
+      overflow: hidden; user-select: none;
+    }
+    .tree-grid th.col-right { text-align: right; }
+    .tree-grid th:hover { background: var(--navy-light); }
+    .tree-grid th.col-drag-over { background: var(--teal-dim) !important; }
+    .col-resize-handle {
+      position: absolute; right: 0; top: 0; bottom: 0; width: 5px;
+      cursor: col-resize; background: rgba(255,255,255,.18);
+      opacity: 0; transition: opacity .15s; z-index: 3;
+    }
+    .tree-grid th:hover .col-resize-handle { opacity: 1; }
+    .tree-grid td { padding: 7px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tree-grid td.col-right { text-align: right; font-variant-numeric: tabular-nums; }
+    .tree-group-row.depth-0 { background: rgba(0,51,102,.06); }
+    .tree-group-row.depth-1 { background: rgba(0,51,102,.03); }
+    .tree-group-row.depth-2 { background: rgba(0,191,165,.04); }
+    .tree-group-row td { font-weight: 600; }
+    .tree-subtotal { font-weight: 700; color: var(--navy); text-align: right; font-variant-numeric: tabular-nums; }
+    .tree-leaf-row:hover { background: rgba(0,191,165,.05); }
+    .tree-leaf-row td { color: var(--text-muted); }
+    .tree-leaf-row td.col-right { text-align: right; }
+    .tree-grand-total { background: var(--navy); color: #fff; }
+    .tree-grand-total td { padding: 9px 14px; font-size: 13px; }
+    .tree-grand-total td.col-right { text-align: right; }
+    .tree-toggle {
+      background: none; border: none; cursor: pointer;
+      font-size: 10px; color: var(--navy); margin-right: 4px;
+      padding: 0 2px; opacity: .7;
+    }
+    .tree-toggle:hover { opacity: 1; }
+    /* Groupby chips section */
+    #groupby-chips-wrap { padding: 10px 16px; border-bottom: 1px solid var(--border); display: none; }
+    .gbchip {
+      display: inline-flex; align-items: center; gap: 4px;
+      background: var(--surface2); border: 1.5px solid var(--border);
+      border-radius: 14px; padding: 3px 8px; font-size: 11px; margin: 2px;
+    }
+
   </style>
 </head>
 <body>
@@ -763,6 +811,7 @@
         <div class="field-list" id="segment-list"><div style="color:var(--text-muted);font-size:12px">Select a dataset first</div></div>
       </div>
     </div>
+    <div id="groupby-chips-wrap" style="display:none"></div>
     <div class="panel-section">
       <div class="panel-section-header" onclick="toggleSection('met-body')">
         <h4>Metrics <span id="met-badge" class="badge">0</span></h4>
@@ -1710,12 +1759,17 @@ const BASE = 'https://saasanalytic.fleetcostcare.com/api';
 
 let allDatasets    = [];
 let currentDataset = null;
-let selectedSegs   = new Set();
+let selectedSegs   = []; // ordered array, not Set
 let selectedMets   = new Map();
 let filters        = [];
 let gridApi        = null;
 let lastRowData    = [];
 let savedReports   = [];
+// Tree grid state
+const _collapseState = {};
+let _treeColOrder    = [];
+let _lastTreeMets    = [];
+let _dragSrcColIdx   = null;
 
 const ICONS = {
   Jobs_By_Status:'briefcase', Quote_Revenue_Forecast:'trending-up', Quotes_By_Status:'file-text',
@@ -1780,14 +1834,14 @@ async function selectDatasetFromCard(name) {
 
 async function onDatasetChange(name) {
   if (!name) return;
-  selectedSegs.clear(); selectedMets.clear(); filters = [];
+  selectedSegs = []; selectedMets.clear(); filters = [];
   document.getElementById('filter-list').innerHTML = '';
   updateBadges();
   try {
     const r = await fetch(`${BASE}/bi/datasets/${name}`);
     const j = await r.json();
     currentDataset = j.data;
-    renderSegmentList(); renderMetricList(); populateSortField();
+    renderSegmentList(); renderMetricList(); populateSortField(); renderGroupByChips();
     document.getElementById('run-btn').disabled = false;
     document.getElementById('run-btn').style.display = '';
     document.getElementById('save-btn').style.display = '';
@@ -1797,7 +1851,7 @@ async function onDatasetChange(name) {
 function renderSegmentList() {
   document.getElementById('segment-list').innerHTML = currentDataset.segments.map(s=>{
     const t = s.segment.segmentType;
-    return `<div class="field-item ${selectedSegs.has(s.segment.segmentName)?'selected':''}" onclick="toggleSeg('${s.segment.segmentName}',this)">
+    return `<div id="seg-item-${s.segment.segmentName}" class="field-item ${selectedSegs.includes(s.segment.segmentName)?'selected':''}" onclick="toggleSeg('${s.segment.segmentName}',this)">
       <div class="field-icon type-${t}">${t==='date'?'📅':t==='number'?'#':'T'}</div>
       <span class="field-name">${s.segment.segmentName}</span>
       <span class="field-cat">${s.segment.category||''}</span>
@@ -1822,11 +1876,20 @@ function populateSortField() {
      ...currentDataset.metrics.map(m=>`<option value="${m.metricName}">${m.metricName}</option>`)].join('');
 }
 
-function toggleSeg(name,el) { selectedSegs.has(name)?selectedSegs.delete(name):selectedSegs.add(name); el.classList.toggle('selected',selectedSegs.has(name)); updateBadges(); }
+function toggleSeg(name,el) {
+  if(selectedSegs.includes(name)) {
+    selectedSegs = selectedSegs.filter(s => s !== name);
+  } else {
+    selectedSegs.push(name);
+  }
+  el.classList.toggle('selected', selectedSegs.includes(name));
+  updateBadges();
+  renderGroupByChips();
+}
 function toggleMet(name,def,el) { selectedMets.has(name)?selectedMets.delete(name):selectedMets.set(name,def); el.classList.toggle('selected',selectedMets.has(name)); updateBadges(); }
 function setMetAgg(name,agg) { if(selectedMets.has(name)) selectedMets.set(name,agg); }
 function updateBadges() {
-  document.getElementById('seg-badge').textContent = selectedSegs.size;
+  document.getElementById('seg-badge').textContent = selectedSegs.length;
   document.getElementById('met-badge').textContent = selectedMets.size;
   document.getElementById('flt-badge').textContent = filters.length;
 }
@@ -1861,7 +1924,8 @@ function updateFilter(id,key,val) { const f=filters.find(x=>x.id===id); if(f){f[
 
 async function runQuery() {
   if(!currentDataset) return;
-  const segs = [...selectedSegs];
+  Object.keys(_collapseState).forEach(k => delete _collapseState[k]);
+  const segs = selectedSegs;
   const mets = [...selectedMets.entries()].map(([m,a])=>{
     const def=currentDataset.metrics.find(x=>x.metricName===m);
     return {metricName:m,aggregation:a,alias:m,displayFormat:def?.displayFormat,prefix:def?.prefix,suffix:def?.suffix};
@@ -1910,19 +1974,267 @@ function renderKpis(data,mets) {
   }).join('');
 }
 
-function renderGrid(rows,mets) {
-  if(!rows.length){document.getElementById('myGrid').innerHTML=`<div class="state-box" style="height:100%"><div class="state-icon"><i data-lucide="search" style="width:40px;height:40px;stroke-width:1.4"></i></div><h3>No results</h3></div>`;return;}
-  const metNames=new Set(mets.map(m=>m.metricName));
-  const metMap={};mets.forEach(m=>metMap[m.metricName]=m);
-  const colDefs=Object.keys(rows[0]).map(key=>{
-    const isMet=metNames.has(key);
-    return {field:key,headerName:key.replace(/([A-Z])/g,' $1').trim(),flex:1,minWidth:110,sortable:true,resizable:true,filter:true,
-      cellRenderer:isMet?(p=>metCellRenderer(p.value,metMap[key])):undefined};
+/* ───────────────────────────────────────────────────────────────────────────────
+   Tree Grid
+─────────────────────────────────────────────────────────────────────────────── */
+function renderGrid(rows, mets) {
+  if (!rows.length) {
+    document.getElementById('myGrid').innerHTML =
+      `<div class="state-box" style="height:100%"><div class="state-icon"><i data-lucide="search" style="width:40px;height:40px;stroke-width:1.4"></i></div><h3>No results</h3><p>No data matched your filters.</p></div>`;
+    lucide.createIcons();
+    return;
+  }
+
+  _lastTreeMets = mets;
+  const metNames = new Set(mets.map(m => m.metricName));
+  const metMap   = {}; mets.forEach(m => metMap[m.metricName] = m);
+  const groupCols = selectedSegs; // ordered array
+  const metCols   = mets.map(m => m.metricName);
+
+  // Determine visible dimension columns
+  // When there are group cols, only show first group col in the tree header
+  // When no group cols, show all non-metric keys
+  const allKeys = Object.keys(rows[0]);
+  const dimCols = groupCols.length > 0
+    ? [groupCols[0]]
+    : allKeys.filter(k => !metNames.has(k));
+
+  // Initial column order: [dimCols..., metCols...]
+  // Preserve user's reorder across re-renders when the column set hasn't changed
+  const newOrder = [...dimCols, ...metCols];
+  const orderChanged = _treeColOrder.length !== newOrder.length ||
+    newOrder.some((c, i) => _treeColOrder[i] !== c);
+  if (orderChanged) _treeColOrder = newOrder;
+
+  // Build tree
+  function buildTree(rows, groupCols, depth) {
+    if (!groupCols.length) return rows;
+    const [col, ...rest] = groupCols;
+    const groups = {};
+    const order  = [];
+    rows.forEach(r => {
+      const key = String(r[col] ?? '—');
+      if (!groups[key]) { groups[key] = []; order.push(key); }
+      groups[key].push(r);
+    });
+    return order.map(key => ({
+      _isGroup: true, _col: col, _key: key, _depth: depth,
+      _children: buildTree(groups[key], rest, depth + 1),
+      _subtotals: computeSubtotals(groups[key], metCols)
+    }));
+  }
+
+  function computeSubtotals(rows, metCols) {
+    const t = {};
+    metCols.forEach(m => { t[m] = rows.reduce((s, r) => s + (parseFloat(r[m]) || 0), 0); });
+    return t;
+  }
+
+  const tree = buildTree(rows, groupCols, 0);
+
+  // Render tree nodes to flat HTML row strings
+  function renderRows(nodes, pathParts, html) {
+    nodes.forEach(node => {
+      if (node._isGroup) {
+        const path      = [...pathParts, node._key].join('|');
+        const collapsed = !!_collapseState[path];
+        const indent    = node._depth * 18;
+        const escapedPath = path.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+        html.push(`<tr class="tree-group-row depth-${node._depth}" data-path="${escapedPath}">
+          <td style="padding-left:${indent + 8}px">
+            <button class="tree-toggle" onclick="treeToggle('${escapedPath}')">${collapsed ? '▶' : '▼'}</button>
+            <strong>${node._key}</strong>
+          </td>
+          ${_treeColOrder.slice(1).map(col => {
+            if (metNames.has(col)) {
+              return `<td class="tree-subtotal col-right">${metCellRenderer(node._subtotals[col], metMap[col])}</td>`;
+            }
+            return `<td></td>`;
+          }).join('')}
+        </tr>`);
+        if (!collapsed) {
+          renderRows(node._children, [...pathParts, node._key], html);
+        }
+      } else {
+        // Leaf row
+        const indent = groupCols.length * 18;
+        html.push(`<tr class="tree-leaf-row" onclick="openDrilldown(this._rowData)" style="cursor:pointer">
+          ${_treeColOrder.map((col, ci) => {
+            if (ci === 0) {
+              // first column — dimension value, indented
+              return `<td style="padding-left:${indent + 8}px;color:var(--text-muted)">${node[col] ?? '—'}</td>`;
+            }
+            if (metNames.has(col)) {
+              return `<td class="col-right">${metCellRenderer(node[col], metMap[col])}</td>`;
+            }
+            return `<td>${node[col] ?? '—'}</td>`;
+          }).join('')}
+        </tr>`);
+      }
+    });
+  }
+
+  const grandTotals = computeSubtotals(rows, metCols);
+  const rowsHtml = [];
+  renderRows(tree, [], rowsHtml);
+
+  // Column widths — default 180px for dim, 130px for metrics
+  const colWidths = _treeColOrder.map(c => metNames.has(c) ? 130 : 180);
+
+  const el = document.getElementById('myGrid');
+  el.innerHTML = '';
+  if (gridApi) { try { gridApi.destroy(); } catch(e) {} gridApi = null; }
+
+  el.innerHTML = `
+    <div class="tree-grid-wrap" id="tree-grid-wrap">
+      <table class="tree-grid" id="tree-grid-table">
+        <colgroup id="tree-colgroup">
+          ${colWidths.map(w => `<col style="width:${w}px;min-width:${w}px">`).join('')}
+        </colgroup>
+        <thead id="tree-thead">
+          <tr id="tree-header-row">
+            ${_treeColOrder.map((col, ci) => {
+              const isMetCol = metNames.has(col);
+              const label = col.replace(/([A-Z])/g, ' $1').trim();
+              return `<th class="${isMetCol ? 'col-right' : ''}" draggable="true"
+                data-col-index="${ci}"
+                ondragstart="treeColDragStart(event,${ci})"
+                ondragover="treeColDragOver(event,${ci})"
+                ondragleave="treeColDragLeave(event,${ci})"
+                ondrop="treeColDrop(event,${ci})">
+                <span class="th-label">${label}</span>
+                <span class="col-resize-handle"
+                  onmousedown="treeColResizeStart(event,${ci})"></span>
+              </th>`;
+            }).join('')}
+          </tr>
+        </thead>
+        <tbody id="tree-tbody">
+          ${rowsHtml.join('')}
+          ${metCols.length ? `<tr class="tree-grand-total">
+            ${_treeColOrder.map((col, ci) => {
+              if (ci === 0) return `<td><strong>Grand Total</strong></td>`;
+              if (metNames.has(col)) return `<td class="col-right"><strong>${metCellRenderer(grandTotals[col], metMap[col])}</strong></td>`;
+              return `<td></td>`;
+            }).join('')}
+          </tr>` : ''}
+        </tbody>
+      </table>
+    </div>`;
+
+  // Attach row data for drilldown (can't use inline onclick with complex data)
+  _attachLeafRowData(el, rows, groupCols);
+  lucide.createIcons();
+}
+
+// Attach actual row objects to leaf tr elements for drilldown
+function _attachLeafRowData(container, rows, groupCols) {
+  const leafTrs = container.querySelectorAll('.tree-leaf-row');
+  let ri = 0;
+  leafTrs.forEach(tr => {
+    if (ri < rows.length) {
+      tr._rowData = rows[ri];
+      ri++;
+    }
   });
-  const el=document.getElementById('myGrid');
-  el.innerHTML='';
-  if(gridApi){try{gridApi.destroy();}catch(e){}gridApi=null;}
-  agGrid.createGrid(el,{columnDefs:colDefs,rowData:rows,defaultColDef:{sortable:true,resizable:true,filter:true},rowSelection:'single',animateRows:true,pagination:true,paginationPageSize:50,onRowClicked:e=>openDrilldown(e.data),onGridReady:p=>{gridApi=p.api;}});
+  // Re-bind click using proper row data
+  leafTrs.forEach(tr => {
+    tr.onclick = () => { if (tr._rowData) openDrilldown(tr._rowData); };
+  });
+}
+
+function treeToggle(path) {
+  _collapseState[path] = !_collapseState[path];
+  renderGrid(lastRowData, _lastTreeMets);
+}
+
+/* ── Column Resize ──────────────────────────────────────────────────────────── */
+function treeColResizeStart(e, colIdx) {
+  e.preventDefault(); e.stopPropagation();
+  const colgroup = document.getElementById('tree-colgroup');
+  const cols = colgroup ? colgroup.querySelectorAll('col') : [];
+  const startX   = e.clientX;
+  const col      = cols[colIdx];
+  const startW   = col ? parseInt(col.style.width) || 130 : 130;
+
+  function onMove(e2) {
+    const newW = Math.max(60, startW + (e2.clientX - startX));
+    if (col) { col.style.width = newW + 'px'; col.style.minWidth = newW + 'px'; }
+  }
+  function onUp() {
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup',   onUp);
+  }
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup',   onUp);
+}
+
+/* ── Column Drag Reorder ──────────────────────────────────────────────────── */
+function treeColDragStart(e, colIdx) {
+  _dragSrcColIdx = colIdx;
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', String(colIdx));
+}
+function treeColDragOver(e, colIdx) {
+  if (_dragSrcColIdx === null || _dragSrcColIdx === colIdx) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  // Highlight drop target
+  document.querySelectorAll('.tree-grid th').forEach((th, i) => {
+    th.classList.toggle('col-drag-over', i === colIdx);
+  });
+}
+function treeColDragLeave(e, colIdx) {
+  document.querySelectorAll('.tree-grid th').forEach(th => th.classList.remove('col-drag-over'));
+}
+function treeColDrop(e, colIdx) {
+  e.preventDefault();
+  document.querySelectorAll('.tree-grid th').forEach(th => th.classList.remove('col-drag-over'));
+  if (_dragSrcColIdx === null || _dragSrcColIdx === colIdx) { _dragSrcColIdx = null; return; }
+  // Reorder _treeColOrder
+  const src = _treeColOrder.splice(_dragSrcColIdx, 1)[0];
+  _treeColOrder.splice(colIdx, 0, src);
+  _dragSrcColIdx = null;
+  renderGrid(lastRowData, _lastTreeMets);
+}
+
+/* ── Group-By Chips ──────────────────────────────────────────────────────────── */
+function moveSegUp(i) {
+  if (i === 0) return;
+  [selectedSegs[i-1], selectedSegs[i]] = [selectedSegs[i], selectedSegs[i-1]];
+  renderGroupByChips();
+}
+function moveSegDown(i) {
+  if (i === selectedSegs.length - 1) return;
+  [selectedSegs[i], selectedSegs[i+1]] = [selectedSegs[i+1], selectedSegs[i]];
+  renderGroupByChips();
+}
+function removeSegFromChips(i) {
+  const name = selectedSegs[i];
+  selectedSegs.splice(i, 1);
+  document.getElementById(`seg-item-${name}`)?.classList.remove('selected');
+  updateBadges();
+  renderGroupByChips();
+}
+function renderGroupByChips() {
+  const wrap = document.getElementById('groupby-chips-wrap');
+  if (!wrap) return;
+  if (!selectedSegs.length) { wrap.style.display = 'none'; return; }
+  wrap.style.display = '';
+  wrap.innerHTML =
+    `<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:6px">Group By Order</div>` +
+    selectedSegs.map((seg, i) => `
+      <span class="gbchip">
+        <span style="font-size:11px;font-weight:600;color:var(--navy)">${i+1}. ${seg}</span>
+        <button onclick="moveSegUp(${i})" title="Move up"
+          style="background:none;border:none;cursor:pointer;padding:0 2px;color:var(--text-muted);font-size:10px"
+          ${i===0?'disabled':''}>&#8593;</button>
+        <button onclick="moveSegDown(${i})" title="Move down"
+          style="background:none;border:none;cursor:pointer;padding:0 2px;color:var(--text-muted);font-size:10px"
+          ${i===selectedSegs.length-1?'disabled':''}>&#8595;</button>
+        <button onclick="removeSegFromChips(${i})"
+          style="background:none;border:none;cursor:pointer;padding:0 2px;color:var(--text-muted);font-size:11px">&times;</button>
+      </span>`).join('');
 }
 
 function metCellRenderer(val,m) {
@@ -1933,7 +2245,7 @@ function metCellRenderer(val,m) {
 }
 
 function openDrilldown(rowData) {
-  const firstSeg=[...selectedSegs][0];
+  const firstSeg=selectedSegs[0];
   document.getElementById('dd-title').textContent=firstSeg?`${firstSeg}: ${rowData[firstSeg]??'Detail'}`:'Row Detail';
   const segs=Object.entries(rowData).filter(([k])=>!selectedMets.has(k));
   const mets=Object.entries(rowData).filter(([k])=>selectedMets.has(k));
@@ -2000,13 +2312,13 @@ async function loadReport(id) {
   showView('builder');
   document.getElementById('dataset-select').value=config.datasetName;
   await onDatasetChange(config.datasetName);
-  selectedSegs=new Set(config.groupBySegments);
+  selectedSegs=[...(config.groupBySegments||[])];
   selectedMets=new Map(config.metrics.map(m=>[m.metricName,m.aggregation]));
   filters=config.filters.map(f=>({...f,id:Date.now()+Math.random()}));
   if(config.sortField) document.getElementById('sort-field').value=config.sortField;
   document.getElementById('sort-dir').value=config.sortDir||'DESC';
   document.getElementById('row-limit').value=config.limit||500;
-  renderSegmentList(); renderMetricList(); renderFilters(); updateBadges();
+  renderSegmentList(); renderMetricList(); renderFilters(); updateBadges(); renderGroupByChips();
   await runQuery();
 }
 
