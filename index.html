@@ -1740,13 +1740,16 @@ async function loadDatasets() {
     renderDatasetGrid();
     populateDatasetSelect();
   } catch(e) {
-    document.getElementById('dataset-grid').innerHTML =
-      `<div class="state-box" style="grid-column:1/-1"><div class="state-icon"><i data-lucide="alert-triangle" style="width:40px;height:40px;stroke-width:1.4"></i></div><h3>Could not load datasets</h3><p>${e.message}</p></div>`;
+    const grid = document.getElementById('dataset-grid');
+    if (grid) grid.innerHTML = `<div class="state-box" style="grid-column:1/-1"><div class="state-icon"><i data-lucide="alert-triangle" style="width:40px;height:40px;stroke-width:1.4"></i></div><h3>Could not load datasets</h3><p>${e.message}</p></div>`;
+    console.error('loadDatasets error:', e);
   }
 }
 
 function renderDatasetGrid() {
-  document.getElementById('dataset-grid').innerHTML = allDatasets.map(ds => `
+  const grid = document.getElementById('dataset-grid');
+  if (!grid) return;
+  grid.innerHTML = allDatasets.map(ds => `
     <div class="dataset-card" onclick="selectDatasetFromCard('${ds.name}')">
       <div class="dc-header">
         <div class="dc-name">${fmtName(ds.name)}</div>
@@ -2730,9 +2733,10 @@ function dexRenderChart() {
     labels = [...new Set(rows.map(r => String(r[labelCol] ?? '—')))];
     datasets = groups.map((g, gi) => ({
       label: g,
+      // Plain numeric array aligned to labels[] — Chart.js resolves names from data.labels
       data: labels.map(l => {
         const row = rows.find(r => String(r[labelCol] ?? '—') === l && String(r[grpCol] ?? '—') === g);
-        return { x: l, y: row ? parseFloat(row[valCol] ?? 0) : 0 };
+        return row ? parseFloat(row[valCol] ?? 0) : 0;
       }),
       backgroundColor: hexAlpha(PAL[gi % PAL.length], 0.82),
       borderColor:     PAL[gi % PAL.length],
@@ -2743,11 +2747,11 @@ function dexRenderChart() {
       responsive: true, maintainAspectRatio: false,
       plugins: {
         legend: { display: true, position: 'bottom', labels: { boxWidth: 10, font: { size: 11 }, padding: 14 } },
-        tooltip: { callbacks: { label: c => ' ' + c.dataset.label + ': ' + fmtVal(c.parsed.y ?? c.parsed.x) } }
+        tooltip: { callbacks: { label: c => ' ' + c.dataset.label + ': ' + fmtVal(c.raw) } }
       },
       scales: {
-        x: { type: isHoriz ? 'linear' : 'category', stacked: isStacked, grid: { display: isHoriz, color: '#e2e8f0' }, ticks: { font: { size: 10 }, maxRotation: isHoriz ? 0 : 40, maxTicksLimit: 12, callback: isHoriz ? fmtVal : undefined } },
-        y: { type: isHoriz ? 'category' : 'linear', stacked: isStacked, grid: { display: !isHoriz, color: '#e2e8f0' }, beginAtZero: true, ticks: { font: { size: 10 }, callback: isHoriz ? undefined : fmtVal } }
+        x: { stacked: isStacked, grid: { display: isHoriz, color: '#e2e8f0' }, ticks: { font: { size: 10 }, maxRotation: isHoriz ? 0 : 40, maxTicksLimit: 12, callback: isHoriz ? (v,i) => fmtVal(v) : undefined } },
+        y: { stacked: isStacked, grid: { display: !isHoriz, color: '#e2e8f0' }, beginAtZero: true, ticks: { font: { size: 10 }, callback: isHoriz ? undefined : (v,i) => fmtVal(v) } }
       }
     };
 
@@ -2756,7 +2760,7 @@ function dexRenderChart() {
     labels = rows.map(r => String(r[labelCol] ?? '—'));
     datasets = [{
       label: valCol,
-      data: rows.map(r => ({ x: String(r[labelCol] ?? '—'), y: parseFloat(r[valCol] ?? 0) })),
+      data: rows.map(r => parseFloat(r[valCol] ?? 0)),
       backgroundColor: hexAlpha(PAL[0], 0.82),
       borderColor: PAL[0], borderWidth: 1,
       borderRadius: isHoriz ? 2 : 4,
@@ -2769,11 +2773,11 @@ function dexRenderChart() {
       responsive: true, maintainAspectRatio: false,
       plugins: {
         legend: { display: false },
-        tooltip: { callbacks: { label: c => ' ' + fmtVal(c.parsed.y ?? c.parsed.x) } }
+        tooltip: { callbacks: { label: c => ' ' + fmtVal(c.raw) } }
       },
       scales: {
-        x: { type: isHoriz ? 'linear' : 'category', grid: { display: isHoriz, color: '#e2e8f0' }, ticks: { font: { size: 10 }, maxRotation: isHoriz ? 0 : 40, maxTicksLimit: 12, callback: isHoriz ? fmtVal : undefined } },
-        y: { type: isHoriz ? 'category' : 'linear', grid: { display: !isHoriz, color: '#e2e8f0' }, beginAtZero: true, ticks: { font: { size: 10 }, callback: isHoriz ? undefined : fmtVal } }
+        x: { grid: { display: isHoriz, color: '#e2e8f0' }, ticks: { font: { size: 10 }, maxRotation: isHoriz ? 0 : 40, maxTicksLimit: 12, callback: isHoriz ? (v,i) => fmtVal(v) : undefined } },
+        y: { grid: { display: !isHoriz, color: '#e2e8f0' }, beginAtZero: true, ticks: { font: { size: 10 }, callback: isHoriz ? undefined : (v,i) => fmtVal(v) } }
       }
     };
   }
