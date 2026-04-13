@@ -2285,8 +2285,6 @@ function _injectInfoButtons() {
     wrap.appendChild(btn);
     kpiRow.parentElement.insertBefore(wrap, kpiRow);
   });
-
-  lucide.createIcons();
 }
 
 /* ── Syntax-highlight a JSON object ─────────────────────────────── */
@@ -2528,7 +2526,11 @@ function _renderQueryResult(json, endpoint) {
 // Called after initDashboard so Lucide is loaded
 function _setupInfoButtons() {
   _injectInfoButtons();
-  // Re-inject on any sub-tab switch in case new cards are added
-  const observer = new MutationObserver(() => _injectInfoButtons());
+  // Debounced re-inject on sub-tab switches — prevents mutation loop
+  let _infoDebounce = null;
+  const observer = new MutationObserver(() => {
+    clearTimeout(_infoDebounce);
+    _infoDebounce = setTimeout(_injectInfoButtons, 300);
+  });
   observer.observe(document.getElementById('app'), { childList: true, subtree: true });
 }
