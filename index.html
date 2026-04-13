@@ -296,14 +296,22 @@
        HOME SCREEN — DATASET EXPLORER
     ════════════════════════════════════════════════════════════════ */
     #home-screen { flex: 1; display: none; overflow: hidden; }
-    .dex-layout { display: grid; grid-template-columns: 280px 1fr; height: 100%; overflow: hidden; }
+    .dex-layout { display: grid; grid-template-columns: 280px 1fr; height: 100%; overflow: hidden; transition: grid-template-columns .2s ease; }
+    .dex-layout.collapsed { grid-template-columns: 0px 1fr; }
 
     /* Left: dataset list */
-    .dex-list { border-right: 1px solid var(--border); overflow-y: auto; background: var(--surface2); }
-    .dex-list-header { padding: 16px 16px 10px; border-bottom: 1px solid var(--border); }
+    .dex-list { border-right: 1px solid var(--border); overflow-y: auto; background: var(--surface2); overflow: hidden; min-width: 0; }
+    .dex-list-header { padding: 16px 16px 10px; border-bottom: 1px solid var(--border); display: flex; align-items: flex-start; gap: 8px; }
+    .dex-list-header-inner { flex: 1; min-width: 0; }
     .dex-list-header h3 { font-size: 13px; font-weight: 700; color: var(--navy); margin: 0 0 8px; text-transform: uppercase; letter-spacing: .06em; }
+    .dex-sidebar-toggle { background: none; border: 1.5px solid var(--border); border-radius: 6px; padding: 4px 6px; cursor: pointer; color: var(--text-muted); display: flex; align-items: center; transition: all .15s; flex-shrink: 0; margin-top: 1px; }
+    .dex-sidebar-toggle:hover { border-color: var(--navy); color: var(--navy); }
     .dex-list-header input { width: 100%; box-sizing: border-box; padding: 6px 10px; border: 1.5px solid var(--border); border-radius: 6px; font-size: 12px; background: var(--surface); color: var(--text); outline: none; }
     .dex-list-header input:focus { border-color: var(--teal); }
+    /* Collapsed sidebar: show a vertical expand button */
+    .dex-expand-strip { display: none; border-right: 1px solid var(--border); background: var(--surface2); align-items: flex-start; padding: 10px 6px; }
+    .dex-layout.collapsed .dex-list { display: none; }
+    .dex-layout.collapsed .dex-expand-strip { display: flex; }
     .dex-ds-item { padding: 12px 16px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background .12s; }
     .dex-ds-item:hover { background: rgba(0,191,165,.06); }
     .dex-ds-item.active { background: rgba(0,51,102,.07); border-left: 3px solid var(--navy); padding-left: 13px; }
@@ -352,14 +360,14 @@
     .dex-limit-select { padding: 5px 8px; border: 1.5px solid var(--border); border-radius: 6px; font-size: 12px; background: var(--surface); color: var(--text); outline: none; }
 
     /* Results */
-    .dex-results { flex: 1; overflow: auto; padding: 0; display: flex; flex-direction: column; }
+    .dex-results { flex: 1; overflow: hidden; padding: 0; display: flex; flex-direction: column; min-height: 0; }
     .dex-results-toolbar { padding: 8px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; background: var(--surface); flex-shrink: 0; }
     .dex-results-meta { font-size: 11px; color: var(--text-muted); flex: 1; }
     .dex-export-btn { padding: 4px 12px; border: 1.5px solid var(--border); border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer; background: var(--surface); color: var(--text); transition: all .12s; }
     .dex-export-btn:hover { border-color: var(--navy); color: var(--navy); }
     .dex-table-wrap { overflow: auto; flex: 1; min-height: 0; }
     /* Visual / Chart Builder */
-    .dex-visual { display:none; border-top:2px solid var(--border); background:var(--surface); }
+    .dex-visual { display:none; border-top:2px solid var(--border); background:var(--surface); flex-shrink:0; overflow:hidden; }
     .dex-visual-header { display:flex; align-items:center; justify-content:space-between; padding:10px 16px; border-bottom:1px solid var(--border); }
     .dex-visual-title { font-size:12px; font-weight:700; color:var(--navy); display:flex; align-items:center; gap:7px; }
     .dex-visual-controls { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
@@ -1310,12 +1318,23 @@
 
     <!-- ═══ HOME ═══ -->
     <div id="home-screen">
-      <div class="dex-layout">
+      <div class="dex-layout" id="dex-layout">
+        <!-- Collapsed strip (shown when sidebar is collapsed) -->
+        <div class="dex-expand-strip">
+          <button class="dex-sidebar-toggle" onclick="dexToggleSidebar()" title="Expand datasets">
+            <i data-lucide="panel-left-open" style="width:14px;height:14px"></i>
+          </button>
+        </div>
         <!-- Left: dataset list -->
         <div class="dex-list">
           <div class="dex-list-header">
-            <h3>Datasets</h3>
-            <input type="text" id="dex-search" placeholder="Search datasets..." oninput="dexFilterList(this.value)">
+            <div class="dex-list-header-inner">
+              <h3>Datasets</h3>
+              <input type="text" id="dex-search" placeholder="Search datasets..." oninput="dexFilterList(this.value)">
+            </div>
+            <button class="dex-sidebar-toggle" onclick="dexToggleSidebar()" title="Collapse sidebar">
+              <i data-lucide="panel-left-close" style="width:14px;height:14px"></i>
+            </button>
           </div>
           <div id="dex-ds-list"><div style="padding:20px;color:var(--text-muted);font-size:12px">Loading...</div></div>
         </div>
@@ -1419,9 +1438,10 @@
                 </div>
               </div>
               <div id="dex-table-wrap" class="dex-table-wrap"></div>
+            </div>
 
-              <!-- ── Visual / Chart Builder ── -->
-              <div class="dex-visual" id="dex-visual">
+            <!-- ── Visual / Chart Builder ── (outside scroll area so always visible) -->
+            <div class="dex-visual" id="dex-visual">
               <div class="dex-visual-header">
                 <div class="dex-visual-title">
                   <i data-lucide="bar-chart-2" style="width:14px;height:14px"></i>
@@ -1951,6 +1971,12 @@ function dexRenderList(datasets) {
         </div>
       </div>`).join('')
     : '<div style="padding:20px;color:var(--text-muted);font-size:12px">No datasets found</div>';
+}
+
+function dexToggleSidebar() {
+  const layout = document.getElementById('dex-layout');
+  layout.classList.toggle('collapsed');
+  lucide.createIcons({ el: layout });
 }
 
 function dexFilterList(q) {
