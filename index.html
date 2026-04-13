@@ -411,6 +411,97 @@
       .dash-chart-row.two-col { grid-template-columns: 1fr; }
       .dash-chart-row.three-col { grid-template-columns: 1fr; }
     }
+
+    /* ── Query Inspector ─────────────────────────────────────────────── */
+    .card-info-btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid var(--border);
+      background: var(--surface2); color: var(--text-muted); cursor: pointer;
+      font-size: 11px; font-weight: 700; line-height: 1; flex-shrink: 0;
+      transition: all .15s; margin-left: 8px; font-style: normal;
+    }
+    .card-info-btn:hover { background: var(--navy); color: #fff; border-color: var(--navy); }
+    .card-info-btn.active { background: var(--teal); color: #fff; border-color: var(--teal); }
+
+    #query-inspector-overlay {
+      display: none; position: fixed; inset: 0; z-index: 9998;
+      background: rgba(0,0,0,.25);
+    }
+    #query-inspector-overlay.open { display: block; }
+
+    #query-inspector-panel {
+      position: fixed; right: 0; top: 54px; bottom: 0; width: 480px; max-width: 96vw;
+      background: var(--surface); z-index: 9999;
+      display: flex; flex-direction: column;
+      box-shadow: -4px 0 24px rgba(0,51,102,.18);
+      transform: translateX(100%); transition: transform .22s cubic-bezier(.4,0,.2,1);
+    }
+    #query-inspector-panel.open { transform: translateX(0); }
+
+    .qi-header {
+      display: flex; align-items: center; gap: 10px;
+      padding: 14px 18px; border-bottom: 1.5px solid var(--border);
+      background: var(--navy); color: #fff; flex-shrink: 0;
+    }
+    .qi-header h3 { font-size: 13px; font-weight: 700; flex: 1; margin: 0; }
+    .qi-close-btn {
+      width: 28px; height: 28px; border-radius: 6px; border: none;
+      background: rgba(255,255,255,.12); color: #fff; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px; line-height: 1; transition: background .12s;
+    }
+    .qi-close-btn:hover { background: rgba(255,255,255,.25); }
+
+    .qi-body { flex: 1; overflow-y: auto; padding: 16px 18px; display: flex; flex-direction: column; gap: 14px; }
+
+    .qi-section-label {
+      font-size: 10px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .08em; color: var(--text-muted); margin-bottom: 5px;
+    }
+    .qi-dataset-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: #e6f7f5; border: 1.5px solid var(--teal);
+      border-radius: 20px; padding: 3px 10px;
+      font-size: 12px; font-weight: 600; color: var(--navy);
+    }
+    .qi-endpoint-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--blue-pill); border: 1.5px solid #b8d0f0;
+      border-radius: 20px; padding: 3px 10px;
+      font-size: 11px; font-weight: 600; color: #1d4ed8; font-family: monospace;
+    }
+    .qi-code {
+      background: #0f172a; color: #e2e8f0; border-radius: 8px;
+      padding: 12px 14px; font-size: 11px; font-family: "Cascadia Code","Fira Code","Consolas",monospace;
+      line-height: 1.6; overflow-x: auto; white-space: pre; flex-shrink: 0;
+      max-height: 260px; overflow-y: auto;
+    }
+    .qi-test-btn {
+      width: 100%; padding: 9px 0; border-radius: 8px; border: none;
+      background: var(--teal); color: #fff; font-size: 13px; font-weight: 600;
+      cursor: pointer; transition: background .15s; display: flex; align-items: center;
+      justify-content: center; gap: 6px; flex-shrink: 0;
+    }
+    .qi-test-btn:hover { background: var(--teal-dim); }
+    .qi-test-btn:disabled { background: #6ba3c4; cursor: not-allowed; }
+
+    .qi-result-section { display: flex; flex-direction: column; gap: 8px; }
+    .qi-result-meta { font-size: 11px; color: var(--text-muted); }
+    .qi-result-meta strong { color: var(--navy); }
+    .qi-result-table-wrap { overflow-x: auto; max-height: 300px; overflow-y: auto; border: 1.5px solid var(--border); border-radius: 8px; }
+    .qi-result-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+    .qi-result-table th { background: var(--surface2); padding: 5px 9px; text-align: left; font-weight: 700; font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); border-bottom: 1.5px solid var(--border); white-space: nowrap; position: sticky; top: 0; }
+    .qi-result-table td { padding: 4px 9px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+    .qi-result-table tr:last-child td { border-bottom: none; }
+    .qi-result-table tr:hover td { background: var(--surface2); }
+    .qi-error { background: #fef2f2; border: 1.5px solid #fca5a5; border-radius: 8px; padding: 10px 14px; font-size: 12px; color: var(--red); }
+    .qi-divider { height: 1px; background: var(--border); margin: 0; }
+    .qi-kpi-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+    .qi-kpi-tile { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; }
+    .qi-kpi-tile-name  { font-size: 10px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+    .qi-kpi-tile-value { font-size: 15px; font-weight: 700; color: var(--navy); }
+    .qi-spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,.4); border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; }
+
   </style>
 </head>
 <body>
@@ -548,14 +639,14 @@
             <div class="dash-kpi-tile" style="grid-column:1/-1;justify-content:center"><div class="spinner"></div></div>
           </div>
           <div class="dash-chart-row three-col">
-            <div class="chart-card">
+            <div class="chart-card" id="chart-card-1">
               <div class="chart-card-header"><div>
                 <div class="chart-card-title">Revenue, Expenses &amp; Profit by Month</div>
                 <div class="chart-card-sub">Jobs P&amp;L dataset</div>
               </div></div>
               <div class="chart-canvas-wrap tall"><canvas id="month-chart"></canvas></div>
             </div>
-            <div class="chart-card">
+            <div class="chart-card" id="chart-card-2">
               <div class="chart-card-header"><div>
                 <div class="chart-card-title">Jobs by Status</div>
                 <div class="chart-card-sub">Count breakdown</div>
@@ -565,14 +656,14 @@
             </div>
           </div>
           <div class="dash-chart-row two-col">
-            <div class="chart-card">
+            <div class="chart-card" id="chart-card-3">
               <div class="chart-card-header"><div>
                 <div class="chart-card-title">Revenue &amp; Profit by Salesperson</div>
                 <div class="chart-card-sub">Horizontal bar</div>
               </div></div>
               <div class="chart-canvas-wrap tall"><canvas id="perf-chart"></canvas></div>
             </div>
-            <div class="chart-card" style="overflow:auto">
+            <div class="chart-card" style="overflow:auto" id="chart-card-4">
               <div class="chart-card-header"><div>
                 <div class="chart-card-title">Salesperson Performance</div>
                 <div class="chart-card-sub">Revenue · Expenses · Profit · Profit %</div>
@@ -605,7 +696,7 @@
             <div class="dash-kpi-tile" style="grid-column:1/-1;justify-content:center"><div class="spinner"></div></div>
           </div>
           <div class="dash-chart-row three-col">
-            <div class="chart-card">
+            <div class="chart-card" id="chart-card-5">
               <div class="chart-card-header"><div>
                 <div class="chart-card-title">Jobs by Status</div>
                 <div class="chart-card-sub">Count &amp; estimated value</div>
@@ -613,7 +704,7 @@
               <div class="chart-canvas-wrap tall"><canvas id="finish-status-chart"></canvas></div>
               <div id="finish-status-chips"></div>
             </div>
-            <div class="chart-card">
+            <div class="chart-card" id="chart-card-6">
               <div class="chart-card-header"><div>
                 <div class="chart-card-title">Jobs by Salesperson</div>
                 <div class="chart-card-sub">Count breakdown</div>
@@ -622,7 +713,7 @@
             </div>
           </div>
           <div class="dash-chart-row">
-            <div class="chart-card" style="width:100%">
+            <div class="chart-card" style="width:100%" id="chart-card-7">
               <div class="chart-card-header"><div>
                 <div class="chart-card-title">Job Detail</div>
                 <div class="chart-card-sub">Salesperson · Status · Estimated Value</div>
@@ -654,14 +745,14 @@
             <div class="dash-kpi-tile" style="grid-column:1/-1;justify-content:center"><div class="spinner"></div></div>
           </div>
           <div class="dash-chart-row two-col">
-            <div class="chart-card">
+            <div class="chart-card" id="chart-card-8">
               <div class="chart-card-header"><div>
                 <div class="chart-card-title">Revenue vs Labor by Salesperson</div>
                 <div class="chart-card-sub">jobs_profit_by_invoice</div>
               </div></div>
               <div class="chart-canvas-wrap tall"><canvas id="jpl-chart"></canvas></div>
             </div>
-            <div class="chart-card" style="overflow:auto">
+            <div class="chart-card" style="overflow:auto" id="chart-card-9">
               <div class="chart-card-header"><div>
                 <div class="chart-card-title">Profit/Loss by Salesperson</div>
                 <div class="chart-card-sub">Revenue · Labor · Materials</div>
@@ -693,14 +784,14 @@
             <div class="dash-kpi-tile" style="grid-column:1/-1;justify-content:center"><div class="spinner"></div></div>
           </div>
           <div class="dash-chart-row three-col">
-            <div class="chart-card">
+            <div class="chart-card" id="chart-card-10">
               <div class="chart-card-header"><div>
                 <div class="chart-card-title">Estimated vs Actual Revenue by Month</div>
                 <div class="chart-card-sub">Job Revenue Forecast</div>
               </div></div>
               <div class="chart-canvas-wrap tall"><canvas id="forecast-chart"></canvas></div>
             </div>
-            <div class="chart-card">
+            <div class="chart-card" id="chart-card-11">
               <div class="chart-card-header"><div>
                 <div class="chart-card-title">Variance by Salesperson</div>
                 <div class="chart-card-sub">Est. vs Actual gap</div>
@@ -725,14 +816,14 @@
             <div class="dash-kpi-tile" style="grid-column:1/-1;justify-content:center"><div class="spinner"></div></div>
           </div>
           <div class="dash-chart-row two-col">
-            <div class="chart-card">
+            <div class="chart-card" id="chart-card-12">
               <div class="chart-card-header"><div>
                 <div class="chart-card-title">Revenue by Salesperson</div>
                 <div class="chart-card-sub">Horizontal bar</div>
               </div></div>
               <div class="chart-canvas-wrap tall"><canvas id="rev-person-chart"></canvas></div>
             </div>
-            <div class="chart-card" style="overflow:auto">
+            <div class="chart-card" style="overflow:auto" id="chart-card-13">
               <div class="chart-card-header"><div>
                 <div class="chart-card-title">Revenue Report</div>
                 <div class="chart-card-sub">Salesperson · Revenue · Profit · %</div>
@@ -779,7 +870,7 @@
 
         <!-- Row 1: Quote Amount by Month + Quotes by Status -->
         <div class="dash-chart-row three-col">
-          <div class="chart-card">
+          <div class="chart-card" id="chart-card-14">
             <div class="chart-card-header">
               <div>
                 <div class="chart-card-title">Quote Value by Month</div>
@@ -788,7 +879,7 @@
             </div>
             <div class="chart-canvas-wrap tall"><canvas id="q-month-chart"></canvas></div>
           </div>
-          <div class="chart-card">
+          <div class="chart-card" id="chart-card-15">
             <div class="chart-card-header">
               <div>
                 <div class="chart-card-title">Quotes by Status</div>
@@ -802,7 +893,7 @@
 
         <!-- Row 2: Salesperson quote table -->
         <div class="dash-chart-row">
-          <div class="chart-card" style="overflow:auto;width:100%">
+          <div class="chart-card" style="overflow:auto;width:100%" id="chart-card-16">
             <div class="chart-card-header">
               <div>
                 <div class="chart-card-title">Salesperson Quote Performance</div>
@@ -840,7 +931,7 @@
         <!-- ═══ BY STATUS sub-panel ═══ -->
         <div id="quote-panel-bystatus" class="quote-sub-panel" style="display:none">
           <div class="dash-chart-row two-col">
-            <div class="chart-card">
+            <div class="chart-card" id="chart-card-17">
               <div class="chart-card-header"><div>
                 <div class="chart-card-title">Quotes by Status</div>
                 <div class="chart-card-sub">Count distribution</div>
@@ -848,7 +939,7 @@
               <div class="chart-canvas-wrap tall"><canvas id="qs-donut-chart"></canvas></div>
               <div id="qs-chips"></div>
             </div>
-            <div class="chart-card">
+            <div class="chart-card" id="chart-card-18">
               <div class="chart-card-header"><div>
                 <div class="chart-card-title">Quote Value by Status</div>
                 <div class="chart-card-sub">Total estimated value</div>
@@ -857,7 +948,7 @@
             </div>
           </div>
           <div class="dash-chart-row">
-            <div class="chart-card" style="width:100%">
+            <div class="chart-card" style="width:100%" id="chart-card-19">
               <div class="chart-card-header"><div>
                 <div class="chart-card-title">Status Breakdown</div>
                 <div class="chart-card-sub">Count · Value</div>
@@ -884,14 +975,14 @@
         <!-- ═══ BY SALESPERSON sub-panel ═══ -->
         <div id="quote-panel-salesperson" class="quote-sub-panel" style="display:none">
           <div class="dash-chart-row two-col">
-            <div class="chart-card">
+            <div class="chart-card" id="chart-card-20">
               <div class="chart-card-header"><div>
                 <div class="chart-card-title">Quote Value by Salesperson</div>
                 <div class="chart-card-sub">Horizontal bar</div>
               </div></div>
               <div class="chart-canvas-wrap tall"><canvas id="qsp-bar-chart"></canvas></div>
             </div>
-            <div class="chart-card" style="overflow:auto">
+            <div class="chart-card" style="overflow:auto" id="chart-card-21">
               <div class="chart-card-header"><div>
                 <div class="chart-card-title">Salesperson Detail</div>
                 <div class="chart-card-sub">Quotes · Value · Share</div>
@@ -918,14 +1009,14 @@
         <!-- ═══ REVENUE FORECAST sub-panel ═══ -->
         <div id="quote-panel-forecast" class="quote-sub-panel" style="display:none">
           <div class="dash-chart-row three-col">
-            <div class="chart-card">
+            <div class="chart-card" id="chart-card-22">
               <div class="chart-card-header"><div>
                 <div class="chart-card-title">Quote Revenue by Month</div>
                 <div class="chart-card-sub">Forecast dataset</div>
               </div></div>
               <div class="chart-canvas-wrap tall"><canvas id="qf-month-chart"></canvas></div>
             </div>
-            <div class="chart-card">
+            <div class="chart-card" id="chart-card-23">
               <div class="chart-card-header"><div>
                 <div class="chart-card-title">Quote Count by Month</div>
                 <div class="chart-card-sub">Volume trend</div>
@@ -959,14 +1050,14 @@
         <div id="equip-panel-pl" class="equip-sub-panel">
           <div class="kpi-row" id="epl-kpi-row"></div>
           <div class="dash-chart-row">
-            <div class="chart-card">
+            <div class="chart-card" id="chart-card-24">
               <div class="chart-card-header"><div>
                 <div class="chart-card-title">Revenue, Expenses &amp; Profit by Yard</div>
                 <div class="chart-card-sub">Equipment P&amp;L dataset</div>
               </div></div>
               <div class="chart-canvas-wrap tall"><canvas id="epl-yard-chart"></canvas></div>
             </div>
-            <div class="chart-card">
+            <div class="chart-card" id="chart-card-25">
               <div class="chart-card-header"><div>
                 <div class="chart-card-title">Expense Breakdown</div>
                 <div class="chart-card-sub">Labor · Material · Overhead</div>
@@ -997,14 +1088,14 @@
         <div id="equip-panel-utilization" class="equip-sub-panel" style="display:none">
           <div class="kpi-row" id="util-kpi-row"></div>
           <div class="dash-chart-row">
-            <div class="chart-card">
+            <div class="chart-card" id="chart-card-26">
               <div class="chart-card-header"><div>
                 <div class="chart-card-title">Utilization % by Yard</div>
                 <div class="chart-card-sub">Avg utilization across fleet</div>
               </div></div>
               <div class="chart-canvas-wrap tall"><canvas id="util-yard-chart"></canvas></div>
             </div>
-            <div class="chart-card">
+            <div class="chart-card" id="chart-card-27">
               <div class="chart-card-header"><div>
                 <div class="chart-card-title">Downtime Hours by Yard</div>
                 <div class="chart-card-sub">Total downtime hours</div>
@@ -1035,14 +1126,14 @@
         <div id="equip-panel-workorders" class="equip-sub-panel" style="display:none">
           <div class="kpi-row" id="wo-kpi-row"></div>
           <div class="dash-chart-row">
-            <div class="chart-card">
+            <div class="chart-card" id="chart-card-28">
               <div class="chart-card-header"><div>
                 <div class="chart-card-title">Work Orders by Yard</div>
                 <div class="chart-card-sub">Count &amp; total cost</div>
               </div></div>
               <div class="chart-canvas-wrap tall"><canvas id="wo-yard-chart"></canvas></div>
             </div>
-            <div class="chart-card">
+            <div class="chart-card" id="chart-card-29">
               <div class="chart-card-header"><div>
                 <div class="chart-card-title">Cost Breakdown by Yard</div>
                 <div class="chart-card-sub">Labor vs Material</div>
@@ -1075,14 +1166,14 @@
       <div id="dash-pm-content" style="display:none">
         <div class="kpi-row" id="pm-kpi-row"></div>
         <div class="dash-chart-row">
-          <div class="chart-card">
+          <div class="chart-card" id="chart-card-30">
             <div class="chart-card-header"><div>
               <div class="chart-card-title">Activities by Schedule Type</div>
               <div class="chart-card-sub">Coming Due vs Past Due</div>
             </div></div>
             <div class="chart-canvas-wrap tall"><canvas id="pm-type-chart"></canvas></div>
           </div>
-          <div class="chart-card">
+          <div class="chart-card" id="chart-card-31">
             <div class="chart-card-header"><div>
               <div class="chart-card-title">Due Status by Yard</div>
               <div class="chart-card-sub">Units with past due &amp; coming due PM</div>
@@ -1549,5 +1640,21 @@ function showBuilderEmpty() { document.getElementById('results-area').style.disp
 function showLoadingState(msg='Loading...') { document.getElementById('results-area').style.display='none'; document.getElementById('builder-empty').style.display='none'; document.getElementById('loading-state').style.display='flex'; document.getElementById('loading-msg').textContent=msg; }
 function toggleSection(id) { const el=document.getElementById(id); el.style.display=el.style.display==='none'?'':'none'; }
 </script>
+
+<!-- ═══ Query Inspector Panel ═══ -->
+<div id="query-inspector-overlay" onclick="closeQueryInspector()"></div>
+<div id="query-inspector-panel">
+  <div class="qi-header">
+    <i data-lucide="database" style="width:16px;height:16px;flex-shrink:0"></i>
+    <h3 id="qi-title">Query Inspector</h3>
+    <button class="qi-close-btn" onclick="closeQueryInspector()" title="Close">&#x2715;</button>
+  </div>
+  <div class="qi-body" id="qi-body">
+    <div style="color:var(--text-muted);font-size:13px;padding:20px 0;text-align:center">
+      Click the <strong>ⓘ</strong> on any chart card to inspect its query.
+    </div>
+  </div>
+</div>
+
 </body>
 </html>

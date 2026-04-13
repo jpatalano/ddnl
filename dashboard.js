@@ -42,6 +42,7 @@ async function initDashboard() {
   const dt = document.getElementById('dash-date-to')?.value || '';
   const dy = getSelectedYards();
   loadFinishJobs(df, dt, dy);
+  _setupInfoButtons();
 }
 
 /* ── Yard multi-select ──────────────────────────────────────────── */
@@ -218,6 +219,7 @@ async function loadJobKpis(dateFrom, dateTo, yards) {
     filters: buildJobFilters(dateFrom, dateTo, yards)
   };
   try {
+    _reg('dash-kpi-row','Jobs P/L — KPIs','/bi/kpis',body);
     const r = await fetch(`${BASE_URL}/bi/kpis`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
     const j = await r.json();
     const kpis = j.data?.kpis || [];
@@ -270,6 +272,7 @@ async function loadMonthChart(dateFrom, dateTo, yards) {
   if (monthChart) { monthChart.destroy(); monthChart = null; }
 
   try {
+    _reg('chart-card-1','Jobs by Month — Revenue/Expenses/Profit','/bi/query',body);
     const r = await fetch(`${BASE_URL}/bi/query`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
     const j = await r.json();
     // Filter out null/bogus years (before 2010)
@@ -332,6 +335,8 @@ async function loadSalespersonPerf(dateFrom, dateTo, yards) {
   const ctx   = document.getElementById('perf-chart');
 
   try {
+    _reg('chart-card-3','Salesperson Performance — Revenue/Profit','/bi/query',body);
+    _reg('chart-card-4','Salesperson Performance — Table','/bi/query',body);
     const r = await fetch(`${BASE_URL}/bi/query`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
     const j = await r.json();
     const rows = j.data?.data || [];
@@ -424,6 +429,7 @@ async function loadStatusBreakdown(dateFrom, dateTo, yards) {
   if (statusChart) { statusChart.destroy(); statusChart = null; }
 
   try {
+    _reg('chart-card-2','Jobs by Status — Count/Revenue','/bi/query',body);
     const r = await fetch(`${BASE_URL}/bi/query`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
     const j = await r.json();
     const rows = j.data?.data || [];
@@ -479,6 +485,7 @@ async function loadQuoteKpis(dateFrom, dateTo, yards) {
     filters: buildQuoteFilters(dateFrom, dateTo, yards)
   };
   try {
+    _reg('quote-kpi-row','Quotes Summary — KPIs','/bi/kpis',body);
     const r = await fetch(`${BASE_URL}/bi/kpis`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
     const j = await r.json();
     const kpis = j.data?.kpis || [];
@@ -582,6 +589,7 @@ async function loadQuoteStatusChart(dateFrom, dateTo, yards) {
     orderBy: [{ field:'TotalQuotes', direction:'DESC' }],
     limit: 15
   };
+  _reg('chart-card-15','Quotes by Status — Count/Value','/bi/query',body);
 
   const ctx = document.getElementById('q-status-chart');
   if (!ctx) return;
@@ -642,6 +650,7 @@ async function loadQuoteSalespersonTable(dateFrom, dateTo, yards) {
     orderBy: [{ field:'TotalQuoteMax', direction:'DESC' }],
     limit: 20
   };
+  _reg('chart-card-16','Salesperson Quote Performance','/bi/query',body);
 
   const tbody = document.getElementById('q-perf-table-body');
   try {
@@ -826,6 +835,11 @@ async function loadFinishJobs(dateFrom, dateTo, yards) {
 
   // KPIs
   try {
+    _reg('finish-kpi-row','Finish Jobs — KPIs','/bi/kpis',{ datasetName:'Jobs_By_Status', metrics:[
+      { metricName:'TotalJobs', aggregation:'COUNT', alias:'TotalJobs' },
+      { metricName:'TotalEstimatedValue', aggregation:'SUM', alias:'TotalEstimatedValue' },
+      { metricName:'AvgEstimatedValue', aggregation:'AVG', alias:'AvgEstimatedValue' },
+    ], filters });
     const kpiBody = { datasetName:'Jobs_By_Status', metrics:[
       { metricName:'TotalJobs', aggregation:'COUNT', alias:'TotalJobs' },
       { metricName:'TotalEstimatedValue', aggregation:'SUM', alias:'TotalEstimatedValue' },
@@ -984,7 +998,7 @@ async function loadJobProfitLoss(dateFrom, dateTo, yards) {
     if (jplChart) { jplChart.destroy(); jplChart=null; }
     try {
       const r = await fetch(`${BASE_URL}/bi/query`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({
-        datasetName:'jobs_profit_by_invoice', groupBySegments:['SalesPersonName'],
+datasetName:'jobs_profit_by_invoice', groupBySegments:['SalesPersonName'],
         metrics:[
           {metricName:'Revenue',aggregation:'SUM',alias:'Revenue'},
           {metricName:'LaborActual',aggregation:'SUM',alias:'LaborActual'},
@@ -1122,7 +1136,7 @@ async function loadForecast(dateFrom, dateTo, yards) {
     if (forecastPersonChart) { forecastPersonChart.destroy(); forecastPersonChart=null; }
     try {
       const r = await fetch(`${BASE_URL}/bi/query`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({
-        datasetName:'Job_Revenue_Forecast', groupBySegments:['SalesPerson'],
+datasetName:'Job_Revenue_Forecast', groupBySegments:['SalesPerson'],
         metrics:[
           {metricName:'EstimatedRevenue',aggregation:'SUM',alias:'EstimatedRevenue'},
           {metricName:'ActualRevenue',aggregation:'SUM',alias:'ActualRevenue'},
@@ -1199,7 +1213,7 @@ async function loadRevenueReport(dateFrom, dateTo, yards) {
     if (revPersonChart) { revPersonChart.destroy(); revPersonChart=null; }
     try {
       const r = await fetch(`${BASE_URL}/bi/query`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({
-        datasetName:'jobs_profit_loss', groupBySegments:['SalesPerson'],
+datasetName:'jobs_profit_loss', groupBySegments:['SalesPerson'],
         metrics:[
           {metricName:'JobRevenue',aggregation:'SUM',alias:'JobRevenue'},
           {metricName:'Profit',aggregation:'SUM',alias:'Profit'},
@@ -1264,13 +1278,13 @@ async function loadQuoteByStatus(dateFrom, dateTo, yards) {
   const filters = buildQuoteFilters(dateFrom, dateTo, yards);
   try {
     const r = await fetch(`${BASE_URL}/bi/query`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({
-      datasetName:'Quotes_By_Status', groupBySegments:['QuoteStatus'],
+datasetName:'Quotes_By_Status', groupBySegments:['QuoteStatus'],
       metrics:[
         {metricName:'TotalQuotes',aggregation:'COUNT',alias:'TotalQuotes'},
         {metricName:'TotalQuoteMax',aggregation:'SUM',alias:'TotalQuoteMax'},
       ],
       filters, orderBy:[{field:'TotalQuotes',direction:'DESC'}], limit:15
-    })});
+      })});
     const j = await r.json();
     const rows = j.data?.data||[];
 
@@ -1345,13 +1359,13 @@ async function loadQuoteBySalesperson(dateFrom, dateTo, yards) {
   const filters = buildQuoteFilters(dateFrom, dateTo, yards);
   try {
     const r = await fetch(`${BASE_URL}/bi/query`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({
-      datasetName:'Quotes_By_Status', groupBySegments:['SalesPerson'],
+datasetName:'Quotes_By_Status', groupBySegments:['SalesPerson'],
       metrics:[
         {metricName:'TotalQuotes',aggregation:'COUNT',alias:'TotalQuotes'},
         {metricName:'TotalQuoteMax',aggregation:'SUM',alias:'TotalQuoteMax'},
       ],
       filters, orderBy:[{field:'TotalQuoteMax',direction:'DESC'}], limit:20
-    })});
+      })});
     const j = await r.json();
     const rows = j.data?.data||[];
     const ctx=document.getElementById('qsp-bar-chart');
@@ -1402,13 +1416,13 @@ async function loadQuoteForecast(dateFrom, dateTo, yards) {
 
   try {
     const r = await fetch(`${BASE_URL}/bi/query`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({
-      datasetName:'Quote_Revenue_Forecast', groupBySegments:['Year','Month'],
+datasetName:'Quote_Revenue_Forecast', groupBySegments:['Year','Month'],
       metrics:[
         {metricName:'TotalQuoteAmount',aggregation:'SUM',alias:'TotalQuoteAmount'},
         {metricName:'QuoteCount',aggregation:'COUNT',alias:'QuoteCount'},
       ],
       filters, orderBy:[{field:'Year',direction:'ASC'},{field:'Month',direction:'ASC'}], limit:60
-    })});
+      })});
     const j=await r.json();
     const rows=(j.data?.data||[]).filter(r=>r.Year&&r.Year>=2019);
     const MN=['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -1462,7 +1476,7 @@ function _destroyYardChart(id) {
   if (_yardBreakoutCharts[id]) { _yardBreakoutCharts[id].destroy(); delete _yardBreakoutCharts[id]; }
 }
 
-async function loadYardBreakout({ canvasId, datasetName, filters, metrics, labels, colors, title }) {
+async function loadYardBreakout({ canvasId, datasetName, filters, metrics, labels, colors, title, groupBySegments }) {
   _destroyYardChart(canvasId);
   const canvas = document.getElementById(canvasId);
   if (!canvas) return;
@@ -1470,12 +1484,18 @@ async function loadYardBreakout({ canvasId, datasetName, filters, metrics, label
   try {
     const body = {
       datasetName,
-      groupBySegments: ['Yard'],
+      groupBySegments: groupBySegments || ['Yard'],
       metrics,
       filters,
       orderBy: [{ field: metrics[0].alias, direction: 'DESC' }],
       limit: 20
     };
+    // Derive card ID from canvas ID: 'yard-breakout-jpl-chart' → parent card
+    const _yardCardId = (() => {
+      const el = document.getElementById(canvasId);
+      return el?.closest('[id]')?.id || canvasId;
+    })();
+    _reg(_yardCardId, (title || 'Yard Breakout') + ' — ' + datasetName, '/bi/query', body);
     const r = await fetch(`${BASE_URL}/bi/query`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
     });
@@ -1486,7 +1506,8 @@ async function loadYardBreakout({ canvasId, datasetName, filters, metrics, label
       return;
     }
 
-    const yardLabels = rows.map(r => r.Yard || r.YardCode || '?');
+    const groupKey = (groupBySegments && groupBySegments[0]) || 'Yard';
+    const yardLabels = rows.map(r => r[groupKey] || r.Yard || r.YardName || r.YardCode || '?');
     const datasets = metrics.map((m, i) => ({
       label: labels[i] || m.alias,
       data: rows.map(r => parseFloat(r[m.alias] || 0)),
@@ -1549,11 +1570,12 @@ async function loadYardBreakoutJPL(dateFrom, dateTo, yards) {
     canvasId: 'yard-breakout-jpl-chart',
     datasetName: 'jobs_profit_by_invoice',
     filters: buildJobFilters(dateFrom, dateTo, yards),
+    groupBySegments: ['YardName'],
     metrics: [
-      { metricName:'TotalRevenue', aggregation:'SUM', alias:'TotalRevenue' },
-      { metricName:'TotalNet',     aggregation:'SUM', alias:'TotalNet'     },
+      { metricName:'Revenue',      aggregation:'SUM', alias:'Revenue'      },
+      { metricName:'LaborActual',  aggregation:'SUM', alias:'LaborActual'  },
     ],
-    labels: ['Revenue','Net Profit'],
+    labels: ['Revenue','Labor Actual'],
     colors: [TEAL, NAVY],
   });
 }
@@ -1654,7 +1676,7 @@ async function loadEquipPL(dateFrom, dateTo, yards) {
   // KPIs
   try {
     const kpiBody = {
-      datasetName: 'Equipment_Profit_Loss',
+datasetName: 'Equipment_Profit_Loss',
       metrics: [
         { metricName:'TotalRevenue',     aggregation:'SUM',          alias:'TotalRevenue'   },
         { metricName:'TotalExpenses',    aggregation:'SUM',          alias:'TotalExpenses'  },
@@ -1689,14 +1711,14 @@ async function loadEquipPL(dateFrom, dateTo, yards) {
   // Yard bar chart
   try {
     const r = await fetch(`${BASE_URL}/bi/query`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({
-      datasetName:'Equipment_Profit_Loss', groupBySegments:['Yard'],
+datasetName:'Equipment_Profit_Loss', groupBySegments:['Yard'],
       metrics:[
         { metricName:'TotalRevenue',  aggregation:'SUM', alias:'Revenue'  },
         { metricName:'TotalExpenses', aggregation:'SUM', alias:'Expenses' },
         { metricName:'TotalProfit',   aggregation:'SUM', alias:'Profit'   },
       ],
       filters, orderBy:[{field:'Revenue',direction:'DESC'}], limit:15
-    })});
+      })});
     const j = await r.json();
     const rows = j.data?.data || [];
     if (eplYardChart) { eplYardChart.destroy(); eplYardChart = null; }
@@ -1724,14 +1746,14 @@ async function loadEquipPL(dateFrom, dateTo, yards) {
   // Expense donut
   try {
     const r = await fetch(`${BASE_URL}/bi/query`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({
-      datasetName:'Equipment_Profit_Loss', groupBySegments:['Yard'],
+datasetName:'Equipment_Profit_Loss', groupBySegments:['Yard'],
       metrics:[
         { metricName:'LaborExpenses',    aggregation:'SUM', alias:'Labor'    },
         { metricName:'MaterialExpenses', aggregation:'SUM', alias:'Material' },
         { metricName:'OverheadExpenses', aggregation:'SUM', alias:'Overhead' },
       ],
       filters, limit:1
-    })});
+      })});
     const j = await r.json();
     const totals = (j.data?.data||[]).reduce((acc,row)=>{
       acc.Labor    += parseFloat(row.Labor   ||0);
@@ -1823,7 +1845,7 @@ async function loadEquipUtilization(dateFrom, dateTo, yards) {
   // Utilization % by Yard
   try {
     const r = await fetch(`${BASE_URL}/bi/query`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({
-      datasetName:'Equipment_Utilization', groupBySegments:['Yard'],
+datasetName:'Equipment_Utilization', groupBySegments:['Yard'],
       metrics:[
         { metricName:'AvgUtilization',      aggregation:'AVG', alias:'UtilPct'    },
         { metricName:'TotalTargetHours',    aggregation:'SUM', alias:'Target'     },
@@ -1858,13 +1880,13 @@ async function loadEquipUtilization(dateFrom, dateTo, yards) {
   // Downtime by Yard
   try {
     const r = await fetch(`${BASE_URL}/bi/query`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({
-      datasetName:'Equipment_Utilization', groupBySegments:['Yard'],
+datasetName:'Equipment_Utilization', groupBySegments:['Yard'],
       metrics:[
         { metricName:'TotalDowntimeHours', aggregation:'SUM', alias:'DownHrs'  },
         { metricName:'TotalDowntimeDays',  aggregation:'SUM', alias:'DownDays' },
       ],
       filters, orderBy:[{field:'DownHrs',direction:'DESC'}], limit:15
-    })});
+      })});
     const j = await r.json();
     const rows = j.data?.data || [];
     if (utilDowntimeChart) { utilDowntimeChart.destroy(); utilDowntimeChart = null; }
@@ -1963,7 +1985,7 @@ async function loadWorkOrders(dateFrom, dateTo, yards) {
   // WOs by Yard
   try {
     const r = await fetch(`${BASE_URL}/bi/query`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({
-      datasetName:'WO_Dashboard', groupBySegments:['Yard'],
+datasetName:'WO_Dashboard', groupBySegments:['Yard'],
       metrics:[
         { metricName:'TotalWorkOrders', aggregation:'COUNT', alias:'WOs'   },
         { metricName:'TotalWOCost',     aggregation:'SUM',   alias:'Cost'  },
@@ -1995,13 +2017,13 @@ async function loadWorkOrders(dateFrom, dateTo, yards) {
   // Cost breakdown by Yard
   try {
     const r = await fetch(`${BASE_URL}/bi/query`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({
-      datasetName:'WO_Dashboard', groupBySegments:['Yard'],
+datasetName:'WO_Dashboard', groupBySegments:['Yard'],
       metrics:[
         { metricName:'TotalLaborCost',    aggregation:'SUM', alias:'Labor'    },
         { metricName:'TotalMaterialCost', aggregation:'SUM', alias:'Material' },
       ],
       filters, orderBy:[{field:'Labor',direction:'DESC'}], limit:15
-    })});
+      })});
     const j = await r.json();
     const rows = j.data?.data || [];
     if (woCostChart) { woCostChart.destroy(); woCostChart = null; }
@@ -2191,4 +2213,322 @@ async function loadPM(dateFrom, dateTo, yards) {
         </tr>`).join('')
       : '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:20px">No data</td></tr>';
   } catch(e) { console.error('PM table error', e); }
+}
+
+
+/* ══════════════════════════════════════════════════════════════════
+   QUERY INSPECTOR
+   ══════════════════════════════════════════════════════════════════ */
+
+// Registry: cardId -> { title, endpoint, body, lastRun }
+const _queryRegistry = {};
+let _activeInfoBtn = null;
+
+/**
+ * Register a query against a card.
+ * Call this right before every fetch in each loadX function.
+ * cardId  — the chart-card or kpi-row element ID
+ * title   — human-readable name shown in the panel header
+ * endpoint — '/bi/query' | '/bi/kpis' | '/bi/segment-values?...'
+ * body    — the request body object (will be deep-cloned)
+ */
+function _reg(cardId, title, endpoint, body) {
+  _queryRegistry[cardId] = {
+    title,
+    endpoint,
+    body: JSON.parse(JSON.stringify(body)),
+    lastRun: null,
+    lastResult: null,
+  };
+}
+
+/* ── Info button injection ───────────────────────────────────────── */
+function _injectInfoButtons() {
+  document.querySelectorAll('.chart-card[id], .kpi-row[id]').forEach(card => {
+    const id = card.id;
+    if (!id) return;
+    // Find the header element inside this card
+    const header = card.querySelector('.chart-card-header, .kpi-card-header');
+    if (!header) return;
+    // Don't double-inject
+    if (header.querySelector('.card-info-btn')) return;
+
+    const btn = document.createElement('button');
+    btn.className = 'card-info-btn';
+    btn.title = 'Inspect query';
+    btn.innerHTML = 'ⓘ';
+    btn.setAttribute('data-card-id', id);
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      openQueryInspector(id, btn);
+    });
+    header.appendChild(btn);
+  });
+
+  // Also inject on KPI rows (they use a different structure)
+  document.querySelectorAll('[id$="-kpi-row"]').forEach(kpiRow => {
+    const id = kpiRow.id;
+    // KPI rows don't have a chart-card-header — we add a small floating button above the grid
+    if (kpiRow.querySelector('.kpi-info-btn-wrap')) return;
+    const wrap = document.createElement('div');
+    wrap.className = 'kpi-info-btn-wrap';
+    wrap.style.cssText = 'display:flex;justify-content:flex-end;margin-bottom:4px';
+    const btn = document.createElement('button');
+    btn.className = 'card-info-btn';
+    btn.title = 'Inspect KPI query';
+    btn.innerHTML = 'ⓘ';
+    btn.setAttribute('data-card-id', id);
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      openQueryInspector(id, btn);
+    });
+    wrap.appendChild(btn);
+    kpiRow.parentElement.insertBefore(wrap, kpiRow);
+  });
+
+  lucide.createIcons();
+}
+
+/* ── Syntax-highlight a JSON object ─────────────────────────────── */
+function _syntaxHL(obj) {
+  const json = JSON.stringify(obj, null, 2);
+  return json
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, m => {
+      if (/^"/.test(m)) {
+        if (/:$/.test(m)) return `<span style="color:#7dd3fc">${m}</span>`; // key
+        return `<span style="color:#86efac">${m}</span>`; // string value
+      }
+      if (/true|false/.test(m)) return `<span style="color:#c4b5fd">${m}</span>`;
+      if (/null/.test(m))       return `<span style="color:#94a3b8">${m}</span>`;
+      return `<span style="color:#fda4af">${m}</span>`; // number
+    });
+}
+
+/* ── Open inspector panel ────────────────────────────────────────── */
+function openQueryInspector(cardId, btn) {
+  // Toggle off if same card clicked again
+  if (_activeInfoBtn && _activeInfoBtn === btn) {
+    closeQueryInspector();
+    return;
+  }
+  // Deactivate previous
+  if (_activeInfoBtn) _activeInfoBtn.classList.remove('active');
+  _activeInfoBtn = btn;
+  btn.classList.add('active');
+
+  const entry = _queryRegistry[cardId];
+  const panel = document.getElementById('query-inspector-panel');
+  const overlay = document.getElementById('query-inspector-overlay');
+  const titleEl = document.getElementById('qi-title');
+  const body = document.getElementById('qi-body');
+
+  panel.classList.add('open');
+  overlay.classList.add('open');
+  lucide.createIcons({ el: panel });
+
+  if (!entry) {
+    titleEl.textContent = 'Query Inspector';
+    body.innerHTML = `
+      <div style="color:var(--text-muted);font-size:13px;padding:20px 0;text-align:center">
+        <strong>No query registered yet</strong><br>
+        <span style="font-size:11px">Apply filters or switch to this tab to load data first.</span>
+      </div>`;
+    return;
+  }
+
+  titleEl.textContent = entry.title;
+
+  const endpoint = entry.endpoint;
+  const isKpi    = endpoint.includes('/kpis');
+  const isQuery  = endpoint.includes('/query');
+  const isSegVals = endpoint.includes('/segment-values');
+
+  const datasetName = entry.body?.datasetName || entry.body?.dataset || '—';
+  const filters = entry.body?.filters || [];
+  const metrics = entry.body?.metrics || [];
+  const groupBy = entry.body?.groupBySegments || [];
+
+  // Render filters in a readable way
+  const filterTags = filters.length
+    ? filters.map(f => {
+        const op  = f.operator || '';
+        const val = Array.isArray(f.value)
+          ? f.value.join(', ')
+          : (f.secondValue ? `${f.value} → ${f.secondValue}` : f.value);
+        return `<span style="display:inline-flex;align-items:center;gap:4px;background:#f1f5f9;border:1px solid var(--border);border-radius:12px;padding:2px 9px;font-size:11px;margin:2px">
+          <strong style="color:var(--navy)">${f.segmentName||f.segment||'?'}</strong>
+          <span style="color:var(--text-muted)">${op}</span>
+          <span style="color:#0369a1">${val}</span>
+        </span>`;
+      }).join('')
+    : '<span style="color:var(--text-muted);font-size:11px">None (all data)</span>';
+
+  const metricTags = metrics.length
+    ? metrics.map(m => `<span style="display:inline-flex;align-items:center;background:#e6f7f5;border:1px solid var(--teal);border-radius:12px;padding:2px 9px;font-size:11px;margin:2px;color:var(--navy);font-weight:600">${m.metricName}${m.aggregation?' <span style=color:var(--text-muted);font-weight:400>('+m.aggregation+')</span>':''}</span>`).join('')
+    : '<span style="color:var(--text-muted);font-size:11px">All</span>';
+
+  const groupTags = groupBy.length
+    ? groupBy.map(g => `<span style="display:inline-flex;background:var(--blue-pill);border:1px solid #b8d0f0;border-radius:12px;padding:2px 9px;font-size:11px;margin:2px;color:#1d4ed8;font-weight:600">${g}</span>`).join('')
+    : '<span style="color:var(--text-muted);font-size:11px">—</span>';
+
+  const orderBy = entry.body?.orderBy;
+  const limit   = entry.body?.limit;
+
+  body.innerHTML = `
+    <div>
+      <div class="qi-section-label">Dataset</div>
+      <span class="qi-dataset-badge">
+        <i data-lucide="database" style="width:12px;height:12px"></i>
+        ${datasetName}
+      </span>
+    </div>
+    <div class="qi-divider"></div>
+    <div>
+      <div class="qi-section-label">Endpoint</div>
+      <span class="qi-endpoint-badge">POST ${endpoint}</span>
+    </div>
+    <div class="qi-divider"></div>
+    <div>
+      <div class="qi-section-label">Active Filters</div>
+      <div style="display:flex;flex-wrap:wrap;gap:2px">${filterTags}</div>
+    </div>
+    ${isQuery ? `
+    <div>
+      <div class="qi-section-label">Metrics</div>
+      <div style="display:flex;flex-wrap:wrap;gap:2px">${metricTags}</div>
+    </div>
+    <div>
+      <div class="qi-section-label">Group By</div>
+      <div style="display:flex;flex-wrap:wrap;gap:2px">${groupTags}</div>
+    </div>
+    ${orderBy ? `<div><div class="qi-section-label">Order By</div><span style="font-size:11px;color:var(--text-muted)">${orderBy.map(o=>o.field+' '+o.direction).join(', ')}</span></div>` : ''}
+    ${limit ? `<div><div class="qi-section-label">Limit</div><span style="font-size:11px;color:var(--text-muted)">${limit} rows</span></div>` : ''}
+    ` : ''}
+    <div class="qi-divider"></div>
+    <div>
+      <div class="qi-section-label">Full Request Body</div>
+      <div class="qi-code">${_syntaxHL(entry.body)}</div>
+    </div>
+    <button class="qi-test-btn" id="qi-test-btn" onclick="runQueryInspectorTest('${cardId}')">
+      <i data-lucide="play" style="width:14px;height:14px"></i>
+      Test Live Query
+    </button>
+    <div id="qi-result-area"></div>
+  `;
+
+  lucide.createIcons({ el: panel });
+
+  // If there's a cached result, show it
+  if (entry.lastResult) {
+    _renderQueryResult(entry.lastResult, entry.endpoint);
+  }
+}
+
+/* ── Close inspector ─────────────────────────────────────────────── */
+function closeQueryInspector() {
+  document.getElementById('query-inspector-panel')?.classList.remove('open');
+  document.getElementById('query-inspector-overlay')?.classList.remove('open');
+  if (_activeInfoBtn) { _activeInfoBtn.classList.remove('active'); _activeInfoBtn = null; }
+}
+
+/* ── Run live test ───────────────────────────────────────────────── */
+async function runQueryInspectorTest(cardId) {
+  const entry = _queryRegistry[cardId];
+  if (!entry) return;
+
+  const btn = document.getElementById('qi-test-btn');
+  const resultArea = document.getElementById('qi-result-area');
+  if (!btn || !resultArea) return;
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="qi-spinner"></span> Running...';
+  resultArea.innerHTML = '';
+
+  try {
+    const url = `${BASE_URL}${entry.endpoint}`;
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(entry.body),
+    });
+    const json = await resp.json();
+    entry.lastResult = json;
+    _renderQueryResult(json, entry.endpoint);
+  } catch(e) {
+    resultArea.innerHTML = `<div class="qi-error">Network error: ${e.message}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i data-lucide="play" style="width:14px;height:14px"></i> Test Live Query';
+    lucide.createIcons({ el: btn.parentElement });
+  }
+}
+
+/* ── Render query result ─────────────────────────────────────────── */
+function _renderQueryResult(json, endpoint) {
+  const resultArea = document.getElementById('qi-result-area');
+  if (!resultArea) return;
+
+  if (!json.success) {
+    const msg = json.error?.message || JSON.stringify(json.error || json);
+    const details = json.error?.details ? json.error.details.map(d=>`<div style="margin-top:4px;font-size:10px;opacity:.8">${d.path?.join('.')}: ${d.message}</div>`).join('') : '';
+    resultArea.innerHTML = `<div class="qi-error"><strong>Error:</strong> ${msg}${details}</div>`;
+    return;
+  }
+
+  const isKpi = endpoint.includes('/kpis');
+
+  if (isKpi) {
+    const kpis = json.data?.kpis || [];
+    if (!kpis.length) { resultArea.innerHTML = `<div style="color:var(--text-muted);font-size:12px;padding:8px 0">No KPI data returned</div>`; return; }
+    const tiles = kpis.map(k => `
+      <div class="qi-kpi-tile">
+        <div class="qi-kpi-tile-name">${k.name}</div>
+        <div class="qi-kpi-tile-value">${k.formatted ?? k.value}</div>
+      </div>`).join('');
+    resultArea.innerHTML = `
+      <div class="qi-result-section">
+        <div class="qi-result-meta"><strong>${kpis.length}</strong> KPI metric${kpis.length!==1?'s':''} returned</div>
+        <div class="qi-kpi-grid">${tiles}</div>
+      </div>`;
+    return;
+  }
+
+  // Query result
+  const rows = json.data?.data || json.data?.values || [];
+  if (!rows.length) { resultArea.innerHTML = `<div style="color:var(--text-muted);font-size:12px;padding:8px 0">No rows returned</div>`; return; }
+
+  const cols = Object.keys(rows[0]);
+  const thead = `<tr>${cols.map(c=>`<th>${c}</th>`).join('')}</tr>`;
+  const tbody = rows.map(row =>
+    `<tr>${cols.map(c => {
+      const v = row[c];
+      const isNum = typeof v === 'number' || (!isNaN(v) && v !== '' && v !== null);
+      const display = v === null ? '<span style="color:#94a3b8">null</span>' : String(v);
+      return `<td style="${isNum?'text-align:right':''}">${display}</td>`;
+    }).join('')}</tr>`
+  ).join('');
+
+  const ms = json.data?.executionTimeMs;
+  const metaStr = `<strong>${rows.length}</strong> row${rows.length!==1?'s':''} returned${ms ? ` · <strong>${ms}ms</strong>` : ''}`;
+
+  resultArea.innerHTML = `
+    <div class="qi-result-section">
+      <div class="qi-result-meta">${metaStr}</div>
+      <div class="qi-result-table-wrap">
+        <table class="qi-result-table">
+          <thead>${thead}</thead>
+          <tbody>${tbody}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+/* ── Auto-inject buttons after DOM is ready ──────────────────────── */
+// Called after initDashboard so Lucide is loaded
+function _setupInfoButtons() {
+  _injectInfoButtons();
+  // Re-inject on any sub-tab switch in case new cards are added
+  const observer = new MutationObserver(() => _injectInfoButtons());
+  observer.observe(document.getElementById('app'), { childList: true, subtree: true });
 }
