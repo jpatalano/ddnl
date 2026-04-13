@@ -358,6 +358,21 @@
     .dex-export-btn { padding: 4px 12px; border: 1.5px solid var(--border); border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer; background: var(--surface); color: var(--text); transition: all .12s; }
     .dex-export-btn:hover { border-color: var(--navy); color: var(--navy); }
     .dex-table-wrap { overflow: auto; max-height: 100%; }
+    /* Query preview panel */
+    .dex-query-preview { display:none; background:#0f1923; border-radius:8px; margin:0 0 10px 0; overflow:hidden; border:1px solid rgba(255,255,255,.08); }
+    .dex-qp-header { display:flex; align-items:center; justify-content:space-between; padding:7px 12px; background:#162030; cursor:pointer; user-select:none; }
+    .dex-qp-header-left { display:flex; align-items:center; gap:8px; font-size:11px; font-weight:700; color:#7dd3fc; letter-spacing:.04em; text-transform:uppercase; }
+    .dex-qp-toggle { font-size:10px; color:#94a3b8; transition:transform .2s; }
+    .dex-qp-toggle.open { transform:rotate(180deg); }
+    .dex-qp-endpoint { padding:6px 12px 4px; font-size:10px; color:#94a3b8; font-family:monospace; border-bottom:1px solid rgba(255,255,255,.06); }
+    .dex-qp-endpoint span { color:#86efac; }
+    .dex-qp-body { padding:8px 12px 10px; }
+    .dex-qp-body pre { margin:0; font-size:11px; color:#e2e8f0; white-space:pre-wrap; word-break:break-all; font-family:'JetBrains Mono','Fira Code','Courier New',monospace; line-height:1.55; }
+    .dex-qp-body .qp-key { color:#93c5fd; }
+    .dex-qp-body .qp-str { color:#86efac; }
+    .dex-qp-body .qp-num { color:#fcd34d; }
+    .dex-qp-body .qp-bool { color:#f9a8d4; }
+    .dex-qp-body .qp-null { color:#94a3b8; }
     .dex-table { width: 100%; border-collapse: collapse; font-size: 12px; }
     .dex-table thead tr { background: var(--navy); color: #fff; position: sticky; top: 0; z-index: 2; }
     .dex-table thead th { padding: 8px 12px; text-align: left; font-weight: 600; white-space: nowrap; }
@@ -1366,6 +1381,20 @@
                   <i data-lucide="download" style="width:12px;height:12px"></i> CSV
                 </button>
               </div>
+              <!-- Query preview -->
+              <div class="dex-query-preview" id="dex-query-preview">
+                <div class="dex-qp-header" onclick="dexToggleQueryPreview()">
+                  <div class="dex-qp-header-left">
+                    <i data-lucide="code-2" style="width:13px;height:13px"></i>
+                    Last Query
+                  </div>
+                  <i data-lucide="chevron-down" style="width:13px;height:13px" class="dex-qp-toggle" id="dex-qp-toggle"></i>
+                </div>
+                <div id="dex-qp-body-wrap" style="display:none">
+                  <div class="dex-qp-endpoint">POST <span id="dex-qp-endpoint"></span></div>
+                  <div class="dex-qp-body"><pre id="dex-qp-pre"></pre></div>
+                </div>
+              </div>
               <div id="dex-table-wrap" class="dex-table-wrap"></div>
             </div>
           </div>
@@ -1888,6 +1917,7 @@ async function dexSelectDataset(name) {
   document.getElementById('dex-table-wrap').innerHTML = '';
   document.getElementById('dex-results-meta').textContent = 'Run a query to see results';
   document.getElementById('dex-export-btn').style.display = 'none';
+  document.getElementById('dex-query-preview').style.display = 'none';
 
   try {
     const r = await fetch(`${BASE_URL}/bi/datasets/${name}`);
@@ -2014,6 +2044,41 @@ function dexUpdateQBuilder() {
     : '<span style="font-size:11px;color:var(--text-muted)">Click metrics above to add</span>';
 }
 
+function dexToggleQueryPreview() {
+  const wrap = document.getElementById('dex-qp-body-wrap');
+  const tog  = document.getElementById('dex-qp-toggle');
+  const open = wrap.style.display === 'none';
+  wrap.style.display = open ? '' : 'none';
+  tog.classList.toggle('open', open);
+}
+
+function dexShowQuery(endpoint, body) {
+  const panel = document.getElementById('dex-query-preview');
+  const epEl  = document.getElementById('dex-qp-endpoint');
+  const preEl = document.getElementById('dex-qp-pre');
+  epEl.textContent = endpoint;
+  // Syntax-highlighted JSON
+  const json = JSON.stringify(body, null, 2);
+  preEl.innerHTML = json.replace(
+    /("(\u[a-zA-Z0-9]{4}|\[^u]|[^\"])*"(\s*:)?|(true|false|null)|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g,
+    match => {
+      let cls = 'qp-num';
+      if (/^"/.test(match)) cls = /:$/.test(match) ? 'qp-key' : 'qp-str';
+      else if (/true|false/.test(match)) cls = 'qp-bool';
+      else if (/null/.test(match)) cls = 'qp-null';
+      return `<span class="${cls}">${match}</span>`;
+    }
+  );
+  panel.style.display = '';
+  // Keep open on first show, stay in current open/close state after
+  const wrap = document.getElementById('dex-qp-body-wrap');
+  if (wrap.style.display === '') return; // already open
+  // Auto-open on first query
+  wrap.style.display = '';
+  document.getElementById('dex-qp-toggle').classList.add('open');
+  lucide.createIcons({ el: panel });
+}
+
 async function dexRunQuery() {
   if (!_dexActive) return;
   const dsName = _dexActive.name;
@@ -2059,6 +2124,7 @@ async function dexRunQuery() {
         metrics: defaultMets.map(m => ({ metricName: m, aggregation: 'SUM', alias: m })),
         filters, limit
       };
+      dexShowQuery(`${BASE_URL}/bi/query`, body);
       const r = await fetch(`${BASE_URL}/bi/query`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
       const j = await r.json();
       data = j.data?.data || [];
@@ -2071,6 +2137,7 @@ async function dexRunQuery() {
         metrics: [],
         filters, limit
       };
+      dexShowQuery(`${BASE_URL}/bi/query`, body);
       const r = await fetch(`${BASE_URL}/bi/query`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
       const j = await r.json();
       data = j.data?.data || [];
@@ -2084,6 +2151,7 @@ async function dexRunQuery() {
         filters, limit,
         orderBy: _dexSelMets.length ? [{ field: _dexSelMets[0], direction: 'DESC' }] : undefined
       };
+      dexShowQuery(`${BASE_URL}/bi/query`, body);
       const r = await fetch(`${BASE_URL}/bi/query`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
       const j = await r.json();
       data = j.data?.data || [];

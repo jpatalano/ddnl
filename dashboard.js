@@ -160,17 +160,12 @@ async function refreshDashboard() {
   } catch(e) { console.error('Dashboard refresh error:', e); }
   setDashLoading(false);
 
-  // Mark the always-loaded tabs so they don't re-fire on tab switch
-  jobLoaded['finish']   = true;
-  quoteLoaded['summary'] = true;
+  // Always reload whichever job and quote sub-tabs are currently visible
+  jobLoaded[activeJobTab] = true;
+  loadJobSubTab(activeJobTab, dateFrom, dateTo, yards);
 
-  // Re-load whichever sub-tab is currently visible (if not the defaults)
-  if (activeJobTab !== 'finish') {
-    jobLoaded[activeJobTab] = true;
-    loadJobSubTab(activeJobTab, dateFrom, dateTo, yards);
-  }
+  quoteLoaded[activeQuoteTab] = true;
   if (activeQuoteTab !== 'summary') {
-    quoteLoaded[activeQuoteTab] = true;
     loadQuoteSubTab(activeQuoteTab, dateFrom, dateTo, yards);
   }
   if (activeDashTab === 'equipment') {
