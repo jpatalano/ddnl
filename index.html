@@ -1944,16 +1944,20 @@ async function dexSelectDataset(name) {
     const mets = (DEX_METRICS[name] || []).map(m => ({ name: m }));
     _dexActive.metrics = mets;
 
-    // Render segment tags
+    // Auto-select all non-date segments by default; exclude date segments from groupBy
+    _dexSelSegs = segs.filter(s => s.type !== 'date').map(s => s.name);
+    _dexSelMets = mets.map(m => m.name);
+
+    // Render segment tags (pre-highlighted)
     document.getElementById('dex-seg-tags').innerHTML = segs.map(s =>
-      `<span class="dex-field-tag" id="dex-seg-${s.name}" onclick="dexToggleSeg('${s.name}')">
+      `<span class="dex-field-tag${_dexSelSegs.includes(s.name) ? ' selected' : ''}" id="dex-seg-${s.name}" onclick="dexToggleSeg('${s.name}')">
         ${s.name}<span class="tag-type">${s.type==='date'?'📅':s.cat==='Entity'?'👤':''}</span>
       </span>`).join('');
 
-    // Render metric tags
+    // Render metric tags (pre-highlighted)
     document.getElementById('dex-met-tags').innerHTML = mets.length
       ? mets.map(m =>
-        `<span class="dex-field-tag" id="dex-met-${m.name}" onclick="dexToggleMet('${m.name}')">${m.name}</span>`
+        `<span class="dex-field-tag${_dexSelMets.includes(m.name) ? ' selected' : ''}" id="dex-met-${m.name}" onclick="dexToggleMet('${m.name}')">${m.name}</span>`
         ).join('')
       : '<span style="font-size:11px;color:var(--text-muted)">No known metrics — run a query with segments only to explore</span>';
 
@@ -2144,9 +2148,13 @@ async function dexRunQuery() {
       meta = j.data?.metadata;
     } else {
       // Full query
+      // When aggregating with metrics, exclude date segments from groupBy
+      // (date columns as groupBy with SUM metrics = too granular, returns empty)
+      const dateSegNames = (_dexActive.segments || []).filter(s => s.type === 'date').map(s => s.name);
+      const groupSegs = _dexSelSegs.filter(s => !dateSegNames.includes(s));
       const body = {
         datasetName: dsName,
-        groupBySegments: _dexSelSegs,
+        groupBySegments: groupSegs.length ? groupSegs : _dexSelSegs,
         metrics: _dexSelMets.map(m => ({ metricName: m, aggregation: 'SUM', alias: m })),
         filters, limit,
         orderBy: _dexSelMets.length ? [{ field: _dexSelMets[0], direction: 'DESC' }] : undefined
@@ -2185,12 +2193,23 @@ function dexRenderTable(rows, meta) {
   document.getElementById('dex-export-btn').style.display = '';
   const cols = Object.keys(rows[0]);
   const isNum = v => v !== null && v !== '' && !isNaN(parseFloat(v));
+  const DATE_COL = /date|Date/i;
+  const fmtDate = v => {
+    if (!v) return '—';
+    // API returns year as integer (e.g. 2026) or full ISO string
+    const s = String(v);
+    if (/^\d{4}$/.test(s)) return s; // bare year
+    const d = new Date(s);
+    if (!isNaN(d)) return d.toLocaleDateString('en-US', {month:'2-digit',day:'2-digit',year:'numeric'});
+    return s;
+  };
 
   const html = `<table class="dex-table">
     <thead><tr>${cols.map(c => `<th>${c}</th>`).join('')}</tr></thead>
     <tbody>${rows.map(row =>
       `<tr>${cols.map(c => {
         const v = row[c];
+        if (DATE_COL.test(c)) return `<td>${fmtDate(v)}</td>`;
         const num = isNum(v);
         const display = num && Math.abs(parseFloat(v)) >= 1000
           ? parseFloat(v).toLocaleString(undefined, {minimumFractionDigits:0,maximumFractionDigits:2})
