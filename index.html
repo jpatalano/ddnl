@@ -1339,14 +1339,14 @@
             <div class="dex-qbuilder">
               <div class="dex-qbuilder-row" style="margin-bottom:8px">
                 <span class="dex-qb-label">Group By</span>
-                <div id="dex-qb-groupby" style="display:flex;gap:6px;flex-wrap:wrap;flex:1">
-                  <span style="font-size:11px;color:var(--text-muted)">Click segments above to add</span>
+                <div id="dex-qb-groupby" style="display:flex;gap:6px;flex-wrap:wrap;flex:1;align-items:center">
+                  <span id="dex-qb-groupby-hint" style="font-size:11px;color:var(--text-muted)">Click segments above to group</span>
                 </div>
               </div>
               <div class="dex-qbuilder-row" style="margin-bottom:8px">
                 <span class="dex-qb-label">Metrics</span>
-                <div id="dex-qb-metrics" style="display:flex;gap:6px;flex-wrap:wrap;flex:1">
-                  <span style="font-size:11px;color:var(--text-muted)">Click metrics above to add</span>
+                <div id="dex-qb-metrics" style="display:flex;gap:6px;flex-wrap:wrap;flex:1;align-items:center">
+                  <span id="dex-qb-metrics-hint" style="font-size:11px;color:var(--text-muted)">Click metrics above to aggregate</span>
                 </div>
               </div>
               <div class="dex-qbuilder-row">
@@ -1944,23 +1944,25 @@ async function dexSelectDataset(name) {
     const mets = (DEX_METRICS[name] || []).map(m => ({ name: m }));
     _dexActive.metrics = mets;
 
-    // Auto-select all non-date segments by default; exclude date segments from groupBy
-    _dexSelSegs = segs.filter(s => s.type !== 'date').map(s => s.name);
+    // Default: no segments selected for group-by (user picks their dimension)
+    // All metrics selected by default so they can just pick a groupBy and run
+    _dexSelSegs = [];
     _dexSelMets = mets.map(m => m.name);
-    console.log('[DEX] auto-selected segs:', _dexSelSegs, 'mets:', _dexSelMets);
+    console.log('[DEX] auto-selected mets:', _dexSelMets);
 
-    // Render segment tags (pre-highlighted)
+    // Render segment tags — none pre-selected, user picks groupBy dimension
+    const SEG_TYPE_ICON = { date:'📅', Entity:'👤', Location:'📍' };
     document.getElementById('dex-seg-tags').innerHTML = segs.map(s =>
-      `<span class="dex-field-tag${_dexSelSegs.includes(s.name) ? ' selected' : ''}" id="dex-seg-${s.name}" onclick="dexToggleSeg('${s.name}')">
-        ${s.name}<span class="tag-type">${s.type==='date'?'📅':s.cat==='Entity'?'👤':''}</span>
+      `<span class="dex-field-tag" id="dex-seg-${s.name}" onclick="dexToggleSeg('${s.name}')" title="${s.type}">
+        ${s.name}<span class="tag-type">${SEG_TYPE_ICON[s.type] || SEG_TYPE_ICON[s.cat] || ''}</span>
       </span>`).join('');
 
-    // Render metric tags (pre-highlighted)
+    // Render metric tags — all pre-selected
     document.getElementById('dex-met-tags').innerHTML = mets.length
       ? mets.map(m =>
         `<span class="dex-field-tag${_dexSelMets.includes(m.name) ? ' selected' : ''}" id="dex-met-${m.name}" onclick="dexToggleMet('${m.name}')">${m.name}</span>`
         ).join('')
-      : '<span style="font-size:11px;color:var(--text-muted)">No known metrics — run a query with segments only to explore</span>';
+      : '<span style="font-size:11px;color:var(--text-muted)">No known metrics for this dataset</span>';
 
     // Populate date segment dropdown
     const dateSegs = segs.filter(s => s.type === 'date');
@@ -2031,23 +2033,31 @@ function dexToggleMet(name) {
 
 function dexUpdateQBuilder() {
   const gbWrap = document.getElementById('dex-qb-groupby');
+  const gbHint = document.getElementById('dex-qb-groupby-hint');
   const mWrap  = document.getElementById('dex-qb-metrics');
+  const mHint  = document.getElementById('dex-qb-metrics-hint');
 
-  gbWrap.innerHTML = _dexSelSegs.length
-    ? _dexSelSegs.map(s =>
-        `<span style="display:inline-flex;align-items:center;gap:4px;background:rgba(0,51,102,.1);border-radius:12px;padding:2px 8px;font-size:11px;font-weight:600;color:var(--navy)">
-          ${s}
-          <span onclick="dexToggleSeg('${s}')" style="cursor:pointer;opacity:.6;font-size:10px">×</span>
-        </span>`).join('')
-    : '<span style="font-size:11px;color:var(--text-muted)">Click segments above to add</span>';
+  // Group By chips
+  if (gbHint) gbHint.style.display = _dexSelSegs.length ? 'none' : '';
+  gbWrap.querySelectorAll('.dex-qb-chip').forEach(el => el.remove());
+  _dexSelSegs.forEach(s => {
+    const chip = document.createElement('span');
+    chip.className = 'dex-qb-chip';
+    chip.style.cssText = 'display:inline-flex;align-items:center;gap:4px;background:rgba(0,51,102,.12);border-radius:12px;padding:2px 10px;font-size:11px;font-weight:600;color:var(--navy)';
+    chip.innerHTML = `${s} <span onclick="dexToggleSeg('${s}')" style="cursor:pointer;opacity:.5;font-size:11px;line-height:1;margin-left:2px">×</span>`;
+    gbWrap.appendChild(chip);
+  });
 
-  mWrap.innerHTML = _dexSelMets.length
-    ? _dexSelMets.map(m =>
-        `<span style="display:inline-flex;align-items:center;gap:4px;background:rgba(107,33,168,.1);border-radius:12px;padding:2px 8px;font-size:11px;font-weight:600;color:#6b21a8">
-          ${m}
-          <span onclick="dexToggleMet('${m}')" style="cursor:pointer;opacity:.6;font-size:10px">×</span>
-        </span>`).join('')
-    : '<span style="font-size:11px;color:var(--text-muted)">Click metrics above to add</span>';
+  // Metric chips with SUM label
+  if (mHint) mHint.style.display = _dexSelMets.length ? 'none' : '';
+  mWrap.querySelectorAll('.dex-qb-chip').forEach(el => el.remove());
+  _dexSelMets.forEach(m => {
+    const chip = document.createElement('span');
+    chip.className = 'dex-qb-chip';
+    chip.style.cssText = 'display:inline-flex;align-items:center;gap:4px;background:rgba(0,191,165,.12);border-radius:12px;padding:2px 10px;font-size:11px;font-weight:600;color:var(--teal)';
+    chip.innerHTML = `${m} <span style="opacity:.45;font-size:10px;font-weight:400">SUM</span> <span onclick="dexToggleMet('${m}')" style="cursor:pointer;opacity:.5;font-size:11px;line-height:1;margin-left:2px">×</span>`;
+    mWrap.appendChild(chip);
+  });
 }
 
 function dexToggleQueryPreview() {
@@ -2117,6 +2127,16 @@ async function dexRunQuery() {
     }
 
     let data, meta;
+    // Guard: metrics need at least one groupBy segment
+    if (_dexSelMets.length > 0 && _dexSelSegs.length === 0) {
+      document.getElementById('dex-table-wrap').innerHTML =
+        '<div class="dex-no-data" style="color:var(--amber)">Pick at least one segment to group by — e.g. Yard, SalesPerson, or Status.</div>';
+      document.getElementById('dex-results-meta').textContent = 'Select a Group By dimension';
+      btn.disabled = false;
+      btn.innerHTML = '<i data-lucide="play" style="width:13px;height:13px"></i> Run Query';
+      lucide.createIcons({ el: btn });
+      return;
+    }
     if (_dexSelMets.length === 0 && _dexSelSegs.length === 0) {
       // Raw browse — use /bi/query with no groupBy or metrics to get sample rows
       // Build body with all known metrics and first few segs as groupBy
