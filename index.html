@@ -2520,51 +2520,60 @@ function dexRenderChart() {
 
   let datasets, labels, chartOptions;
 
-  // ── MULTI-RING DOUGHNUT: when pie/doughnut + grpCol set (and different from label) ──
+  // ── MULTI-RING DOUGHNUT: inner = labelCol, outer = grpCol children ──
   if (isPie && grpCol && grpCol !== labelCol) {
-    // Outer ring: grpCol breakdown (color = unique grp values)
-    // Inner ring: labelCol breakdown, colored by parent grp
-    const grpVals  = [...new Set(rows.map(r => String(r[grpCol]  ?? '—')))];
-    const lblVals  = [...new Set(rows.map(r => String(r[labelCol] ?? '—')))];
+    // Inner ring = label axis (e.g. SalesPerson) — one arc per unique label, solid color
+    const lblVals    = [...new Set(rows.map(r => String(r[labelCol] ?? '—')))];
+    const innerData  = lblVals.map(l => rows.filter(r => String(r[labelCol] ?? '—') === l).reduce((s,r) => s + parseFloat(r[valCol]??0), 0));
+    const innerColors = lblVals.map((_,i) => PAL[i % PAL.length]);
 
-    // Sum value per grp (inner ring)
-    const innerData   = grpVals.map(g => rows.filter(r => String(r[grpCol] ?? '—') === g).reduce((s,r) => s + parseFloat(r[valCol]??0), 0));
-    const innerColors = grpVals.map((_,i) => PAL[i % PAL.length]);
-
-    // Outer ring: each label colored by its parent grp
-    const outerLabels = lblVals;
-    const outerData   = lblVals.map(l => rows.filter(r => String(r[labelCol] ?? '—') === l).reduce((s,r) => s + parseFloat(r[valCol]??0), 0));
-    const outerColors = lblVals.map(l => {
-      const row = rows.find(r => String(r[labelCol] ?? '—') === l);
-      const g   = row ? String(row[grpCol] ?? '—') : '—';
-      const idx = grpVals.indexOf(g);
-      return hexAlpha(PAL[idx < 0 ? 0 : idx % PAL.length], 0.65);
+    // Outer ring = grpCol (e.g. Customer) — arcs normalized so each parent's children
+    // collectively span the exact same angle as the parent's inner arc (true breakout)
+    const grandTotal = innerData.reduce((s,v) => s + v, 0);
+    const outerRows = [];
+    lblVals.forEach((l, li) => {
+      const children  = rows.filter(r => String(r[labelCol] ?? '—') === l);
+      const parentVal = innerData[li];
+      const childSum  = children.reduce((s,r) => s + parseFloat(r[valCol]??0), 0);
+      children.forEach(r => {
+        const rawVal    = parseFloat(r[valCol]??0);
+        // Scale child so its proportion within parent maps correctly to outer ring
+        const scaled    = childSum > 0 ? (rawVal / childSum) * parentVal : 0;
+        outerRows.push({ lbl: l, grp: String(r[grpCol] ?? '—'), val: scaled, rawVal, li });
+      });
     });
+    const outerData   = outerRows.map(o => o.val);
+    const outerLabels = outerRows.map(o => o.grp);
+    const outerColors = outerRows.map(o => hexAlpha(PAL[o.li % PAL.length], 0.55));
 
     datasets = [
-      { label: grpCol,   data: innerData, backgroundColor: innerColors, borderColor: '#fff', borderWidth: 2, hoverOffset: 4 },
-      { label: labelCol, data: outerData, backgroundColor: outerColors, borderColor: '#fff', borderWidth: 1, hoverOffset: 4 },
+      { label: labelCol, data: innerData, backgroundColor: innerColors, borderColor: '#fff', borderWidth: 2, hoverOffset: 6 },
+      { label: grpCol,   data: outerData, backgroundColor: outerColors, borderColor: '#fff', borderWidth: 1, hoverOffset: 4 },
     ];
-    labels = grpVals; // inner ring labels for tooltip
+    labels = lblVals;
 
     chartOptions = {
       responsive: true, maintainAspectRatio: false,
-      cutout: '40%',
+      cutout: '35%',
       plugins: {
         legend: {
           display: true, position: 'right',
           labels: {
-            boxWidth: 10, font: { size: 11 }, padding: 14,
-            generateLabels: chart => [
-              ...grpVals.map((g,i) => ({ text: g, fillStyle: PAL[i%PAL.length], strokeStyle: '#fff', lineWidth: 1, hidden: false, index: i })),
-              ...outerLabels.map((l,i) => ({ text: '  ' + l, fillStyle: outerColors[i], strokeStyle: '#fff', lineWidth: 0, hidden: false, index: i + grpVals.length }))
+            boxWidth: 10, font: { size: 11 }, padding: 12,
+            generateLabels: () => [
+              ...lblVals.map((l,i) => ({ text: l, fillStyle: PAL[i%PAL.length], strokeStyle: '#fff', lineWidth: 1, hidden: false })),
+              ...outerRows.filter((o,i) => outerRows.findIndex(x => x.grp === o.grp) === i)
+                .map(o => ({ text: '  › ' + o.grp, fillStyle: outerColors[outerRows.indexOf(o)], strokeStyle: 'transparent', lineWidth: 0, hidden: false }))
             ]
           }
         },
         tooltip: {
           callbacks: {
-            title: ctx => ctx[0].datasetIndex === 0 ? grpVals[ctx[0].dataIndex] : outerLabels[ctx[0].dataIndex],
-            label: ctx => ' ' + fmtVal(ctx.raw)
+            title: ctx => ctx[0].datasetIndex === 0 ? lblVals[ctx[0].dataIndex] : outerLabels[ctx[0].dataIndex],
+            label: ctx => {
+              if (ctx.datasetIndex === 0) return ' Total: ' + fmtVal(ctx.raw);
+              return ' ' + outerLabels[ctx.dataIndex] + ': ' + fmtVal(outerRows[ctx.dataIndex].rawVal);
+            }
           }
         }
       }
