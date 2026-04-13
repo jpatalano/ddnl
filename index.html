@@ -330,10 +330,7 @@
 
     /* Explorer panel when dataset selected */
     .dex-panel { display: none; flex-direction: column; overflow: hidden; height: 100%; }
-    .dex-panel.visible { display: grid; grid-template-rows: auto auto auto 1fr auto; }
-    .dex-panel.visible .dex-panel-header { flex-shrink: 0; }
-    .dex-panel.visible .dex-schema { flex-shrink: 0; }
-    .dex-panel.visible .dex-qbuilder { flex-shrink: 0; }
+    .dex-panel.visible { display: flex; }
     .dex-panel-header { padding: 14px 20px; border-bottom: 1px solid var(--border); background: var(--surface); display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
     .dex-panel-header h2 { font-size: 15px; font-weight: 700; color: var(--navy); margin: 0; }
     .dex-panel-header p  { font-size: 12px; color: var(--text-muted); margin: 0; flex: 1; }
@@ -363,7 +360,7 @@
     .dex-limit-select { padding: 5px 8px; border: 1.5px solid var(--border); border-radius: 6px; font-size: 12px; background: var(--surface); color: var(--text); outline: none; }
 
     /* Results */
-    .dex-results { overflow: hidden; padding: 0; display: flex; flex-direction: column; min-height: 0; }
+    .dex-results { flex: 1; overflow: hidden; padding: 0; display: flex; flex-direction: column; min-height: 0; max-height: calc(100% - 420px); }
     .dex-results-toolbar { padding: 8px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; background: var(--surface); flex-shrink: 0; }
     .dex-results-meta { font-size: 11px; color: var(--text-muted); flex: 1; }
     .dex-export-btn { padding: 4px 12px; border: 1.5px solid var(--border); border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer; background: var(--surface); color: var(--text); transition: all .12s; }
@@ -2484,7 +2481,7 @@ function dexShowVisual(rows) {
     document.getElementById('dex-ct-' + _dexChartType)?.classList.add('active');
   }
 
-  document.getElementById('dex-visual').style.display = '';
+  document.getElementById('dex-visual').style.display = 'block';
   lucide.createIcons({ el: document.getElementById('dex-visual') });
   dexRenderChart();
 }
