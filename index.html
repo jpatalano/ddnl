@@ -1381,18 +1381,20 @@
                   <i data-lucide="download" style="width:12px;height:12px"></i> CSV
                 </button>
               </div>
-              <!-- Query preview -->
-              <div class="dex-query-preview" id="dex-query-preview">
-                <div class="dex-qp-header" onclick="dexToggleQueryPreview()">
-                  <div class="dex-qp-header-left">
-                    <i data-lucide="code-2" style="width:13px;height:13px"></i>
-                    Last Query
+              <!-- Inline query inspector — always visible after first run -->
+              <div id="dex-query-preview" style="display:none;background:#0f1923;border-bottom:1px solid rgba(255,255,255,.07)">
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 14px;cursor:pointer;user-select:none" onclick="dexToggleQueryPreview()">
+                  <div style="display:flex;align-items:center;gap:7px;font-size:10px;font-weight:700;color:#7dd3fc;letter-spacing:.06em;text-transform:uppercase">
+                    <i data-lucide="terminal" style="width:12px;height:12px"></i> Last Query
+                    <span id="dex-qp-endpoint" style="font-weight:400;color:#86efac;font-family:monospace;text-transform:none;letter-spacing:0"></span>
                   </div>
-                  <i data-lucide="chevron-down" style="width:13px;height:13px" class="dex-qp-toggle" id="dex-qp-toggle"></i>
+                  <div style="display:flex;align-items:center;gap:8px">
+                    <button onclick="event.stopPropagation();dexCopyQuery()" style="background:rgba(255,255,255,.08);border:none;border-radius:4px;padding:2px 8px;font-size:10px;color:#94a3b8;cursor:pointer">Copy</button>
+                    <i data-lucide="chevron-down" style="width:12px;height:12px;color:#94a3b8;transition:transform .2s" id="dex-qp-toggle"></i>
+                  </div>
                 </div>
-                <div id="dex-qp-body-wrap" style="display:none">
-                  <div class="dex-qp-endpoint">POST <span id="dex-qp-endpoint"></span></div>
-                  <div class="dex-qp-body"><pre id="dex-qp-pre"></pre></div>
+                <div id="dex-qp-body-wrap" style="display:none;border-top:1px solid rgba(255,255,255,.06);padding:10px 14px">
+                  <pre id="dex-qp-pre" style="margin:0;font-size:11px;color:#e2e8f0;white-space:pre-wrap;word-break:break-all;font-family:'JetBrains Mono','Fira Code','Courier New',monospace;line-height:1.55"></pre>
                 </div>
               </div>
               <div id="dex-table-wrap" class="dex-table-wrap"></div>
@@ -2065,31 +2067,39 @@ function dexToggleQueryPreview() {
   const tog  = document.getElementById('dex-qp-toggle');
   const open = wrap.style.display === 'none';
   wrap.style.display = open ? '' : 'none';
-  tog.classList.toggle('open', open);
+  tog.style.transform = open ? 'rotate(180deg)' : '';
+}
+
+function dexCopyQuery() {
+  const pre = document.getElementById('dex-qp-pre');
+  if (!pre) return;
+  navigator.clipboard.writeText(pre.innerText).catch(() => {});
 }
 
 function dexShowQuery(endpoint, body) {
   const panel = document.getElementById('dex-query-preview');
   const epEl  = document.getElementById('dex-qp-endpoint');
   const preEl = document.getElementById('dex-qp-pre');
-  epEl.textContent = endpoint;
-  // Syntax-highlighted JSON
+  // Show endpoint in header line
+  epEl.textContent = 'POST ' + endpoint;
+  // Syntax-highlighted JSON in body
   const json = JSON.stringify(body, null, 2);
   preEl.innerHTML = json.replace(
-    /("(\u[a-zA-Z0-9]{4}|\[^u]|[^\"])*"(\s*:)?|(true|false|null)|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g,
+    /("(?:\u[a-zA-Z0-9]{4}|\[^u]|[^\\"])*"(?:\s*:)?|(?:true|false|null)|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g,
     match => {
-      let cls = 'qp-num';
-      if (/^"/.test(match)) cls = /:$/.test(match) ? 'qp-key' : 'qp-str';
-      else if (/true|false/.test(match)) cls = 'qp-bool';
-      else if (/null/.test(match)) cls = 'qp-null';
-      return `<span class="${cls}">${match}</span>`;
+      let cls = 'color:#fcd34d';
+      if (/^"/.test(match)) cls = /:$/.test(match) ? 'color:#93c5fd' : 'color:#86efac';
+      else if (/true|false/.test(match)) cls = 'color:#f9a8d4';
+      else if (/null/.test(match)) cls = 'color:#94a3b8';
+      return `<span style="${cls}">${match}</span>`;
     }
   );
+  // Always show panel, always open body
   panel.style.display = '';
-  // Always open the body on each run so user can see the latest query
   const wrap = document.getElementById('dex-qp-body-wrap');
   wrap.style.display = '';
-  document.getElementById('dex-qp-toggle').classList.add('open');
+  const tog = document.getElementById('dex-qp-toggle');
+  if (tog) tog.style.transform = 'rotate(180deg)';
   lucide.createIcons({ el: panel });
 }
 
@@ -2206,7 +2216,7 @@ function dexRenderTable(rows, meta) {
   document.getElementById('dex-results-meta').textContent = metaStr;
 
   if (!rows.length) {
-    document.getElementById('dex-table-wrap').innerHTML = '<div class="dex-no-data">No data returned for the selected filters.</div>';
+    document.getElementById('dex-table-wrap').innerHTML = '<div class="dex-no-data">No data returned for the selected filters. Check the Last Query panel above to debug.</div>';
     return;
   }
 
