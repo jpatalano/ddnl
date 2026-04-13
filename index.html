@@ -373,12 +373,20 @@
     .dex-qp-body .qp-num { color:#fcd34d; }
     .dex-qp-body .qp-bool { color:#f9a8d4; }
     .dex-qp-body .qp-null { color:#94a3b8; }
-    .dex-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .dex-table { width: 100%; border-collapse: collapse; font-size: 12px; table-layout: fixed; }
     .dex-table thead tr { background: var(--navy); color: #fff; position: sticky; top: 0; z-index: 2; }
-    .dex-table thead th { padding: 8px 12px; text-align: left; font-weight: 600; white-space: nowrap; }
+    .dex-table thead th { padding: 8px 12px 8px 10px; text-align: left; font-weight: 600; white-space: nowrap; position: relative; overflow: hidden; cursor: pointer; user-select: none; min-width: 60px; }
+    .dex-table thead th:hover { background: rgba(255,255,255,.1); }
+    .dex-table thead th .th-label { display:inline-flex; align-items:center; gap:5px; }
+    .dex-table thead th .sort-icon { font-size:10px; opacity:.5; flex-shrink:0; }
+    .dex-table thead th.sort-asc .sort-icon::after { content:'▲'; opacity:1; color:#00BFA5; }
+    .dex-table thead th.sort-desc .sort-icon::after { content:'▼'; opacity:1; color:#00BFA5; }
+    .dex-table thead th:not(.sort-asc):not(.sort-desc) .sort-icon::after { content:'⇅'; }
+    .dex-table thead th .col-resize { position:absolute; right:0; top:0; bottom:0; width:5px; cursor:col-resize; background:rgba(255,255,255,.15); opacity:0; transition:opacity .15s; }
+    .dex-table thead th:hover .col-resize { opacity:1; }
     .dex-table tbody tr:nth-child(even) { background: var(--surface2); }
     .dex-table tbody tr:hover { background: rgba(0,191,165,.06); }
-    .dex-table tbody td { padding: 6px 12px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+    .dex-table tbody td { padding: 6px 12px; border-bottom: 1px solid var(--border); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .dex-table tbody td.num { text-align: right; font-variant-numeric: tabular-nums; }
     .dex-no-data { padding: 40px; text-align: center; color: var(--text-muted); font-size: 13px; }
     .dex-spinner-wrap { padding: 40px; text-align: center; color: var(--text-muted); }
@@ -1908,6 +1916,7 @@ async function dexSelectDataset(name) {
   _dexSelSegs = [];
   _dexSelMets = [];
   _dexResults = [];
+  _dexSortCol = null; _dexSortDir = 'asc';
 
   // Show loading state
   document.getElementById('dex-empty').style.display = 'none';
@@ -2226,6 +2235,9 @@ async function dexRunQuery() {
   }
 }
 
+// Sort state for dataset explorer table
+let _dexSortCol = null, _dexSortDir = 'asc';
+
 function dexRenderTable(rows, meta) {
   const metaStr = meta
     ? `${meta.totalRows ?? rows.length} rows · ${meta.executionTimeMs}ms${meta.cacheHit ? ' (cached)' : ''}`
@@ -2239,38 +2251,95 @@ function dexRenderTable(rows, meta) {
 
   document.getElementById('dex-export-btn').style.display = '';
   const cols = Object.keys(rows[0]);
-  // Detect which columns are truly numeric (all non-null values are numbers)
   const isNumCol = col => rows.every(r => r[col] === null || r[col] === '' || (!isNaN(parseFloat(r[col])) && !/[a-zA-Z]/.test(String(r[col]))));
   const numCols = new Set(cols.filter(isNumCol));
   const DATE_COL = /date|Date/i;
-  // String segment names should always be text regardless of value
-  const STRING_SEGS = new Set(['Customer','CustomerLocation','SalesPerson','SalesPersonName','Status','Yard','YardCode','YardName','Customer','JobStatus','QuoteStatus','UnitNumber','Description','Type']);
+  const STRING_SEGS = new Set(['Customer','CustomerLocation','SalesPerson','SalesPersonName','Status','Yard','YardCode','YardName','JobStatus','QuoteStatus','UnitNumber','Description','Type']);
   const fmtDate = v => {
     if (!v) return '—';
-    // API returns year as integer (e.g. 2026) or full ISO string
     const s = String(v);
-    if (/^\d{4}$/.test(s)) return s; // bare year
+    if (/^\d{4}$/.test(s)) return s;
     const d = new Date(s);
     if (!isNaN(d)) return d.toLocaleDateString('en-US', {month:'2-digit',day:'2-digit',year:'numeric'});
     return s;
   };
+  const fmtCell = (c, v) => {
+    if (DATE_COL.test(c)) return { html: fmtDate(v), cls: '' };
+    if (STRING_SEGS.has(c) || !numCols.has(c)) return { html: v ?? '—', cls: '' };
+    const display = v !== null && v !== '' && Math.abs(parseFloat(v)) >= 1000
+      ? parseFloat(v).toLocaleString(undefined, {minimumFractionDigits:0,maximumFractionDigits:2})
+      : (v ?? '—');
+    return { html: display, cls: 'num' };
+  };
 
-  const html = `<table class="dex-table">
-    <thead><tr>${cols.map(c => `<th>${c}</th>`).join('')}</tr></thead>
-    <tbody>${rows.map(row =>
-      `<tr>${cols.map(c => {
-        const v = row[c];
-        if (DATE_COL.test(c)) return `<td>${fmtDate(v)}</td>`;
-        if (STRING_SEGS.has(c) || !numCols.has(c)) return `<td>${v ?? '—'}</td>`;
-        const display = v !== null && v !== '' && Math.abs(parseFloat(v)) >= 1000
-          ? parseFloat(v).toLocaleString(undefined, {minimumFractionDigits:0,maximumFractionDigits:2})
-          : (v ?? '—');
-        return `<td class="num">${display}</td>`;
-      }).join('')}</tr>`
-    ).join('')}</tbody>
-  </table>`;
+  // Sort rows if a sort column is set
+  let sorted = [...rows];
+  if (_dexSortCol && cols.includes(_dexSortCol)) {
+    const isNum = numCols.has(_dexSortCol);
+    sorted.sort((a, b) => {
+      const av = isNum ? parseFloat(a[_dexSortCol] ?? 0) : String(a[_dexSortCol] ?? '');
+      const bv = isNum ? parseFloat(b[_dexSortCol] ?? 0) : String(b[_dexSortCol] ?? '');
+      return _dexSortDir === 'asc' ? (av > bv ? 1 : av < bv ? -1 : 0) : (av < bv ? 1 : av > bv ? -1 : 0);
+    });
+  }
 
-  document.getElementById('dex-table-wrap').innerHTML = html;
+  const wrap = document.getElementById('dex-table-wrap');
+  const table = document.createElement('table');
+  table.className = 'dex-table';
+
+  // Header
+  const thead = document.createElement('thead');
+  const hrow  = document.createElement('tr');
+  cols.forEach((c, i) => {
+    const th = document.createElement('th');
+    th.style.width = '150px';
+    const sortCls = _dexSortCol === c ? (_dexSortDir === 'asc' ? ' sort-asc' : ' sort-desc') : '';
+    th.className = sortCls.trim();
+    th.innerHTML = `<span class="th-label">${c}<span class="sort-icon"></span></span><div class="col-resize" data-col="${i}"></div>`;
+    th.addEventListener('click', e => {
+      if (e.target.classList.contains('col-resize')) return;
+      if (_dexSortCol === c) { _dexSortDir = _dexSortDir === 'asc' ? 'desc' : 'asc'; }
+      else { _dexSortCol = c; _dexSortDir = numCols.has(c) ? 'desc' : 'asc'; }
+      dexRenderTable(_dexResults, meta);
+    });
+    hrow.appendChild(th);
+  });
+  thead.appendChild(hrow);
+  table.appendChild(thead);
+
+  // Body
+  const tbody = document.createElement('tbody');
+  sorted.forEach(row => {
+    const tr = document.createElement('tr');
+    cols.forEach(c => {
+      const td = document.createElement('td');
+      const { html, cls } = fmtCell(c, row[c]);
+      if (cls) td.className = cls;
+      td.textContent = html;
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+
+  wrap.innerHTML = '';
+  wrap.appendChild(table);
+
+  // Column resize logic
+  const ths = table.querySelectorAll('thead th');
+  table.querySelectorAll('.col-resize').forEach(handle => {
+    let startX, startW, th;
+    handle.addEventListener('mousedown', e => {
+      e.preventDefault();
+      th = e.target.closest('th');
+      startX = e.pageX;
+      startW = th.offsetWidth;
+      const onMove = ev => { th.style.width = Math.max(50, startW + ev.pageX - startX) + 'px'; };
+      const onUp   = () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+  });
 }
 
 function dexExportCsv() {
