@@ -2250,7 +2250,12 @@ function dexRenderTable(rows, meta) {
   }
 
   document.getElementById('dex-export-btn').style.display = '';
-  const cols = Object.keys(rows[0]);
+  // Order columns: groupBy segments in click order, then metrics, then anything else
+  const rawCols = Object.keys(rows[0]);
+  const groupCols = _dexSelSegs.filter(c => rawCols.includes(c));
+  const metCols   = _dexSelMets.filter(c => rawCols.includes(c));
+  const restCols  = rawCols.filter(c => !groupCols.includes(c) && !metCols.includes(c));
+  const cols = [...groupCols, ...metCols, ...restCols];
   const isNumCol = col => rows.every(r => r[col] === null || r[col] === '' || (!isNaN(parseFloat(r[col])) && !/[a-zA-Z]/.test(String(r[col]))));
   const numCols = new Set(cols.filter(isNumCol));
   const DATE_COL = /date|Date/i;
