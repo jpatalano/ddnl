@@ -42,7 +42,9 @@ async function initDashboard() {
   const dt = document.getElementById('dash-date-to')?.value || '';
   const dy = getSelectedYards();
   loadFinishJobs(df, dt, dy);
+  // Inject ⓘ buttons once initial data has rendered
   _setupInfoButtons();
+  setTimeout(_injectInfoButtons, 1500);
 }
 
 /* ── Yard multi-select ──────────────────────────────────────────── */
@@ -127,10 +129,12 @@ function switchDashTab(tab) {
   if (tab === 'equipment' && !equipLoaded[activeEquipTab]) {
     equipLoaded[activeEquipTab] = true;
     loadEquipSubTab(activeEquipTab, dateFrom, dateTo, yards);
+    setTimeout(_injectInfoButtons, 500);
   }
   if (tab === 'pm' && !pmLoaded) {
     pmLoaded = true;
     loadPM(dateFrom, dateTo, yards);
+    setTimeout(_injectInfoButtons, 500);
   }
 }
 
@@ -811,12 +815,14 @@ function loadJobSubTab(tab, dateFrom, dateTo, yards) {
   if (tab === 'profitloss') { loadJobProfitLoss(dateFrom, dateTo, yards); }
   if (tab === 'forecast')   { loadForecast(dateFrom, dateTo, yards); }
   if (tab === 'revenue')    { loadRevenueReport(dateFrom, dateTo, yards); }
+  setTimeout(_injectInfoButtons, 500);
 }
 
 function loadQuoteSubTab(tab, dateFrom, dateTo, yards) {
   if (tab === 'bystatus')   { loadQuoteByStatus(dateFrom, dateTo, yards); }
   if (tab === 'salesperson'){ loadQuoteBySalesperson(dateFrom, dateTo, yards); }
   if (tab === 'forecast')   { loadQuoteForecast(dateFrom, dateTo, yards); }
+  setTimeout(_injectInfoButtons, 500);
 }
 
 // (refreshDashboard consolidation — see master refresh above)
@@ -2244,46 +2250,35 @@ function _reg(cardId, title, endpoint, body) {
 
 /* ── Info button injection ───────────────────────────────────────── */
 function _injectInfoButtons() {
-  document.querySelectorAll('.chart-card[id], .kpi-row[id]').forEach(card => {
+  // Chart cards — inject ⓘ into their header
+  document.querySelectorAll('.chart-card[id]').forEach(card => {
     const id = card.id;
     if (!id) return;
-    // Find the header element inside this card
-    const header = card.querySelector('.chart-card-header, .kpi-card-header');
+    const header = card.querySelector('.chart-card-header');
     if (!header) return;
-    // Don't double-inject
-    if (header.querySelector('.card-info-btn')) return;
+    if (header.querySelector('.card-info-btn')) return; // already injected
 
     const btn = document.createElement('button');
     btn.className = 'card-info-btn';
     btn.title = 'Inspect query';
     btn.innerHTML = 'ⓘ';
     btn.setAttribute('data-card-id', id);
-    btn.addEventListener('click', e => {
-      e.stopPropagation();
-      openQueryInspector(id, btn);
-    });
+    btn.addEventListener('click', e => { e.stopPropagation(); openQueryInspector(id, btn); });
     header.appendChild(btn);
   });
 
-  // Also inject on KPI rows (they use a different structure)
+  // KPI rows — inject ⓘ as the first child inside the row itself (not a sibling)
   document.querySelectorAll('[id$="-kpi-row"]').forEach(kpiRow => {
     const id = kpiRow.id;
-    // KPI rows don't have a chart-card-header — we add a small floating button above the grid
-    if (kpiRow.querySelector('.kpi-info-btn-wrap')) return;
-    const wrap = document.createElement('div');
-    wrap.className = 'kpi-info-btn-wrap';
-    wrap.style.cssText = 'display:flex;justify-content:flex-end;margin-bottom:4px';
+    if (kpiRow.querySelector('.card-info-btn')) return; // already injected
+
     const btn = document.createElement('button');
-    btn.className = 'card-info-btn';
+    btn.className = 'card-info-btn kpi-row-info-btn';
     btn.title = 'Inspect KPI query';
     btn.innerHTML = 'ⓘ';
     btn.setAttribute('data-card-id', id);
-    btn.addEventListener('click', e => {
-      e.stopPropagation();
-      openQueryInspector(id, btn);
-    });
-    wrap.appendChild(btn);
-    kpiRow.parentElement.insertBefore(wrap, kpiRow);
+    btn.addEventListener('click', e => { e.stopPropagation(); openQueryInspector(id, btn); });
+    kpiRow.appendChild(btn);
   });
 }
 
@@ -2523,14 +2518,7 @@ function _renderQueryResult(json, endpoint) {
 }
 
 /* ── Auto-inject buttons after DOM is ready ──────────────────────── */
-// Called after initDashboard so Lucide is loaded
+// No MutationObserver — inject once at init, then called manually after each tab load
 function _setupInfoButtons() {
   _injectInfoButtons();
-  // Debounced re-inject on sub-tab switches — prevents mutation loop
-  let _infoDebounce = null;
-  const observer = new MutationObserver(() => {
-    clearTimeout(_infoDebounce);
-    _infoDebounce = setTimeout(_injectInfoButtons, 300);
-  });
-  observer.observe(document.getElementById('app'), { childList: true, subtree: true });
 }
