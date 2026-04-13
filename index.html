@@ -2608,8 +2608,8 @@ function dexRenderChart() {
         tooltip: { callbacks: { label: c => ' ' + c.dataset.label + ': ' + fmtVal(c.raw) } }
       },
       scales: {
-        x: { stacked: isStacked, grid: { display: isHoriz, color: '#e2e8f0' }, ticks: { font: { size: 10 }, maxRotation: isHoriz ? 0 : 40, maxTicksLimit: 12, callback: isHoriz ? fmtVal : undefined } },
-        y: { stacked: isStacked, grid: { display: !isHoriz, color: '#e2e8f0' }, beginAtZero: true, ticks: { font: { size: 10 }, callback: isHoriz ? undefined : fmtVal } }
+        x: { type: isHoriz ? 'linear' : 'category', stacked: isStacked, grid: { display: isHoriz, color: '#e2e8f0' }, ticks: { font: { size: 10 }, maxRotation: isHoriz ? 0 : 40, maxTicksLimit: 12, callback: isHoriz ? fmtVal : undefined } },
+        y: { type: isHoriz ? 'category' : 'linear', stacked: isStacked, grid: { display: !isHoriz, color: '#e2e8f0' }, beginAtZero: true, ticks: { font: { size: 10 }, callback: isHoriz ? undefined : fmtVal } }
       }
     };
 
@@ -2634,8 +2634,8 @@ function dexRenderChart() {
         tooltip: { callbacks: { label: c => ' ' + fmtVal(c.raw) } }
       },
       scales: {
-        x: { grid: { display: isHoriz, color: '#e2e8f0' }, ticks: { font: { size: 10 }, maxRotation: isHoriz ? 0 : 40, maxTicksLimit: 12, callback: isHoriz ? fmtVal : undefined } },
-        y: { grid: { display: !isHoriz, color: '#e2e8f0' }, beginAtZero: true, ticks: { font: { size: 10 }, callback: isHoriz ? undefined : fmtVal } }
+        x: { type: isHoriz ? 'linear' : 'category', grid: { display: isHoriz, color: '#e2e8f0' }, ticks: { font: { size: 10 }, maxRotation: isHoriz ? 0 : 40, maxTicksLimit: 12, callback: isHoriz ? fmtVal : undefined } },
+        y: { type: isHoriz ? 'category' : 'linear', grid: { display: !isHoriz, color: '#e2e8f0' }, beginAtZero: true, ticks: { font: { size: 10 }, callback: isHoriz ? undefined : fmtVal } }
       }
     };
   }
