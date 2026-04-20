@@ -905,6 +905,32 @@
     .dkt-icon { width: 38px; height: 38px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 17px; flex-shrink: 0; }
     .dkt-label { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--text-muted); margin-bottom: 3px; }
     .dkt-value { font-size: 20px; font-weight: 800; line-height: 1; }
+    /* ── KPI delta pill ─────────────────────────────────────────────────────── */
+    .kpi-delta { display: inline-flex; align-items: center; gap: 3px; font-size: 10.5px; font-weight: 700;
+                 padding: 2px 7px; border-radius: 20px; margin-top: 5px; white-space: nowrap;
+                 position: relative; cursor: default; }
+    .kpi-delta.up   { background: rgba(22,163,74,.13);  color: #16a34a; }
+    .kpi-delta.down { background: rgba(220,38,38,.12);  color: #dc2626; }
+    .kpi-delta.flat { background: rgba(100,116,139,.1); color: var(--text-muted); }
+    .kpi-delta svg  { width: 10px; height: 10px; stroke-width: 2.5; }
+    /* tooltip */
+    .kpi-delta-tip {
+      visibility: hidden; opacity: 0; pointer-events: none;
+      position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
+      background: var(--navy); color: #fff; font-size: 10.5px; font-weight: 600;
+      padding: 5px 10px; border-radius: 6px; white-space: nowrap; z-index: 999;
+      box-shadow: 0 4px 16px rgba(0,0,0,.25);
+      transition: opacity .15s ease;
+    }
+    .kpi-delta-tip::after {
+      content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
+      border: 5px solid transparent; border-top-color: var(--navy);
+    }
+    .kpi-delta:hover .kpi-delta-tip { visibility: visible; opacity: 1; }
+    /* inside .kpi-tile (report builder bar) */
+    .kpi-tile .kpi-delta { display: block; margin-top: 4px; }
+    /* inside .dash-kpi-tile (dashboard) */
+    .dash-kpi-tile .kpi-delta { display: block; margin-top: 4px; }
 
     /* Chart grid */
     .dash-chart-row { display: grid; gap: 16px; }
@@ -3086,6 +3112,7 @@ function _toggleTheme() {
 
 function applyInstance(inst) {
   _activeInstance = inst;
+  window._INST = inst; // expose for helpers (goodDirection, etc.)
 
   // 1. BASE always stays as '/api' — server-side proxy handles instance routing
   // (inst.apiBase is used server-side only)
@@ -3717,35 +3744,122 @@ async function runQuery() {
   });
   showLoadingState(`Querying ${fmtName(currentDataset.dataset.name)}...`);
   try {
-    const [qr,kr] = await Promise.all([
-      apiFetch(`${BASE}/bi/query`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}),
-      mets.length?apiFetch(`${BASE}/bi/kpis`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}):null
+    const [qr, kr] = await Promise.all([
+      apiFetch(`${BASE}/bi/query`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
+      mets.length ? apiFetch(`${BASE}/bi/kpis`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }) : null
     ]);
-    const qj=await qr.json(); const kj=kr?await kr.json():null;
-    if(!qj.success) throw new Error(qj.error?.message||'Query failed');
-    lastRowData=qj.data?.data||qj.data?.rows||[];
+    const qj = await qr.json(); const kj = kr ? await kr.json() : null;
+    if (!qj.success) throw new Error(qj.error?.message || 'Query failed');
+    lastRowData = qj.data?.data || qj.data?.rows || [];
     { const _dr = _extractDateRange(body.filters || []);
       _lastGridMeta['rb-grid'] = { mets, datasetName: currentDataset.dataset.name, filters: body.filters || [], ..._dr };
       delete _ctCompare['rb-grid']; }
-    renderGrid(lastRowData,mets,'rb-grid');
-    if(kj?.success) renderKpis(kj.data,mets); else document.getElementById('rb-kpi-bar').innerHTML='';
-    document.getElementById('rb-result-info').textContent=`${lastRowData.length.toLocaleString()} rows · ${fmtName(currentDataset.dataset.name)}`;
+    renderGrid(lastRowData, mets, 'rb-grid');
+    if (kj?.success) {
+      // Fetch compare data asynchronously — don't block the grid render
+      const _dr = _extractDateRange(body.filters || []);
+      _kpiCompareFetch(body, _dr.dateFrom, _dr.dateTo).then(priorMap => {
+        renderKpis(kj.data, mets, priorMap);
+      });
+    } else {
+      document.getElementById('rb-kpi-bar').innerHTML = '';
+    }
+    document.getElementById('rb-result-info').textContent = `${lastRowData.length.toLocaleString()} rows · ${fmtName(currentDataset.dataset.name)}`;
     console.log('[runQuery] rows:', lastRowData.length, 'calling showResultsArea');
     showResultsArea();
-  } catch(e) { rbShowEmpty(); document.getElementById('rb-result-info').textContent='Error: '+e.message; console.error('runQuery error:', e); }
+  } catch(e) { rbShowEmpty(); document.getElementById('rb-result-info').textContent = 'Error: ' + e.message; console.error('runQuery error:', e); }
 }
 
-function renderKpis(data,mets) {
-  const bar=document.getElementById('rb-kpi-bar')||document.getElementById('kpi-bar');
+// ─── KPI Compare helpers ──────────────────────────────────────────────────────
+
+// Returns HTML for a delta pill. priorVal may be null (no comparison available).
+// goodDir: 'up' (higher=green) | 'down' (lower=green) | 'neutral'
+function _kpiDeltaHtml(curVal, priorVal, metaM, goodDir) {
+  if (priorVal == null || priorVal === '' || isNaN(parseFloat(priorVal))) return '';
+  const cur  = parseFloat(curVal)  || 0;
+  const pri  = parseFloat(priorVal) || 0;
+  if (pri === 0 && cur === 0) return '';
+
+  const absDiff = cur - pri;
+  const pct     = pri !== 0 ? (absDiff / Math.abs(pri)) * 100 : null;
+
+  // Format absolute delta same as the metric
+  const fmtAbs = formatCell(Math.abs(absDiff), metaM?.displayFormat, metaM?.prefix, metaM?.suffix, metaM?.decimalPlaces);
+  const pctStr  = pct != null ? Math.abs(pct).toFixed(1) + '%' : null;
+  const priorFmt = formatCell(priorVal, metaM?.displayFormat, metaM?.prefix, metaM?.suffix, metaM?.decimalPlaces);
+
+  const dir = absDiff > 0 ? 'up' : absDiff < 0 ? 'down' : 'flat';
+  const arrow = dir === 'up' ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="18 15 12 9 6 15"/></svg>'
+              : dir === 'down' ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="6 9 12 15 18 9"/></svg>'
+              : '—';
+
+  // Color: if goodDir matches movement direction, green; else red; flat = muted
+  let cls = 'flat';
+  if (dir !== 'flat') {
+    const isGood = (goodDir === 'up' && dir === 'up') || (goodDir === 'down' && dir === 'down');
+    cls = isGood ? 'up' : 'down';   // up=green, down=red in CSS
+  }
+
+  const label = [pctStr, (absDiff > 0 ? '+' : absDiff < 0 ? '-' : '') + fmtAbs].filter(Boolean).join(' · ');
+  const tip   = `Prior: ${priorFmt}`;
+
+  return `<span class="kpi-delta ${cls}">${arrow}${label}<span class="kpi-delta-tip">${tip}</span></span>`;
+}
+
+// Fetch compare-period KPI values. Returns map { metricName -> priorValue } or null.
+// Requires _fiscalCalendar to be loaded and dateFrom/dateTo to be set.
+async function _kpiCompareFetch(body, dateFrom, dateTo) {
+  if (!_fiscalCalendar || !dateFrom || !dateTo) return null;
+  try {
+    // Get prior period dates from fiscal calendar endpoint
+    const cr = await apiFetch(`${BASE}/bi/fiscal/compare-range?from=${dateFrom}&to=${dateTo}`);
+    const cj = await cr.json();
+    const pp = cj.data?.priorPeriod;
+    if (!pp?.from || !pp?.to) return null;
+
+    // Find the date segment from existing filters
+    const dateSeg = (body.filters || []).find(f => f.type === 'date_range')?.segmentName || null;
+
+    const compareBody = {
+      ...body,
+      compareFrom: pp.from,
+      compareTo:   pp.to,
+      dateSegment: dateSeg
+    };
+    const r = await apiFetch(`${BASE}/bi/kpis/compare`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(compareBody)
+    });
+    const j = await r.json();
+    if (!j.success || !j.data?.prior) return null;
+
+    // Build map name->value from prior array + stash period for tooltip label
+    const map = {};
+    (j.data.prior || []).forEach(k => { map[k.name] = k.value; });
+    map.__compareFrom = pp.from;
+    map.__compareTo   = pp.to;
+    return map;
+  } catch(e) {
+    console.warn('[kpi-compare] fetch error:', e.message);
+    return null;
+  }
+}
+
+function renderKpis(data, mets, priorMap) {
+  const bar = document.getElementById('rb-kpi-bar') || document.getElementById('kpi-bar');
   // /bi/kpis returns { kpis: [{name, value}] }, /bi/query returns { data: [...] }
-  let row={};
-  if(data?.kpis) { data.kpis.forEach(k=>{ row[k.name]=k.value; }); }
-  else { row=(data?.data||data?.rows||[])[0]||{}; }
-  bar.innerHTML=mets.map(m=>{
-    const raw=row[m.metricName]??row[m.alias];
-    const num=parseFloat(raw);
-    const cls=num<0?'negative':num>0?'positive':'';
-    return `<div class="kpi-tile"><div class="kpi-label">${m.metricName}</div><div class="kpi-value ${cls}">${formatCell(raw,m.displayFormat,m.prefix,m.suffix,m.decimalPlaces)}</div></div>`;
+  let row = {};
+  if (data?.kpis) { data.kpis.forEach(k => { row[k.name] = k.value; }); }
+  else { row = (data?.data || data?.rows || [])[0] || {}; }
+  const goodDir = window._INST?.goodDirection || 'up';
+  bar.innerHTML = mets.map(m => {
+    const raw    = row[m.metricName] ?? row[m.alias];
+    const num    = parseFloat(raw);
+    const cls    = num < 0 ? 'negative' : num > 0 ? 'positive' : '';
+    const prior  = priorMap ? (priorMap[m.metricName] ?? priorMap[m.alias]) : null;
+    const delta  = _kpiDeltaHtml(raw, prior, m, goodDir);
+    return `<div class="kpi-tile"><div class="kpi-label">${m.metricName}</div><div class="kpi-value ${cls}">${formatCell(raw,m.displayFormat,m.prefix,m.suffix,m.decimalPlaces)}</div>${delta}</div>`;
   }).join('');
 }
 
@@ -4938,8 +5052,14 @@ async function runQueryWithPromptFilters(paramFilters) {
       _lastGridMeta['rb-grid'] = { mets, datasetName: currentDataset.dataset.name, filters: body.filters || [], ..._dr };
       delete _ctCompare['rb-grid']; }
     renderGrid(lastRowData, mets, 'rb-grid');
-    if (kj?.success) renderKpis(kj.data, mets);
-    else document.getElementById('rb-kpi-bar').innerHTML = '';
+    if (kj?.success) {
+      const _dr = _extractDateRange(body.filters || []);
+      _kpiCompareFetch(body, _dr.dateFrom, _dr.dateTo).then(priorMap => {
+        renderKpis(kj.data, mets, priorMap);
+      });
+    } else {
+      document.getElementById('rb-kpi-bar').innerHTML = '';
+    }
     document.getElementById('rb-result-info').textContent = `${lastRowData.length.toLocaleString()} rows · ${fmtName(currentDataset.dataset.name)}`;
     showResultsArea();
   } catch(e) {
@@ -5050,13 +5170,23 @@ async function srExecuteReport(report, paramFilters) {
       let row = {};
       if (kpiData?.kpis) kpiData.kpis.forEach(k => { row[k.name] = k.value; });
       else row = (kpiData?.data || kpiData?.rows || [])[0] || {};
-      document.getElementById('sr-kpi-bar').innerHTML = mets.map(m => {
-        const raw = row[m.metricName] ?? row[m.alias];
-        const num = parseFloat(raw);
-        const cls = num < 0 ? 'negative' : num > 0 ? 'positive' : '';
-        const kpiLabel = (srColCfg[m.metricName]||{}).label || m.metricName.replace(/([A-Z])/g,' $1').trim();
-        return `<div class="kpi-tile"><div class="kpi-label">${kpiLabel}</div><div class="kpi-value ${cls}">${formatCell(raw, m.displayFormat, m.prefix, m.suffix, m.decimalPlaces)}</div></div>`;
-      }).join('');
+      const goodDir = window._INST?.goodDirection || 'up';
+      const _srDr = _extractDateRange(allFilters);
+      const renderSrKpis = (priorMap) => {
+        document.getElementById('sr-kpi-bar').innerHTML = mets.map(m => {
+          const raw      = row[m.metricName] ?? row[m.alias];
+          const num      = parseFloat(raw);
+          const cls      = num < 0 ? 'negative' : num > 0 ? 'positive' : '';
+          const kpiLabel = (srColCfg[m.metricName]||{}).label || m.metricName.replace(/([A-Z])/g,' $1').trim();
+          const prior    = priorMap ? (priorMap[m.metricName] ?? priorMap[m.alias]) : null;
+          const delta    = _kpiDeltaHtml(raw, prior, m, goodDir);
+          return `<div class="kpi-tile"><div class="kpi-label">${kpiLabel}</div><div class="kpi-value ${cls}">${formatCell(raw, m.displayFormat, m.prefix, m.suffix, m.decimalPlaces)}</div>${delta}</div>`;
+        }).join('');
+      };
+      renderSrKpis(null); // render immediately without compare
+      _kpiCompareFetch(body, _srDr.dateFrom, _srDr.dateTo).then(priorMap => {
+        if (priorMap) renderSrKpis(priorMap); // re-render with deltas once available
+      });
     }
 
     // Build render context from saved report config so grouping/columns work
@@ -8920,22 +9050,37 @@ async function myDashFetchTile(tile, pi, ti) {
         return (m.prefix && !isCurrency ? m.prefix : '') + s + (m.suffix || '');
       };
 
-      const PAL = typeof PERF_COLORS !== 'undefined' ? PERF_COLORS : ['#00BFA5','#003366','#f59e0b','#6366f1','#ec4899'];
-      chartEl.innerHTML = kpis.map((kpi, i) => {
-        const color = PAL[i % PAL.length];
-        const icon = (metaMeta[kpi.name]?.displayFormat === 'currency' || metaMeta[kpi.name]?.prefix === '$') ? 'dollar-sign' : 'hash';
-        return `
-          <div class="dash-kpi-tile" style="flex:1;min-width:130px">
-            <div class="dkt-icon" style="background:${color}22;color:${color}">
-              <i data-lucide="${icon}" style="width:16px;height:16px;stroke-width:2"></i>
-            </div>
-            <div>
-              <div class="dkt-label">${escHtml(kpi.name)}</div>
-              <div class="dkt-value" style="color:${color}">${fmtKpi(kpi.value, kpi.name)}</div>
-            </div>
-          </div>`;
-      }).join('');
-      lucide.createIcons({ el: chartEl });
+      const goodDir  = window._INST?.goodDirection || 'up';
+      const PAL      = typeof PERF_COLORS !== 'undefined' ? PERF_COLORS : ['#00BFA5','#003366','#f59e0b','#6366f1','#ec4899'];
+
+      const renderDashKpis = (priorMap) => {
+        chartEl.innerHTML = kpis.map((kpi, i) => {
+          const color  = PAL[i % PAL.length];
+          const icon   = (metaMeta[kpi.name]?.displayFormat === 'currency' || metaMeta[kpi.name]?.prefix === '$') ? 'dollar-sign' : 'hash';
+          const prior  = priorMap ? priorMap[kpi.name] : null;
+          // Build metaM shape for _kpiDeltaHtml
+          const metaM  = { displayFormat: metaMeta[kpi.name]?.displayFormat, prefix: metaMeta[kpi.name]?.prefix, suffix: metaMeta[kpi.name]?.suffix, decimalPlaces: metaMeta[kpi.name]?.decimalPlaces };
+          const delta  = _kpiDeltaHtml(kpi.value, prior, metaM, goodDir);
+          return `
+            <div class="dash-kpi-tile" style="flex:1;min-width:130px">
+              <div class="dkt-icon" style="background:${color}22;color:${color}">
+                <i data-lucide="${icon}" style="width:16px;height:16px;stroke-width:2"></i>
+              </div>
+              <div>
+                <div class="dkt-label">${escHtml(kpi.name)}</div>
+                <div class="dkt-value" style="color:${color}">${fmtKpi(kpi.value, kpi.name)}</div>
+                ${delta}
+              </div>
+            </div>`;
+        }).join('');
+        lucide.createIcons({ el: chartEl });
+      };
+
+      renderDashKpis(null); // immediate render
+      // Async compare fetch — re-render tiles with delta pills once data arrives
+      _kpiCompareFetch(body, dateFrom, dateTo).then(priorMap => {
+        if (priorMap) renderDashKpis(priorMap);
+      });
     } catch(e) {
       chartEl.innerHTML = `<div style="color:var(--red);font-size:12px;padding:16px;text-align:center">Error: ${e.message}</div>`;
     }

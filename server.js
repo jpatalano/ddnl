@@ -1019,6 +1019,41 @@ app.post('/api/bi/kpis', async (req, res) => {
   }
 });
 
+
+// POST /api/bi/kpis/compare
+// Body: same as /bi/kpis but also requires { compareFrom, compareTo } dates
+// Returns { current: [{name,value}], prior: [{name,value}] }
+app.post('/api/bi/kpis/compare', async (req, res) => {
+  const inst = resolveInstance(req);
+  const { compareFrom, compareTo, ...kpiBody } = req.body;
+  if (!compareFrom || !compareTo) return res.status(400).json({ error: 'compareFrom and compareTo required' });
+  if (inst.adapter !== 'internal') return res.json({ success: true, data: null }); // only for internal adapter
+
+  try {
+    // Run current period and prior period in parallel
+    const dateSeg = req.body.dateSegment || kpiBody.filters?.find(f => f.type === 'date_range')?.segmentName || null;
+
+    // Build prior-period filter: replace date filters with compare range
+    const priorFilters = (kpiBody.filters || []).filter(f => f.type !== 'date_range');
+    if (dateSeg) {
+      priorFilters.push({ segmentName: dateSeg, type: 'date_range', from: compareFrom, to: compareTo });
+    }
+
+    const currentBody = { ...kpiBody, groupBySegments: [] };
+    const priorBody   = { ...kpiBody, groupBySegments: [], filters: priorFilters.length ? priorFilters : undefined };
+
+    const [curResult, priResult] = await Promise.all([
+      esClient.query(inst.clientId, kpiBody.datasetName, currentBody),
+      esClient.query(inst.clientId, kpiBody.datasetName, priorBody)
+    ]);
+
+    const current = Object.entries(curResult.data[0] || {}).map(([name, value]) => ({ name, value }));
+    const prior   = Object.entries(priResult.data[0] || {}).map(([name, value]) => ({ name, value }));
+
+    return res.json({ success: true, data: { current, prior, compareFrom, compareTo } });
+  } catch(e) { return res.status(500).json({ success: false, error: e.message }); }
+});
+
 app.get('/api/bi/segment-values', async (req, res) => {
   const inst = resolveInstance(req);
   const dataset  = req.query.dataset  || req.query.datasetName;
