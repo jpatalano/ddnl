@@ -1032,12 +1032,21 @@ app.post('/api/bi/kpis/compare', async (req, res) => {
 
   try {
     // Run current period and prior period in parallel
-    const dateSeg = req.body.dateSegment || kpiBody.filters?.find(f => f.type === 'date_range')?.segmentName || null;
+    // dateSeg: prefer explicit body.dateSegment, then sniff from gte/lt operators in filters
+    const dateSeg = req.body.dateSegment
+      || (kpiBody.filters || []).find(f => f.operator === 'gte' || f.operator === 'gt')?.segmentName
+      || null;
 
-    // Build prior-period filter: replace date filters with compare range
-    const priorFilters = (kpiBody.filters || []).filter(f => f.type !== 'date_range');
+    // Build prior-period filter: strip existing date filters (gte/lt on dateSeg) and replace
+    // with compare range using the same gte/lt operator format esClient understands
+    const priorFilters = (kpiBody.filters || []).filter(
+      f => !(dateSeg && f.segmentName === dateSeg && (f.operator === 'gte' || f.operator === 'gt' || f.operator === 'lt' || f.operator === 'lte'))
+    );
     if (dateSeg) {
-      priorFilters.push({ segmentName: dateSeg, type: 'date_range', from: compareFrom, to: compareTo });
+      // Add 1 day past compareTo so lt includes the full end day (same as _dateRangeFilters client-side)
+      const compareToNext = new Date(new Date(compareTo + 'T00:00:00').getTime() + 86400000).toISOString().slice(0,10);
+      priorFilters.push({ segmentName: dateSeg, operator: 'gte', value: compareFrom });
+      priorFilters.push({ segmentName: dateSeg, operator: 'lt',  value: compareToNext });
     }
 
     const currentBody = { ...kpiBody, groupBySegments: [] };
@@ -1402,9 +1411,9 @@ app.get('/api/bi/fiscal/compare-range', async (req, res) => {
       `SELECT ($1::date - $2::date)::int AS span`, [to, from]
     );
     const span = dayCount.rows[0]?.span || 0;
-    // Prior period ends the day before `from`, spans `span` days
-    const priorTo   = new Date(new Date(from).getTime() - 86400000).toISOString().slice(0,10);
-    const priorFrom = new Date(new Date(from).getTime() - 86400000 - span * 86400000).toISOString().slice(0,10);
+    // Prior period ends day before `from`, same length as current period (span+1 days)
+    const priorTo   = new Date(new Date(from + 'T00:00:00').getTime() - 86400000).toISOString().slice(0,10);
+    const priorFrom = new Date(new Date(from + 'T00:00:00').getTime() - 86400000 * (span + 1)).toISOString().slice(0,10);
 
     res.json({
       success: true,
