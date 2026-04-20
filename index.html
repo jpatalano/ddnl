@@ -8500,74 +8500,109 @@ function myDashRenderView(screen) {
 
 /* ── Custom Dashboard Filter Bar ─────────────────────────────────── */
 
-// DATE MATH — compute { dateFrom, dateTo } for a preset ID
+// DATE MATH — compute { dateFrom, dateTo } for a preset ID.
+// When a fiscal calendar is active, week/month/quarter/year boundaries use fiscal dates.
+// _fiscalPresets is loaded from /api/bi/fiscal/presets on init (server resolves fiscal_days).
 function _myDashPresetRange(presetId) {
   const today = new Date();
-  const ymd = d => d.toISOString().slice(0, 10);
-  const startOfWeek = d => { const c = new Date(d); c.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return c; }; // Mon
+  const ymd   = d => d.toISOString().slice(0, 10);
+  const dow   = d => (d.getDay() + 6) % 7; // 0=Mon ... 6=Sun
 
-  // ── Fiscal presets — use server-resolved ranges when available ──────────────
-  if (presetId.startsWith('fiscal_') && _fiscalCalendar) {
-    // _fiscalPresets is populated on init from /api/bi/fiscal/presets (server does the fiscal_days math)
-    if (_fiscalPresets) {
-      const key = presetId === 'fiscal_week_last' ? 'fiscal_week_last'
-                : presetId === 'fiscal_month_last' ? 'fiscal_month_last'
-                : presetId; // fiscal_week | fiscal_month | fiscal_year
-      const r = _fiscalPresets[key];
-      if (r?.from && r?.to) return { dateFrom: r.from, dateTo: r.to };
-    }
+  // ── Helper: fiscal fallback via calendar math ─────────────────────────────
+  const _fiscalYearBounds = () => {
+    const cal = _fiscalCalendar;
+    const sm  = (cal.fiscal_year_start_month || 1) - 1; // 0-indexed month
+    const sd  = cal.fiscal_year_start_day   || 1;
+    let start = new Date(today.getFullYear(), sm, sd);
+    if (start > today) start = new Date(today.getFullYear() - 1, sm, sd);
+    const end = new Date(start.getFullYear() + 1, sm, sd - 1);
+    return { start, end };
+  };
 
-    // Fallback if presets not yet loaded: calendar-math approximation
-    const cal          = _fiscalCalendar;
-    const fyStartMonth = (cal.fiscal_year_start_month || 1) - 1; // 0-indexed
-    const fyStartDay   = (cal.fiscal_year_start_day   || 1);
-    if (presetId === 'fiscal_week')      { const mon = startOfWeek(today); const sun = new Date(mon); sun.setDate(mon.getDate()+6); return { dateFrom: ymd(mon), dateTo: ymd(sun) }; }
-    if (presetId === 'fiscal_week_last') { const m = startOfWeek(today); const lm = new Date(m); lm.setDate(m.getDate()-7); const ls = new Date(lm); ls.setDate(lm.getDate()+6); return { dateFrom: ymd(lm), dateTo: ymd(ls) }; }
-    if (presetId === 'fiscal_month')     { const fm = new Date(today.getFullYear(), today.getMonth(), 1); const lm = new Date(today.getFullYear(), today.getMonth()+1, 0); return { dateFrom: ymd(fm), dateTo: ymd(lm) }; }
-    if (presetId === 'fiscal_month_last'){ const fm = new Date(today.getFullYear(), today.getMonth()-1, 1); const lm = new Date(today.getFullYear(), today.getMonth(), 0); return { dateFrom: ymd(fm), dateTo: ymd(lm) }; }
-    if (presetId === 'fiscal_year') {
-      let fyStart = new Date(today.getFullYear(), fyStartMonth, fyStartDay);
-      if (fyStart > today) fyStart = new Date(today.getFullYear()-1, fyStartMonth, fyStartDay);
-      const fyEnd = new Date(fyStart.getFullYear()+1, fyStartMonth, fyStartDay-1);
-      return { dateFrom: ymd(fyStart), dateTo: ymd(fyEnd) };
-    }
+  // ── Resolve via server-side fiscal presets when available ─────────────────
+  // Map unified preset IDs → fiscal_presets keys
+  const FISCAL_MAP = {
+    this_week:    'fiscal_week',
+    last_week:    'fiscal_week_last',
+    this_month:   'fiscal_month',
+    last_month:   'fiscal_month_last',
+    this_quarter: 'fiscal_quarter',
+    last_quarter: 'fiscal_quarter_last',
+    this_year:    'fiscal_year',
+    last_year:    'fiscal_year_last',
+  };
+
+  if (_fiscalCalendar && _fiscalPresets && FISCAL_MAP[presetId]) {
+    const r = _fiscalPresets[FISCAL_MAP[presetId]];
+    if (r?.from && r?.to) return { dateFrom: r.from, dateTo: r.to };
   }
 
+  // ── Calendar math (used when no fiscal calendar, or presets not yet loaded) ──
   switch (presetId) {
     case 'today':
       return { dateFrom: ymd(today), dateTo: ymd(today) };
+
     case 'yesterday': {
       const y = new Date(today); y.setDate(today.getDate() - 1);
       return { dateFrom: ymd(y), dateTo: ymd(y) };
     }
+
     case 'this_week': {
-      const mon = startOfWeek(today);
-      const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+      const mon = new Date(today); mon.setDate(today.getDate() - dow(today));
+      const sun = new Date(mon);   sun.setDate(mon.getDate() + 6);
       return { dateFrom: ymd(mon), dateTo: ymd(sun) };
     }
+
     case 'last_week': {
-      const thisMonday = startOfWeek(today);
-      const lastMon = new Date(thisMonday); lastMon.setDate(thisMonday.getDate() - 7);
-      const lastSun = new Date(lastMon); lastSun.setDate(lastMon.getDate() + 6);
-      return { dateFrom: ymd(lastMon), dateTo: ymd(lastSun) };
+      const mon = new Date(today); mon.setDate(today.getDate() - dow(today) - 7);
+      const sun = new Date(mon);   sun.setDate(mon.getDate() + 6);
+      return { dateFrom: ymd(mon), dateTo: ymd(sun) };
     }
+
     case 'this_month': {
-      const fm = new Date(today.getFullYear(), today.getMonth(), 1);
-      const lm = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-      return { dateFrom: ymd(fm), dateTo: ymd(lm) };
+      const s = new Date(today.getFullYear(), today.getMonth(), 1);
+      const e = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+      return { dateFrom: ymd(s), dateTo: ymd(e) };
     }
+
     case 'last_month': {
-      const fm = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-      const lm = new Date(today.getFullYear(), today.getMonth(), 0);
-      return { dateFrom: ymd(fm), dateTo: ymd(lm) };
+      const s = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+      const e = new Date(today.getFullYear(), today.getMonth(), 0);
+      return { dateFrom: ymd(s), dateTo: ymd(e) };
     }
+
+    case 'this_quarter': {
+      const q   = Math.floor(today.getMonth() / 3);
+      const s   = new Date(today.getFullYear(), q * 3, 1);
+      const e   = new Date(today.getFullYear(), q * 3 + 3, 0);
+      return { dateFrom: ymd(s), dateTo: ymd(e) };
+    }
+
+    case 'last_quarter': {
+      const q   = Math.floor(today.getMonth() / 3);
+      const pq  = q === 0 ? 3 : q - 1;
+      const yr  = q === 0 ? today.getFullYear() - 1 : today.getFullYear();
+      const s   = new Date(yr, pq * 3, 1);
+      const e   = new Date(yr, pq * 3 + 3, 0);
+      return { dateFrom: ymd(s), dateTo: ymd(e) };
+    }
+
     case 'this_year': {
-      const fy = new Date(today.getFullYear(), 0, 1);
-      const ly = new Date(today.getFullYear(), 11, 31);
-      return { dateFrom: ymd(fy), dateTo: ymd(ly) };
+      const s = new Date(today.getFullYear(), 0, 1);
+      const e = new Date(today.getFullYear(), 11, 31);
+      return { dateFrom: ymd(s), dateTo: ymd(e) };
     }
+
+    case 'last_year': {
+      const s = new Date(today.getFullYear() - 1, 0, 1);
+      const e = new Date(today.getFullYear() - 1, 11, 31);
+      return { dateFrom: ymd(s), dateTo: ymd(e) };
+    }
+
     case 'custom':
-      return { dateFrom: _myDashFilterState.dateRange.dateFrom, dateTo: _myDashFilterState.dateRange.dateTo };
+      return { dateFrom: _myDashFilterState.dateRange.dateFrom || '',
+               dateTo:   _myDashFilterState.dateRange.dateTo   || '' };
+
     default:
       return { dateFrom: '', dateTo: '' };
   }
@@ -8623,31 +8658,24 @@ function _myDashScanTiles() {
 }
 
 // Base presets — fiscal variants injected at render time if _fiscalCalendar is active
-const MYD_DATE_PRESETS_BASE = [
-  { id: 'today',           label: 'Today' },
-  { id: 'yesterday',       label: 'Yesterday' },
-  { id: 'this_week',       label: 'This Week' },
-  { id: 'last_week',       label: 'Last Week' },
-  { id: 'this_month',      label: 'This Month' },
-  { id: 'last_month',      label: 'Last Month' },
-  { id: 'this_year',       label: 'This Year' },
-  { id: 'custom',          label: 'Custom' }
+// Single unified preset list — fiscal boundaries implied when _fiscalCalendar is active.
+// IDs map to fiscal ranges via FISCAL_MAP in _myDashPresetRange().
+const MYD_DATE_PRESETS = [
+  { id: 'today',         label: 'Today'        },
+  { id: 'yesterday',     label: 'Yesterday'    },
+  { id: 'this_week',     label: 'This Week'    },
+  { id: 'last_week',     label: 'Last Week'    },
+  { id: 'this_month',    label: 'This Month'   },
+  { id: 'last_month',    label: 'Last Month'   },
+  { id: 'this_quarter',  label: 'This Quarter' },
+  { id: 'last_quarter',  label: 'Last Quarter' },
+  { id: 'this_year',     label: 'This Year'    },
+  { id: 'last_year',     label: 'Last Year'    },
+  { id: 'custom',        label: 'Custom'       },
 ];
-const MYD_DATE_PRESETS_FISCAL = [
-  { id: 'today',           label: 'Today' },
-  { id: 'yesterday',       label: 'Yesterday' },
-  { id: 'fiscal_week',     label: 'This Fiscal Week' },
-  { id: 'fiscal_week_last',label: 'Last Fiscal Week' },
-  { id: 'fiscal_month',    label: 'This Fiscal Period' },
-  { id: 'fiscal_month_last', label: 'Last Fiscal Period' },
-  { id: 'fiscal_year',     label: 'This Fiscal Year' },
-  { id: 'custom',          label: 'Custom' }
-];
-function _myDashPresets() {
-  return _fiscalCalendar ? MYD_DATE_PRESETS_FISCAL : MYD_DATE_PRESETS_BASE;
-}
-// Keep a single export for compatibility
-const MYD_DATE_PRESETS = MYD_DATE_PRESETS_BASE; // legacy ref — use _myDashPresets() at render time
+function _myDashPresets() { return MYD_DATE_PRESETS; }
+const MYD_DATE_PRESETS_BASE   = MYD_DATE_PRESETS; // compat alias
+const MYD_DATE_PRESETS_FISCAL = MYD_DATE_PRESETS; // compat alias
 
 async function myDashRenderFilterBar() {
   const bar = document.getElementById('myd-filter-bar');

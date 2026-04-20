@@ -1331,15 +1331,44 @@ app.get('/api/bi/fiscal/presets', async (req, res) => {
       [calId, today.fiscal_year]
     )).rows;
 
+    // Fiscal quarter (current)
+    const [fqRow] = (await pool.query(
+      `SELECT MIN(calendar_date)::text AS from_, MAX(calendar_date)::text AS to_
+       FROM fiscal_days
+       WHERE calendar_id=$1 AND fiscal_quarter=$2 AND fiscal_year=$3`,
+      [calId, today.fiscal_quarter, today.fiscal_year]
+    )).rows;
+
+    // Last fiscal quarter
+    const prevQ  = today.fiscal_quarter === 1 ? 4 : today.fiscal_quarter - 1;
+    const prevQY = today.fiscal_quarter === 1 ? today.fiscal_year - 1 : today.fiscal_year;
+    const [fqLastRow] = (await pool.query(
+      `SELECT MIN(calendar_date)::text AS from_, MAX(calendar_date)::text AS to_
+       FROM fiscal_days
+       WHERE calendar_id=$1 AND fiscal_quarter=$2 AND fiscal_year=$3`,
+      [calId, prevQ, prevQY]
+    )).rows;
+
+    // Last fiscal year
+    const [fyLastRow] = (await pool.query(
+      `SELECT MIN(calendar_date)::text AS from_, MAX(calendar_date)::text AS to_
+       FROM fiscal_days
+       WHERE calendar_id=$1 AND fiscal_year=$2`,
+      [calId, today.fiscal_year - 1]
+    )).rows;
+
     res.json({
       success: true,
       data: {
         refDate,
-        fiscal_week:       fwRow?.from_     ? { from: fwRow.from_,     to: fwRow.to_     } : null,
-        fiscal_week_last:  fwLastRow?.from_  ? { from: fwLastRow.from_,  to: fwLastRow.to_  } : null,
-        fiscal_month:      fmRow?.from_     ? { from: fmRow.from_,     to: fmRow.to_     } : null,
-        fiscal_month_last: fmLastRow?.from_  ? { from: fmLastRow.from_,  to: fmLastRow.to_  } : null,
-        fiscal_year:       fyRow?.from_     ? { from: fyRow.from_,     to: fyRow.to_     } : null,
+        fiscal_week:         fwRow?.from_     ? { from: fwRow.from_,     to: fwRow.to_     } : null,
+        fiscal_week_last:    fwLastRow?.from_  ? { from: fwLastRow.from_,  to: fwLastRow.to_  } : null,
+        fiscal_month:        fmRow?.from_     ? { from: fmRow.from_,     to: fmRow.to_     } : null,
+        fiscal_month_last:   fmLastRow?.from_  ? { from: fmLastRow.from_,  to: fmLastRow.to_  } : null,
+        fiscal_quarter:      fqRow?.from_     ? { from: fqRow.from_,     to: fqRow.to_     } : null,
+        fiscal_quarter_last: fqLastRow?.from_  ? { from: fqLastRow.from_,  to: fqLastRow.to_  } : null,
+        fiscal_year:         fyRow?.from_     ? { from: fyRow.from_,     to: fyRow.to_     } : null,
+        fiscal_year_last:    fyLastRow?.from_  ? { from: fyLastRow.from_,  to: fyLastRow.to_  } : null,
       }
     });
   } catch(e) { res.status(500).json({ error: e.message }); }
