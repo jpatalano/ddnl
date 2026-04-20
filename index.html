@@ -3815,7 +3815,7 @@ function _kpiDeltaHtml(curVal, priorVal, metaM, goodDir) {
 
 // Fetch compare-period KPI values. Returns map { metricName -> priorValue } or null.
 // Requires _fiscalCalendar to be loaded and dateFrom/dateTo to be set.
-async function _kpiCompareFetch(body, dateFrom, dateTo) {
+async function _kpiCompareFetch(body, dateFrom, dateTo, hintDateSeg) {
   if (!_fiscalCalendar || !dateFrom || !dateTo) return null;
   try {
     // Get prior period dates from fiscal calendar endpoint
@@ -3824,8 +3824,11 @@ async function _kpiCompareFetch(body, dateFrom, dateTo) {
     const pp = cj.data?.priorPeriod;
     if (!pp?.from || !pp?.to) return null;
 
-    // Find the date segment from existing filters
-    const dateSeg = (body.filters || []).find(f => f.type === 'date_range')?.segmentName || null;
+    // Resolve date segment: prefer explicit hint, then look for gte/lt operators in filters
+    // (filters use operator:'gte'/'lt', not type:'date_range', so we can't use .find(f=>f.type==='date_range'))
+    const dateSeg = hintDateSeg
+      || (body.filters || []).find(f => f.operator === 'gte' || f.operator === 'gt')?.segmentName
+      || null;
 
     const compareBody = {
       ...body,
@@ -9085,7 +9088,7 @@ async function myDashFetchTile(tile, pi, ti) {
 
       renderDashKpis(null); // immediate render
       // Async compare fetch — re-render tiles with delta pills once data arrives
-      _kpiCompareFetch(body, dateFrom, dateTo).then(priorMap => {
+      _kpiCompareFetch(body, dateFrom, dateTo, tile.dateSegment || tile.dateField || null).then(priorMap => {
         if (priorMap) renderDashKpis(priorMap);
       });
     } catch(e) {
