@@ -8187,6 +8187,62 @@ function _myDashPresetRange(presetId) {
   const today = new Date();
   const ymd = d => d.toISOString().slice(0, 10);
   const startOfWeek = d => { const c = new Date(d); c.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return c; }; // Mon
+
+  // ── Fiscal presets — use fiscal_days if available, else fall back to calendar equivalents ──
+  if (presetId.startsWith('fiscal_') && _fiscalCalendar) {
+    const cal  = _fiscalCalendar;
+    const days = cal.fiscal_days || [];
+    const todayStr = ymd(today);
+
+    if (days.length) {
+      // Use fiscal_days lookup for true fiscal week/period/year boundaries
+      const todayEntry = days.find(d => d.calendar_date === todayStr);
+      if (todayEntry) {
+        if (presetId === 'fiscal_week') {
+          const wk = todayEntry.fiscal_week;
+          const wkDays = days.filter(d => d.fiscal_week === wk && d.fiscal_year === todayEntry.fiscal_year);
+          return { dateFrom: wkDays[0].calendar_date, dateTo: wkDays[wkDays.length-1].calendar_date };
+        }
+        if (presetId === 'fiscal_week_last') {
+          const prevWk = todayEntry.fiscal_week - 1;
+          const prevYr = todayEntry.fiscal_year;
+          const wkDays = days.filter(d => d.fiscal_week === prevWk && d.fiscal_year === prevYr);
+          if (wkDays.length) return { dateFrom: wkDays[0].calendar_date, dateTo: wkDays[wkDays.length-1].calendar_date };
+        }
+        if (presetId === 'fiscal_month') {
+          const mo = todayEntry.fiscal_month;
+          const moDays = days.filter(d => d.fiscal_month === mo && d.fiscal_year === todayEntry.fiscal_year);
+          return { dateFrom: moDays[0].calendar_date, dateTo: moDays[moDays.length-1].calendar_date };
+        }
+        if (presetId === 'fiscal_month_last') {
+          const prevMo = todayEntry.fiscal_month - 1;
+          const prevYr = todayEntry.fiscal_year;
+          const moDays = days.filter(d => d.fiscal_month === prevMo && d.fiscal_year === prevYr);
+          if (moDays.length) return { dateFrom: moDays[0].calendar_date, dateTo: moDays[moDays.length-1].calendar_date };
+        }
+        if (presetId === 'fiscal_year') {
+          const yrDays = days.filter(d => d.fiscal_year === todayEntry.fiscal_year);
+          return { dateFrom: yrDays[0].calendar_date, dateTo: yrDays[yrDays.length-1].calendar_date };
+        }
+      }
+    }
+
+    // Fallback: no fiscal_days — map to calendar equivalents using fiscal year start
+    const fyStartMonth = (cal.fiscal_year_start_month || 1) - 1; // 0-indexed
+    const fyStartDay   = (cal.fiscal_year_start_day   || 1);
+    if (presetId === 'fiscal_week')      { const mon = startOfWeek(today); const sun = new Date(mon); sun.setDate(mon.getDate()+6); return { dateFrom: ymd(mon), dateTo: ymd(sun) }; }
+    if (presetId === 'fiscal_week_last') { const m = startOfWeek(today); const lm = new Date(m); lm.setDate(m.getDate()-7); const ls = new Date(lm); ls.setDate(lm.getDate()+6); return { dateFrom: ymd(lm), dateTo: ymd(ls) }; }
+    if (presetId === 'fiscal_month')     { const fm = new Date(today.getFullYear(), today.getMonth(), 1); const lm = new Date(today.getFullYear(), today.getMonth()+1, 0); return { dateFrom: ymd(fm), dateTo: ymd(lm) }; }
+    if (presetId === 'fiscal_month_last'){ const fm = new Date(today.getFullYear(), today.getMonth()-1, 1); const lm = new Date(today.getFullYear(), today.getMonth(), 0); return { dateFrom: ymd(fm), dateTo: ymd(lm) }; }
+    if (presetId === 'fiscal_year') {
+      // Fiscal year start: fyStartMonth/fyStartDay
+      let fyStart = new Date(today.getFullYear(), fyStartMonth, fyStartDay);
+      if (fyStart > today) fyStart = new Date(today.getFullYear()-1, fyStartMonth, fyStartDay);
+      const fyEnd = new Date(fyStart.getFullYear()+1, fyStartMonth, fyStartDay-1);
+      return { dateFrom: ymd(fyStart), dateTo: ymd(fyEnd) };
+    }
+  }
+
   switch (presetId) {
     case 'today':
       return { dateFrom: ymd(today), dateTo: ymd(today) };
@@ -8227,6 +8283,25 @@ function _myDashPresetRange(presetId) {
   }
 }
 
+// Format a date range for display: "Apr 20 – Apr 26" or "Apr 20" for single day
+function _myDashFormatDateRange(dateFrom, dateTo) {
+  if (!dateFrom) return '';
+  const fmt = d => {
+    const dt = new Date(d + 'T00:00:00');
+    return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
+  if (!dateTo || dateTo === dateFrom) return fmt(dateFrom);
+  // If same year, omit year; if cross-year add year to dateTo
+  const fromYr = dateFrom.slice(0,4), toYr = dateTo.slice(0,4);
+  if (fromYr !== toYr) {
+    const dtFrom = new Date(dateFrom + 'T00:00:00');
+    const dtTo   = new Date(dateTo   + 'T00:00:00');
+    return dtFrom.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) + ' – ' +
+           dtTo.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  }
+  return fmt(dateFrom) + ' – ' + fmt(dateTo);
+}
+
 // Returns the resolved { dateFrom, dateTo } from current filter state
 function _myDashActiveDateRange() {
   const { presetId, dateFrom, dateTo } = _myDashFilterState.dateRange;
@@ -8257,16 +8332,32 @@ function _myDashScanTiles() {
   return { dateFields, sliceDims };
 }
 
-const MYD_DATE_PRESETS = [
-  { id: 'today',      label: 'Today' },
-  { id: 'yesterday',  label: 'Yesterday' },
-  { id: 'this_week',  label: 'This Week' },
-  { id: 'last_week',  label: 'Last Week' },
-  { id: 'this_month', label: 'This Month' },
-  { id: 'last_month', label: 'Last Month' },
-  { id: 'this_year',  label: 'This Year' },
-  { id: 'custom',     label: 'Custom' }
+// Base presets — fiscal variants injected at render time if _fiscalCalendar is active
+const MYD_DATE_PRESETS_BASE = [
+  { id: 'today',           label: 'Today' },
+  { id: 'yesterday',       label: 'Yesterday' },
+  { id: 'this_week',       label: 'This Week' },
+  { id: 'last_week',       label: 'Last Week' },
+  { id: 'this_month',      label: 'This Month' },
+  { id: 'last_month',      label: 'Last Month' },
+  { id: 'this_year',       label: 'This Year' },
+  { id: 'custom',          label: 'Custom' }
 ];
+const MYD_DATE_PRESETS_FISCAL = [
+  { id: 'today',           label: 'Today' },
+  { id: 'yesterday',       label: 'Yesterday' },
+  { id: 'fiscal_week',     label: 'This Fiscal Week' },
+  { id: 'fiscal_week_last',label: 'Last Fiscal Week' },
+  { id: 'fiscal_month',    label: 'This Fiscal Period' },
+  { id: 'fiscal_month_last', label: 'Last Fiscal Period' },
+  { id: 'fiscal_year',     label: 'This Fiscal Year' },
+  { id: 'custom',          label: 'Custom' }
+];
+function _myDashPresets() {
+  return _fiscalCalendar ? MYD_DATE_PRESETS_FISCAL : MYD_DATE_PRESETS_BASE;
+}
+// Keep a single export for compatibility
+const MYD_DATE_PRESETS = MYD_DATE_PRESETS_BASE; // legacy ref — use _myDashPresets() at render time
 
 async function myDashRenderFilterBar() {
   const bar = document.getElementById('myd-filter-bar');
@@ -8283,9 +8374,14 @@ async function myDashRenderFilterBar() {
 
   const { presetId } = _myDashFilterState.dateRange;
   const isCustom = presetId === 'custom';
+  const activePresets = _myDashPresets();
+
+  // Resolved date range label shown next to active pill
+  const { dateFrom: resolvedFrom, dateTo: resolvedTo } = _myDashActiveDateRange();
+  const dateRangeLabel = resolvedFrom ? _myDashFormatDateRange(resolvedFrom, resolvedTo) : '';
 
   // ── Date presets HTML ────────────────────────────────────────────────────
-  const pillsHtml = MYD_DATE_PRESETS.map(p =>
+  const pillsHtml = activePresets.map(p =>
     `<button class="df-pill${presetId === p.id ? ' active' : ''}" onclick="myDashSelectPreset('${p.id}')">${p.label}</button>`
   ).join('');
 
@@ -8293,6 +8389,7 @@ async function myDashRenderFilterBar() {
     <div class="df-group">
       <span class="df-label">Period</span>
       <div class="df-pills">${pillsHtml}</div>
+      ${dateRangeLabel && !isCustom ? `<span class="df-date-label" style="font-size:11px;color:var(--text-muted);margin-left:6px;align-self:center;white-space:nowrap">${dateRangeLabel}</span>` : ''}
     </div>
     <div class="df-custom-row${isCustom ? ' open' : ''}" id="myd-custom-row">
       <span class="df-label">From</span>
@@ -8455,18 +8552,24 @@ function myDashSelectPreset(presetId) {
     const range = _myDashPresetRange(presetId);
     _myDashFilterState.dateRange.dateFrom = range.dateFrom;
     _myDashFilterState.dateRange.dateTo   = range.dateTo;
-    // Highlight active pill
+    // Highlight active pill + update date range label
+    const _presets = _myDashPresets();
     document.querySelectorAll('.df-pill').forEach(btn => {
-      const preset = MYD_DATE_PRESETS.find(p => p.label === btn.textContent.trim());
+      const preset = _presets.find(p => p.label === btn.textContent.trim());
       if (preset) btn.classList.toggle('active', preset.id === presetId);
     });
+    // Update date range label inline (avoids full re-render)
+    const { dateFrom: rf, dateTo: rt } = _myDashActiveDateRange();
+    const lbl = document.querySelector('.df-group .df-date-label');
+    if (lbl) lbl.textContent = rf ? _myDashFormatDateRange(rf, rt) : '';
     // Hide custom row
     document.getElementById('myd-custom-row')?.classList.remove('open');
     myDashRefreshTiles();
   } else {
     // Show custom inputs — re-render to open the row
+    const _presets = _myDashPresets();
     document.querySelectorAll('.df-pill').forEach(btn => {
-      const preset = MYD_DATE_PRESETS.find(p => p.label === btn.textContent.trim());
+      const preset = _presets.find(p => p.label === btn.textContent.trim());
       if (preset) btn.classList.toggle('active', preset.id === presetId);
     });
     document.getElementById('myd-custom-row')?.classList.add('open');
