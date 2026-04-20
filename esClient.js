@@ -54,8 +54,9 @@ function buildMappings(fields) {
     }
   }
   // Always include internal meta
-  properties['__instance_id']  = { type: 'keyword' };
-  properties['__ingested_at']  = { type: 'date' };
+  properties['__instance_id']    = { type: 'keyword' };
+  properties['__ingested_at']    = { type: 'date' };
+  properties['__ingest_version'] = { type: 'integer' };
   return { properties };
 }
 
@@ -124,6 +125,11 @@ async function deleteIndex(instanceId, datasetName, version) {
 
 // ── Document ingest ────────────────────────────────────────────────────────────
 
+// Default chunk size for bulk operations. Large payloads are split so no single
+// ES bulk request exceeds ~10MB in practice. At ~500 bytes/doc average this is
+// well within the default http.max_content_length of 100MB.
+const BULK_CHUNK_SIZE = 500;
+
 /**
  * Bulk index documents into the current alias.
  * docs: array of plain objects — we add __instance_id + __ingested_at.
@@ -152,6 +158,100 @@ async function bulkIndex(instanceId, datasetName, docs, idField = null) {
     indexed: docs.length - failed.length,
     failed:  failed.length,
     errors:  failed.slice(0, 10).map(i => i.index.error)
+  };
+}
+
+/**
+ * Production-grade bulk upsert — designed for high-volume ingest where the same
+ * record may arrive multiple times (nightly CSV re-sends, webhook retries, etc.).
+ *
+ * Differences from bulkIndex:
+ *  - idField is REQUIRED — upsert without an id field is meaningless for dedup.
+ *  - Uses ES 'update' action with doc_as_upsert:true so __ingest_version is
+ *    incremented atomically via a Painless script on every write.
+ *  - Splits large payloads into chunks (BULK_CHUNK_SIZE docs each) so a single
+ *    250K-row nightly CSV doesn't blow the ES request size limit.
+ *  - Returns a richer result with per-chunk timing for structured logging.
+ *
+ * Returns: { indexed, failed, errors[], chunks, durationMs }
+ */
+async function bulkUpsert(instanceId, datasetName, docs, idField) {
+  if (!idField) throw new Error('bulkUpsert requires idField — use bulkIndex for append-only ingest');
+
+  const es    = getClient();
+  const alias = aliasName(instanceId, datasetName);
+  const now   = new Date().toISOString();
+  const t0    = Date.now();
+
+  let totalIndexed = 0;
+  let totalFailed  = 0;
+  const allErrors  = [];
+  let chunkCount   = 0;
+
+  // Process in chunks to bound request size
+  for (let i = 0; i < docs.length; i += BULK_CHUNK_SIZE) {
+    const chunk = docs.slice(i, i + BULK_CHUNK_SIZE);
+    chunkCount++;
+
+    const body = chunk.flatMap(doc => {
+      const docId = doc[idField];
+      if (docId == null) {
+        // Fallback: append-only for docs missing the id field
+        const enriched = {
+          ...doc,
+          __instance_id:    instanceId,
+          __ingested_at:    now,
+          __ingest_version: 1
+        };
+        return [{ index: { _index: alias } }, enriched];
+      }
+
+      // Scripted update: set all fields, increment __ingest_version
+      // If doc doesn't exist yet (upsert), create with version=1
+      const fields = {
+        ...doc,
+        __instance_id: instanceId,
+        __ingested_at: now
+      };
+
+      return [
+        { update: { _index: alias, _id: String(docId) } },
+        {
+          script: {
+            source: [
+              'ctx._source.putAll(params.fields);',
+              'ctx._source.__ingest_version = (ctx._source.__ingest_version != null',
+              '  ? (int)ctx._source.__ingest_version + 1 : 1);'
+            ].join(' '),
+            lang:   'painless',
+            params: { fields }
+          },
+          upsert: { ...fields, __ingest_version: 1 }
+        }
+      ];
+    });
+
+    const result = await es.bulk({ refresh: false, body });  // refresh:false for throughput
+
+    const failed = (result.items || []).filter(i => (i.update || i.index)?.error);
+    totalIndexed += chunk.length - failed.length;
+    totalFailed  += failed.length;
+    if (failed.length) {
+      allErrors.push(...failed.slice(0, 5).map(i => (i.update || i.index).error));
+    }
+  }
+
+  // One final refresh so queries see the new data immediately
+  if (totalIndexed > 0) {
+    try { await es.indices.refresh({ index: alias }); } catch (_) { /* non-fatal */ }
+  }
+
+  return {
+    indexed:    totalIndexed,
+    failed:     totalFailed,
+    errors:     allErrors.slice(0, 20),
+    chunks:     chunkCount,
+    durationMs: Date.now() - t0
   };
 }
 
@@ -425,7 +525,8 @@ module.exports = {
   getClient,
   indexName, aliasName,
   createIndex, indexExists, swapAlias, deleteIndex,
-  bulkIndex, replaceAll,
+  bulkIndex, bulkUpsert, replaceAll,
   query, segmentValues, indexStats, rawQuery,
-  ping
+  ping,
+  BULK_CHUNK_SIZE
 };

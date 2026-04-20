@@ -966,8 +966,6 @@ app.post('/api/bi/query', async (req, res) => {
 app.post('/api/bi/kpis', async (req, res) => {
   const inst = resolveInstance(req);
   const body = req.body;
-  console.log('[kpis] filters:', JSON.stringify(body.filters || []));
-
   if (inst.adapter === 'internal') {
     try {
       // Run as groupBySegments=[] to get aggregate totals

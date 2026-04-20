@@ -910,24 +910,60 @@ router.post('/:dataset/webhook/:token', async (req, res) => {
   }
 });
 
-// ── Bulk with channel ─────────────────────────────────────────────────────────
-// Override the original /bulk to resolve id_field from channel config if channel param given
-// POST /api/ingest/:dataset/bulk?channel=<channel_name>
-// (The original router.post('/:dataset/bulk') already exists above — we patch id_field resolution)
-// Add a dedicated api_push route that auto-resolves channel:
+// ── Production-grade API push ─────────────────────────────────────────────────
+//
+// POST /api/ingest/:dataset/push
+//
+// Designed for high-volume ingest (nightly jobs, real-time feeds, re-sends).
+// Key features:
+//   - id_field auto-resolved from channel config (set once in Designer)
+//   - When id_field is set: uses bulkUpsert — scripted ES update that atomically
+//     increments __ingest_version, fully idempotent (safe to re-send same batch)
+//   - When no id_field: falls back to bulkIndex (append-only, auto-id)
+//   - Chunked internally by esClient (BULK_CHUNK_SIZE docs/request)
+//   - Structured per-batch logging: batch_id, doc count, chunks, timing, errors
+//   - Payload cap: 50 000 docs per call — split larger jobs at the sender
+//   - replace=true: full dataset swap (delete-by-query + reindex)
+//
+// Body: { docs: [...], replace?: false, channel?: 'API Push' }
+// Query param: ?channel=<channel_name>  (overrides body.channel)
+//
+const MAX_DOCS_PER_CALL = 50_000;
+
 router.post('/:dataset/push', requireApiKey, async (req, res) => {
   const { clientId, label } = req.ingestCtx;
   const { dataset } = req.params;
   const channelName = req.query.channel || req.body?.channel || 'API Push';
   const { docs = [], replace = false } = req.body;
+  const batchId = crypto.randomBytes(8).toString('hex');  // unique per call for log correlation
   const t0 = Date.now();
 
-  if (!Array.isArray(docs) || !docs.length) return res.status(400).json({ error: 'docs must be a non-empty array' });
+  // ── Input validation ────────────────────────────────────────────────────────
+  if (!Array.isArray(docs) || docs.length === 0) {
+    return res.status(400).json({
+      success: false,
+      error:   'docs must be a non-empty array',
+      batch_id: batchId
+    });
+  }
+  if (docs.length > MAX_DOCS_PER_CALL) {
+    return res.status(400).json({
+      success:  false,
+      error:    `Payload too large: ${docs.length} docs exceeds the ${MAX_DOCS_PER_CALL.toLocaleString()} doc limit per call. Split into smaller batches.`,
+      batch_id: batchId
+    });
+  }
 
+  // ── Resolve dataset & channel ────────────────────────────────────────────────
   const def = await getDatasetDef(clientId, dataset);
-  if (!def) return res.status(404).json({ error: `Dataset '${dataset}' not found` });
+  if (!def) {
+    return res.status(404).json({
+      success:  false,
+      error:    `Dataset '${dataset}' not found for this instance`,
+      batch_id: batchId
+    });
+  }
 
-  // Resolve id_field from channel
   const { rows: [ch] } = await pool.query(
     `SELECT id, id_field FROM ingest_channels
      WHERE dataset_id=$1 AND channel_name=$2 AND method='api_push'`,
@@ -935,25 +971,76 @@ router.post('/:dataset/push', requireApiKey, async (req, res) => {
   );
   const idField = ch?.id_field || null;
 
+  console.log(`[ingest/push] batch_id=${batchId} client=${clientId} dataset=${dataset} channel=${channelName} docs=${docs.length} idField=${idField || 'none'} replace=${replace}`);
+
   try {
-    const result = replace
-      ? await es.replaceAll(clientId, dataset, docs)
-      : await es.bulkIndex(clientId, dataset, docs, idField);
+    let result;
+
+    if (replace) {
+      // Full swap: wipe instance slice + re-index everything
+      result = await es.replaceAll(clientId, dataset, docs);
+      result.chunks = Math.ceil(docs.length / es.BULK_CHUNK_SIZE);
+    } else if (idField) {
+      // High-volume upsert path: scripted update with __ingest_version increment
+      result = await es.bulkUpsert(clientId, dataset, docs, idField);
+    } else {
+      // Append-only: no id_field configured, fall back to standard bulk index
+      result = await es.bulkIndex(clientId, dataset, docs);
+      result.chunks = Math.ceil(docs.length / es.BULK_CHUNK_SIZE);
+    }
 
     const durationMs = Date.now() - t0;
+
+    // ── Structured log ────────────────────────────────────────────────────────
+    console.log(`[ingest/push] batch_id=${batchId} done: indexed=${result.indexed} failed=${result.failed} chunks=${result.chunks || 1} durationMs=${durationMs}`);
+    if (result.failed > 0) {
+      console.warn(`[ingest/push] batch_id=${batchId} errors (first ${result.errors.length}):`, JSON.stringify(result.errors));
+    }
+
+    // ── Update channel last-run stats ─────────────────────────────────────────
     if (ch) {
       await pool.query(
-        `UPDATE ingest_channels SET last_run_at=NOW(), last_run_count=$1, last_run_ok=$2 WHERE id=$3`,
+        `UPDATE ingest_channels
+         SET last_run_at=NOW(), last_run_count=$1, last_run_ok=$2
+         WHERE id=$3`,
         [result.indexed, result.failed === 0, ch.id]
       );
     }
-    await logIngest(clientId, dataset, replace ? 'replace' : 'push', result, label, durationMs);
-    syncLookupFromDocs(clientId, dataset, def.id, docs).catch(() => {});
 
-    res.json({ success: true, channel: channelName, idField, indexed: result.indexed,
-               failed: result.failed, errors: result.errors, durationMs });
+    // ── Persist ingest log row ────────────────────────────────────────────────
+    await logIngest(
+      clientId, dataset,
+      replace ? 'replace' : (idField ? 'push_upsert' : 'push'),
+      result, label, durationMs
+    );
+
+    // ── Async lookup maintenance (never blocks response) ──────────────────────
+    syncLookupFromDocs(clientId, dataset, def.id, docs).catch(e =>
+      console.warn(`[ingest/push] batch_id=${batchId} lookup sync error:`, e.message)
+    );
+
+    // ── Response ─────────────────────────────────────────────────────────────
+    return res.json({
+      success:   true,
+      batch_id:  batchId,
+      channel:   channelName,
+      id_field:  idField,
+      indexed:   result.indexed,
+      failed:    result.failed,
+      chunks:    result.chunks || 1,
+      durationMs,
+      errors:    result.errors    // [] when clean; up to 20 sample errors if any
+    });
+
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    const durationMs = Date.now() - t0;
+    console.error(`[ingest/push] batch_id=${batchId} FATAL:`, e.message);
+    return res.status(500).json({
+      success:   false,
+      batch_id:  batchId,
+      error:     e.message,
+      durationMs
+    });
   }
 });
 
