@@ -8612,6 +8612,28 @@ function _myDashPresetRange(presetId) {
 }
 
 // Format a date range for display: "Apr 20 – Apr 26" or "Apr 20" for single day
+// Debug caption: shows resolved ISO dates + fiscal period/year for troubleshooting
+function _myDashDebugCaption(dateFrom, dateTo, presetId) {
+  if (!dateFrom) return '';
+  let s = `${dateFrom} → ${dateTo}`;
+  if (_fiscalPresets) {
+    const FISCAL_MAP = {
+      this_week: 'fiscal_week', last_week: 'fiscal_week_last',
+      this_month: 'fiscal_month', last_month: 'fiscal_month_last',
+      this_quarter: 'fiscal_quarter', last_quarter: 'fiscal_quarter_last',
+      this_year: 'fiscal_year', last_year: 'fiscal_year_last',
+    };
+    const key = FISCAL_MAP[presetId];
+    const fp  = key ? _fiscalPresets[key] : null;
+    const fy  = _fiscalPresets.fiscal_year;
+    const fyL = _fiscalPresets.fiscal_year_last;
+    const periodLabel = fp ? ` · fiscal ${fp.from} → ${fp.to}` : '';
+    const fyLabel = fy ? ` · FY ${fy.from.slice(0,4)}` : '';
+    s += periodLabel || fyLabel;
+  }
+  return s;
+}
+
 function _myDashFormatDateRange(dateFrom, dateTo) {
   if (!dateFrom) return '';
   const fmt = d => {
@@ -8699,7 +8721,7 @@ async function myDashRenderFilterBar() {
 
   // Resolved date range label shown next to active pill
   const { dateFrom: resolvedFrom, dateTo: resolvedTo } = _myDashActiveDateRange();
-  const dateRangeLabel = resolvedFrom ? _myDashFormatDateRange(resolvedFrom, resolvedTo) : '';
+  const dateRangeLabel = resolvedFrom ? _myDashDebugCaption(resolvedFrom, resolvedTo, presetId) : '';
 
   // ── Date presets HTML ────────────────────────────────────────────────────
   const pillsHtml = activePresets.map(p =>
@@ -8882,7 +8904,7 @@ function myDashSelectPreset(presetId) {
     // Update date range label inline (avoids full re-render)
     const { dateFrom: rf, dateTo: rt } = _myDashActiveDateRange();
     const lbl = document.querySelector('.df-group .df-date-label');
-    if (lbl) lbl.textContent = rf ? _myDashFormatDateRange(rf, rt) : '';
+    if (lbl) lbl.textContent = rf ? _myDashDebugCaption(rf, rt, presetId) : '';
     // Hide custom row
     document.getElementById('myd-custom-row')?.classList.remove('open');
     myDashRefreshTiles();
