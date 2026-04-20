@@ -3258,14 +3258,21 @@ window._ipSelect = function(idx) {
 
 async function init() {
   await loadDatasets();
-  // Load fiscal calendar (non-blocking — used for compare-to feature)
+  // Load fiscal calendar + presets (non-blocking — used for compare deltas)
+  // When both finish loading, re-render active dashboard tiles so compare pills appear.
   apiFetch(`${BASE}/bi/admin/fiscal`).then(r => r.json()).then(j => {
     const cal = (j.calendars || []).find(c => c.is_active && c.day_count > 0);
     _fiscalCalendar = cal || null;
     if (_fiscalCalendar) {
-      // Load server-resolved preset ranges (avoids shipping fiscal_days to browser)
       apiFetch(`${BASE}/bi/fiscal/presets`).then(r => r.json()).then(p => {
-        if (p.success && p.data) _fiscalPresets = p.data;
+        if (p.success && p.data) {
+          _fiscalPresets = p.data;
+          // Re-render tiles now that fiscal data is ready — picks up compare deltas
+          // and corrects fiscal-boundary date ranges if they differed from calendar math.
+          if (typeof myDashRefreshTiles === 'function' && _myDashActive && _myDashMode === 'view') {
+            myDashRefreshTiles();
+          }
+        }
       }).catch(() => {});
     }
   }).catch(() => {});
@@ -3816,7 +3823,8 @@ function _kpiDeltaHtml(curVal, priorVal, metaM, goodDir) {
 // Fetch compare-period KPI values. Returns map { metricName -> priorValue } or null.
 // Requires _fiscalCalendar to be loaded and dateFrom/dateTo to be set.
 async function _kpiCompareFetch(body, dateFrom, dateTo, hintDateSeg) {
-  if (!_fiscalCalendar || !dateFrom || !dateTo) return null;
+  if (!dateFrom || !dateTo) return null;
+  // No fiscal calendar = no compare (server will return null data, handled below)
   try {
     // Get prior period dates from fiscal calendar endpoint
     const cr = await apiFetch(`${BASE}/bi/fiscal/compare-range?from=${dateFrom}&to=${dateTo}`);
