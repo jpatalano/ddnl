@@ -746,7 +746,7 @@ async function registerLookupDatasets(datasetIdMap) {
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 (async () => {
-  const dates = dateRange('2024-01-01', '2025-12-31');
+  const dates = dateRange('2024-01-01', '2026-12-31');
   const itemCount = TAXONOMY.reduce((s, e) => s + e.items.length, 0);
   console.log(`DDNL Produce Seed`);
   console.log(`Hierarchy: ${[...new Set(TAXONOMY.map(e=>e.department))].length} departments, ` +
