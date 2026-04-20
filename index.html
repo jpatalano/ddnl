@@ -4,6 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Analytics</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/ag-grid-community@31.3.2/dist/ag-grid-community.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
   <script src="https://unpkg.com/lucide@1.8.0/dist/umd/lucide.min.js"></script>
@@ -29,7 +32,148 @@
       --shadow:     0 2px 12px rgba(0,51,102,.10);
       --shadow-lg:  0 8px 32px rgba(0,51,102,.14);
     }
-    html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); font-size: 14px; }
+    /* ─── Dark mode ────────────────────────────────────────────────────────── */
+    [data-theme="dark"] {
+      --navy:       #0f1923;
+      --navy-light: #182535;
+      --navy-dark:  #080e15;
+      --bg:         #0b1520;
+      --surface:    #111d2b;
+      --surface2:   #162234;
+      --border:     #1e3048;
+      --text:       #e2eaf4;
+      --text-muted: #5c7a99;
+      --shadow:     0 2px 12px rgba(0,0,0,.4);
+      --shadow-lg:  0 8px 32px rgba(0,0,0,.55);
+      --blue-pill:  #0d2035;
+    }
+
+    /* ─── Produce / modern light skin ──────────────────────────────────────── */
+    [data-theme="produce"] {
+      --font-body:   'Inter', system-ui, sans-serif;
+      --font-mono:   'DM Mono', monospace;
+      --radius:      4px;
+      --radius-sm:   2px;
+      --radius-lg:   6px;
+      --navy:        #003366;
+      --navy-light:  #0a4080;
+      --navy-dark:   #001f40;
+      --teal:        #00BFA5;
+      --teal-dim:    #009e88;
+      --bg:          #f0f4f8;
+      --surface:     #ffffff;
+      --surface2:    #f7f9fb;
+      --border:      #c8d5e3;
+      --text:        #0f1923;
+      --text-muted:  #526070;
+      --shadow:      0 1px 4px rgba(0,0,0,.08), 0 4px 16px rgba(0,51,102,.06);
+      --shadow-lg:   0 4px 24px rgba(0,0,0,.12);
+    }
+
+    /* ─── Produce dark skin ─────────────────────────────────────────────────── */
+    [data-theme="produce-dark"] {
+      --font-body:   'Inter', system-ui, sans-serif;
+      --font-mono:   'DM Mono', monospace;
+      --radius:      4px;
+      --radius-sm:   2px;
+      --radius-lg:   6px;
+      --navy:        #0a1628;
+      --navy-light:  #112040;
+      --navy-dark:   #060e1a;
+      --teal:        #00BFA5;
+      --teal-dim:    #009e88;
+      --bg:          #080f1c;
+      --surface:     #0d1a2e;
+      --surface2:    #101f33;
+      --border:      #1a3050;
+      --text:        #dce8f5;
+      --text-muted:  #4d6d8a;
+      --shadow:      0 1px 4px rgba(0,0,0,.4), 0 4px 16px rgba(0,0,0,.3);
+      --shadow-lg:   0 4px 24px rgba(0,0,0,.55);
+      --blue-pill:   #0c1e32;
+    }
+
+    /* ─── Font application ──────────────────────────────────────────────────── */
+    [data-theme="produce"], [data-theme="produce-dark"] {
+      font-family: var(--font-body);
+      letter-spacing: -0.01em;
+    }
+    [data-theme="produce"] .kpi-value,
+    [data-theme="produce-dark"] .kpi-value,
+    [data-theme="produce"] .col-right,
+    [data-theme="produce-dark"] .col-right,
+    [data-theme="produce"] .metric,
+    [data-theme="produce-dark"] .metric {
+      font-family: var(--font-mono);
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* ─── Produce: sharper corners everywhere ───────────────────────────────── */
+    [data-theme="produce"] .subnav button,
+    [data-theme="produce-dark"] .subnav button,
+    [data-theme="produce"] .save-btn,
+    [data-theme="produce-dark"] .save-btn,
+    [data-theme="produce"] .run-btn,
+    [data-theme="produce-dark"] .run-btn,
+    [data-theme="produce"] .rb-chip,
+    [data-theme="produce-dark"] .rb-chip,
+    [data-theme="produce"] .df-pill,
+    [data-theme="produce-dark"] .df-pill {
+      border-radius: var(--radius) !important;
+    }
+    [data-theme="produce"] .kpi-tile,
+    [data-theme="produce-dark"] .kpi-tile,
+    [data-theme="produce"] .grid-card,
+    [data-theme="produce-dark"] .grid-card,
+    [data-theme="produce"] .rb-zone,
+    [data-theme="produce-dark"] .rb-zone,
+    [data-theme="produce"] .chart-card,
+    [data-theme="produce-dark"] .chart-card,
+    [data-theme="produce"] .myd-panel,
+    [data-theme="produce-dark"] .myd-panel,
+    [data-theme="produce"] .modal-box,
+    [data-theme="produce-dark"] .modal-box {
+      border-radius: var(--radius-lg) !important;
+    }
+
+    /* ─── Produce dark: topbar / surface tweaks ─────────────────────────────── */
+    [data-theme="produce-dark"] #topbar {
+      background: var(--navy);
+      border-bottom: 1px solid var(--border);
+    }
+    [data-theme="produce-dark"] .subnav button {
+      color: rgba(220,232,245,.6);
+      border-color: rgba(220,232,245,.15);
+    }
+    [data-theme="produce-dark"] .subnav button:hover  { border-color: var(--teal); color: var(--teal); }
+    [data-theme="produce-dark"] .subnav button.active { background: var(--teal); border-color: var(--teal); color: #fff; }
+    [data-theme="produce-dark"] .kpi-tile,
+    [data-theme="produce-dark"] .grid-card,
+    [data-theme="produce-dark"] .chart-card,
+    [data-theme="produce-dark"] .rb-zone,
+    [data-theme="produce-dark"] .myd-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+    }
+    [data-theme="produce-dark"] table th {
+      background: var(--surface2);
+      color: var(--text-muted);
+    }
+    [data-theme="produce-dark"] .tree-group-row {
+      background: var(--surface2);
+    }
+    [data-theme="produce-dark"] .tree-leaf-row:hover {
+      background: rgba(0,191,165,.06);
+    }
+    [data-theme="produce-dark"] input,
+    [data-theme="produce-dark"] select,
+    [data-theme="produce-dark"] textarea {
+      background: var(--surface2);
+      border-color: var(--border);
+      color: var(--text);
+    }
+
+    html, body { height: 100%; font-family: var(--font-body, 'Segoe UI', system-ui, sans-serif); background: var(--bg); color: var(--text); font-size: 14px; }
 
     /* ─────────────────────────────────────────────────────────
        Instance Picker
@@ -2930,6 +3074,16 @@ const ICONS = {
 // — updates nav brand text
 // — sets BASE api url
 // — stores as _activeInstance
+function _toggleTheme() {
+  const root = document.documentElement;
+  const base = root.dataset.themeBase || 'produce';
+  const current = root.getAttribute('data-theme') || base;
+  const isDark = current.endsWith('-dark');
+  const next = isDark ? base : base + '-dark';
+  root.setAttribute('data-theme', next);
+  try { localStorage.setItem('ddnl-theme-' + base, next); } catch(_) {}
+}
+
 function applyInstance(inst) {
   _activeInstance = inst;
 
@@ -2959,9 +3113,36 @@ function applyInstance(inst) {
   const appTitle = inst.theme?.['--inst-app-title'] || inst.name || 'Analytics';
   document.title = appTitle;
 
-  // 5. If instance has defaultThemeMode === 'dark', signal it (future dark-mode support)
-  if (inst.defaultThemeMode === 'dark') {
-    document.documentElement.setAttribute('data-theme', 'dark');
+  // 5. Apply theme mode
+  const themeId = inst.themeId || (inst.defaultThemeMode === 'dark' ? 'dark' : null);
+  if (themeId) {
+    document.documentElement.setAttribute('data-theme', themeId);
+  } else {
+    document.documentElement.removeAttribute('data-theme');
+  }
+  // Persist the base themeId so toggle knows which skin family to use
+  document.documentElement.dataset.themeBase = inst.themeId || '';
+  // Restore user's last toggle preference (light <-> dark) if saved
+  if (inst.themeId) {
+    const saved = localStorage.getItem('ddnl-theme-' + inst.themeId);
+    if (saved) document.documentElement.setAttribute('data-theme', saved);
+  }
+
+  // 5b. Inject theme toggle button if this instance supports it
+  if (inst.themeToggle) {
+    const existing = document.getElementById('theme-toggle-btn');
+    if (!existing) {
+      const btn = document.createElement('button');
+      btn.id = 'theme-toggle-btn';
+      btn.title = 'Toggle light / dark';
+      btn.style.cssText = 'background:transparent;border:1.5px solid rgba(255,255,255,.25);color:rgba(255,255,255,.8);border-radius:6px;padding:4px 8px;cursor:pointer;font-size:12px;display:flex;align-items:center;gap:5px;transition:all .15s';
+      btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>';
+      btn.onclick = _toggleTheme;
+      btn.onmouseover = () => { btn.style.borderColor='var(--teal)'; btn.style.color='var(--teal)'; };
+      btn.onmouseout  = () => { btn.style.borderColor='rgba(255,255,255,.25)'; btn.style.color='rgba(255,255,255,.8)'; };
+      const right = document.querySelector('.topbar-right');
+      if (right) right.prepend(btn);
+    }
   }
 
   // 6. Hide nav tabs not relevant to this instance
