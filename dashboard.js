@@ -1,8 +1,14 @@
 /* ═══════════════════════════════════════════════════════════════════
-   FCC BI — Dashboard module  (Jobs + Quotes, global filters)
+   DDNL Platform — Dashboard module
    ═══════════════════════════════════════════════════════════════════ */
 
-const BASE_URL = 'https://saasanalytic.fleetcostcare.com/api';
+// BASE_URL defers to the instance-resolved BASE from index.html.
+// Falls back to FCC default so dashboard works even if instance bootstrap fails.
+const _DB_FALLBACK = null; // no hardcoded fallback — instance config must supply apiBase
+Object.defineProperty(window, 'BASE_URL', {
+  get() { return (typeof BASE !== 'undefined' ? BASE : null) || _DB_FALLBACK; },
+  configurable: true
+});
 
 let monthChart    = null;
 let statusChart   = null;
@@ -18,6 +24,21 @@ let activeDashTab = 'jobs'; // 'jobs' | 'quotes' | 'equipment' | 'pm'
 const TEAL  = '#00BFA5';
 const NAVY  = '#003366';
 const AMBER = '#f59e0b';
+
+// Convert plain number arrays to {y:label, x:value} objects so Chart.js horizontal
+// bar charts display label strings on the Y axis instead of integer indices.
+function hBarDatasets(labels, metaDefs) {
+  // metaDefs: [{ label, data:number[], color, options:{} }, ...]
+  return metaDefs.map(m => ({
+    label: m.label,
+    data: labels.map((lbl, i) => ({ y: lbl, x: m.data[i] ?? 0 })),
+    backgroundColor: m.color,
+    borderColor: m.borderColor || m.color,
+    borderWidth: m.borderWidth ?? 1,
+    borderRadius: 3,
+    ...m.extra
+  }));
+}
 const RED   = '#ef4444';
 const GREEN = '#16a34a';
 
@@ -26,129 +47,438 @@ const PERF_COLORS = [
   '#14b8a6','#8b5cf6','#f97316','#06b6d4','#84cc16'
 ];
 
-/* ── Global Filter State ──────────────────────────────────────────── */
-let _gf = { dateFrom: '', dateTo: '', yards: [] };
+/* ═══════════════════════════════════════════════════════════════════
+   FILTER CONFIG SYSTEM
+   Designer-driven: configure which datasets/columns each filter
+   affects via the ⚙ Filters drawer. No code changes needed to add
+   new datasets or filter params.
+   ═══════════════════════════════════════════════════════════════════ */
 
-function _gfSave() {
-  localStorage.setItem('fcc_gf', JSON.stringify(_gf));
+const FILTER_CONFIG = {
+  version: 1,
+  params: [
+    {
+      id: 'dateRange',
+      label: 'Period',
+      type: 'preset',
+      enabled: true,
+      presets: [
+        { id: '30d',    label: '30d',    daysBack: 30  },
+        { id: '60d',    label: '60d',    daysBack: 60  },
+        { id: '90d',    label: '90d',    daysBack: 90  },
+        { id: '180d',   label: '180d',   daysBack: 180 },
+        { id: 'custom', label: 'Custom', daysBack: -1  },
+        { id: 'all',    label: 'All',    daysBack: null },
+      ],
+      affectedDatasets: [
+        { datasetName:'jobs_profit_loss',       segmentName:'JobStartDate', enabled:true  },
+        { datasetName:'Jobs_By_Status',          segmentName:'JobStartDate', enabled:true  },
+        { datasetName:'jobs_profit_by_invoice',  segmentName:'JobStartDate', enabled:true  },
+        { datasetName:'Job_Revenue_Forecast',    segmentName:'JobStartDate', enabled:true  },
+        { datasetName:'Quotes_By_Status',        segmentName:'QuoteDate',    enabled:true  },
+        { datasetName:'Quote_Revenue_Forecast',  segmentName:'QuoteDate',    enabled:true  },
+        { datasetName:'Equipment_Profit_Loss',   segmentName:'InvoiceDate',  enabled:true  },
+        { datasetName:'Equipment_Utilization',   segmentName:'InvoiceDate',  enabled:true  },
+        { datasetName:'WO_Dashboard',            segmentName:'InvoiceDate',  enabled:true  },
+        { datasetName:'Preventive_Maintenance',  segmentName:null,           enabled:false },
+      ],
+    },
+    {
+      id: 'yard',
+      label: 'Yard',
+      type: 'multiselect',
+      enabled: true,
+      optionSource: 'jobs_profit_loss',
+      optionField: 'Yard',
+      affectedDatasets: [
+        { datasetName:'jobs_profit_loss',       segmentName:'Yard', enabled:true  },
+        { datasetName:'Jobs_By_Status',          segmentName:'Yard', enabled:true  },
+        { datasetName:'jobs_profit_by_invoice',  segmentName:'Yard', enabled:true  },
+        { datasetName:'Job_Revenue_Forecast',    segmentName:'Yard', enabled:true  },
+        { datasetName:'Quotes_By_Status',        segmentName:'Yard', enabled:true  },
+        { datasetName:'Quote_Revenue_Forecast',  segmentName:'Yard', enabled:true  },
+        { datasetName:'Equipment_Profit_Loss',   segmentName:'Yard', enabled:true  },
+        { datasetName:'Equipment_Utilization',   segmentName:'Yard', enabled:true  },
+        { datasetName:'WO_Dashboard',            segmentName:'Yard', enabled:true  },
+        { datasetName:'Preventive_Maintenance',  segmentName:null,   enabled:false },
+      ],
+    },
+  ],
+};
+
+const DEFAULT_FILTER_STATE = {
+  values: {
+    dateRange: { presetId: '90d', dateFrom: '', dateTo: '' },
+    yard: [], // empty array = all yards (no yard filter sent to API)
+  },
+};
+
+/* ── Persistence ─────────────────────────────────────────────────── */
+const _FC_CONFIG_KEY = 'fcc_filter_config';
+const _FC_STATE_KEY  = 'fcc_filter_state';
+
+function _fcSaveConfig(cfg) { localStorage.setItem(_FC_CONFIG_KEY, JSON.stringify(cfg)); }
+function _fcLoadConfig() {
+  try {
+    const raw = localStorage.getItem(_FC_CONFIG_KEY);
+    if (!raw) return structuredClone(FILTER_CONFIG);
+    const stored = JSON.parse(raw);
+    if (stored.version !== FILTER_CONFIG.version) return structuredClone(FILTER_CONFIG);
+    return stored;
+  } catch { return structuredClone(FILTER_CONFIG); }
+}
+function _fcSaveState(state) { localStorage.setItem(_FC_STATE_KEY, JSON.stringify(state)); }
+function _fcLoadState() {
+  try {
+    const raw = localStorage.getItem(_FC_STATE_KEY);
+    return raw ? JSON.parse(raw) : structuredClone(DEFAULT_FILTER_STATE);
+  } catch { return structuredClone(DEFAULT_FILTER_STATE); }
 }
 
-function _gfLoad() {
-  try {
-    const raw = localStorage.getItem('fcc_gf');
-    if (raw) { _gf = JSON.parse(raw); return true; }
-  } catch(e) {}
-  return false;
+/* ── Active runtime state ────────────────────────────────────────── */
+let _fcConfig = structuredClone(FILTER_CONFIG);
+let _fcState  = structuredClone(DEFAULT_FILTER_STATE);
+let _allYardValues = [];
+
+/* ── Preset resolution ───────────────────────────────────────────── */
+function resolvePreset(presetId, presets, customFrom, customTo) {
+  const preset = presets.find(p => p.id === presetId);
+  if (!preset) return { dateFrom: null, dateTo: null };
+  if (preset.daysBack === null) return { dateFrom: null, dateTo: null };
+  if (preset.daysBack === -1)   return { dateFrom: customFrom ?? null, dateTo: customTo ?? null };
+  const today = new Date();
+  const from  = new Date(today);
+  from.setDate(today.getDate() - preset.daysBack);
+  return { dateFrom: from.toISOString().slice(0,10), dateTo: today.toISOString().slice(0,10) };
+}
+
+/* ── Build per-dataset filter arrays ─────────────────────────────── */
+function buildDatasetFilters(params, state) {
+  const result = {};
+  for (const param of params) {
+    if (!param.enabled) continue;
+    const sv = state.values[param.id];
+    for (const m of param.affectedDatasets) {
+      if (!m.enabled || !m.segmentName) continue;
+      const filters = result[m.datasetName] ?? [];
+      if (param.type === 'preset') {
+        const { dateFrom, dateTo } = resolvePreset(sv?.presetId, param.presets, sv?.dateFrom, sv?.dateTo);
+        // >= start midnight, < day-after-end midnight (fully inclusive day range)
+        if (dateFrom) {
+          filters.push({ segmentName: m.segmentName, operator: 'gte', value: dateFrom });
+        }
+        if (dateTo) {
+          const d = new Date(dateTo + 'T00:00:00');
+          d.setDate(d.getDate() + 1);
+          const nextDay = d.toISOString().slice(0, 10);
+          filters.push({ segmentName: m.segmentName, operator: 'lt', value: nextDay });
+        }
+      } else if (param.type === 'multiselect') {
+        const vals = Array.isArray(sv) ? sv : [];
+        if (vals.length > 0 && vals.length < _allYardValues.length) {
+          if (vals.length === 1) filters.push({ segmentName: m.segmentName, operator:'eq', value: vals[0] });
+          else                   filters.push({ segmentName: m.segmentName, operator:'in', value: vals });
+        }
+      }
+      result[m.datasetName] = filters;
+    }
+  }
+  return result;
+}
+
+/* ── Filter builders (backward-compatible signatures) ───────────── */
+// Chart functions keep their (dateFrom, dateTo, yards) signatures but
+// parameters are ignored — filters come from the global _fcState instead.
+function _dsf(datasetName) {
+  return buildDatasetFilters(_fcConfig.params, _fcState)[datasetName] ?? [];
+}
+function buildJobFilters()   { return _dsf('jobs_profit_loss'); }
+function buildQuoteFilters() { return _dsf('Quotes_By_Status'); }
+function buildEquipFilters() { return _dsf('Equipment_Profit_Loss'); }
+function buildYardFilter()   { return []; } // no longer called — filters built per-dataset
+
+/* ── Legacy shim ─────────────────────────────────────────────────── */
+function getSelectedYards() { return _fcState.values.yard ?? []; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   FILTER BAR UI — pill-based preset + yard multiselect
+   ═══════════════════════════════════════════════════════════════════ */
+
+function renderFilterBar() {
+  const bar = document.getElementById('dash-filter-bar');
+  if (!bar) return;
+
+  const dateParam = _fcConfig.params.find(p => p.id === 'dateRange');
+  const sv        = _fcState.values;
+  const activePreset = sv.dateRange?.presetId ?? '90d';
+  const isCustom     = activePreset === 'custom';
+
+  const pillsHtml = (dateParam?.presets ?? []).map(p =>
+    `<button class="df-pill${activePreset === p.id ? ' active' : ''}"
+             data-preset="${p.id}" onclick="dfSelectPreset('${p.id}')">${p.label}</button>`
+  ).join('');
+
+  const yardVals  = sv.yard ?? [];
+  const yardLabel = yardVals.length === 0 || yardVals.length === _allYardValues.length
+    ? 'All Yards'
+    : yardVals.length === 1 ? yardVals[0]
+    : `${yardVals.length} Yards`;
+
+  bar.innerHTML = `
+    <div class="df-group">
+      <span class="df-label">Period</span>
+      <div class="df-pills">${pillsHtml}</div>
+    </div>
+    <div class="df-custom-row${isCustom ? ' open' : ''}" id="df-custom-row">
+      <span class="df-label">From</span>
+      <input type="date" id="df-date-from" value="${sv.dateRange?.dateFrom || ''}" />
+      <span class="df-label">To</span>
+      <input type="date" id="df-date-to" value="${sv.dateRange?.dateTo || ''}" />
+      <button class="df-apply-btn" onclick="dfApplyCustomDate()">Apply</button>
+    </div>
+    <div class="df-sep"></div>
+    <div class="df-group" style="position:relative">
+      <span class="df-label">Yard</span>
+      <div class="yard-multiselect" id="yard-ms-wrap">
+        <button type="button" class="yard-ms-trigger" id="yard-ms-trigger" onclick="toggleYardDropdown()">
+          <span id="yard-ms-label">${yardLabel}</span>
+          <i data-lucide="chevron-down" style="width:13px;height:13px;flex-shrink:0"></i>
+        </button>
+        <div class="yard-ms-dropdown" id="yard-ms-dropdown">
+          <div class="yard-ms-actions">
+            <button type="button" onclick="yardSelectAll()">Select All</button>
+            <button type="button" onclick="yardClearAll()">Clear All</button>
+          </div>
+          <div class="yard-ms-options" id="yard-ms-options"></div>
+        </div>
+      </div>
+    </div>
+    <div class="df-spacer"></div>
+    <button class="df-cfg-btn" onclick="openFilterDesigner()" title="Configure filters">
+      <i data-lucide="settings-2" style="width:13px;height:13px"></i> Filters
+    </button>
+    <button class="df-reset-btn" onclick="resetDashFilters()" title="Reset">
+      <i data-lucide="rotate-ccw" style="width:13px;height:13px"></i> Reset
+    </button>
+  `;
+
+  _renderYardOptions();
+  lucide.createIcons({ el: bar });
+}
+
+function _renderYardOptions() {
+  const container = document.getElementById('yard-ms-options');
+  if (!container) return;
+  const selected = _fcState.values.yard ?? [];
+  const allSelected = selected.length === 0 || selected.length === _allYardValues.length;
+  container.innerHTML = _allYardValues.map(v =>
+    `<label class="yard-ms-option">
+      <input type="checkbox" value="${v}" ${allSelected || selected.includes(v) ? 'checked' : ''}
+             onchange="dfYardChange()"> ${v}
+    </label>`
+  ).join('');
+}
+
+function dfSelectPreset(presetId) {
+  const dateParam = _fcConfig.params.find(p => p.id === 'dateRange');
+  if (!dateParam) return;
+  const { dateFrom, dateTo } = resolvePreset(
+    presetId, dateParam.presets,
+    document.getElementById('df-date-from')?.value,
+    document.getElementById('df-date-to')?.value
+  );
+  _fcState.values.dateRange = { presetId, dateFrom: dateFrom || '', dateTo: dateTo || '' };
+  _fcSaveState(_fcState);
+  document.getElementById('df-custom-row')?.classList.toggle('open', presetId === 'custom');
+  document.querySelectorAll('.df-pill').forEach(b => b.classList.toggle('active', b.dataset.preset === presetId));
+  if (presetId !== 'custom') refreshDashboard();
+}
+
+function dfApplyCustomDate() {
+  const from = document.getElementById('df-date-from')?.value;
+  const to   = document.getElementById('df-date-to')?.value;
+  if (!from || !to) return;
+  _fcState.values.dateRange = { presetId:'custom', dateFrom: from, dateTo: to };
+  _fcSaveState(_fcState);
+  refreshDashboard();
+}
+
+function dfYardChange() {
+  const checked = Array.from(document.querySelectorAll('#yard-ms-options input[type=checkbox]:checked')).map(cb => cb.value);
+  _fcState.values.yard = checked.length === _allYardValues.length ? [] : checked;
+  _fcSaveState(_fcState);
+  const n = checked.length;
+  const label = document.getElementById('yard-ms-label');
+  if (label) label.textContent = n === 0 ? 'No Yards' : n === _allYardValues.length ? 'All Yards' : n === 1 ? checked[0] : `${n} Yards`;
+}
+
+function toggleYardDropdown() { document.getElementById('yard-ms-dropdown')?.classList.toggle('open'); }
+document.addEventListener('click', function(e) {
+  const wrap = document.getElementById('yard-ms-wrap');
+  if (wrap && !wrap.contains(e.target)) document.getElementById('yard-ms-dropdown')?.classList.remove('open');
+});
+function yardSelectAll() {
+  document.querySelectorAll('#yard-ms-options input[type=checkbox]').forEach(cb => cb.checked = true);
+  _fcState.values.yard = [];
+  _fcSaveState(_fcState);
+  const label = document.getElementById('yard-ms-label');
+  if (label) label.textContent = 'All Yards';
+}
+function yardClearAll() {
+  document.querySelectorAll('#yard-ms-options input[type=checkbox]').forEach(cb => cb.checked = false);
+  _fcState.values.yard = [];
+  _fcSaveState(_fcState);
+  const label = document.getElementById('yard-ms-label');
+  if (label) label.textContent = 'No Yards';
+}
+function updateYardLabel() { dfYardChange(); } // legacy shim
+
+/* ═══════════════════════════════════════════════════════════════════
+   FILTER DESIGNER DRAWER
+   ═══════════════════════════════════════════════════════════════════ */
+let _fdEditConfig = null;
+
+function openFilterDesigner() {
+  _fdEditConfig = structuredClone(_fcConfig);
+  renderFilterDesigner(_fdEditConfig);
+  const el = document.getElementById('fd-drawer');
+  const bg = document.getElementById('fd-backdrop');
+  if (el) { el.hidden = false; requestAnimationFrame(() => el.classList.add('open')); }
+  if (bg) { bg.hidden = false; requestAnimationFrame(() => bg.classList.add('open')); }
+}
+
+function closeFilterDesigner() {
+  const el = document.getElementById('fd-drawer');
+  const bg = document.getElementById('fd-backdrop');
+  if (el) { el.classList.remove('open'); setTimeout(() => { el.hidden = true; }, 230); }
+  if (bg) { bg.classList.remove('open'); setTimeout(() => { bg.hidden = true; }, 230); }
+}
+
+function renderFilterDesigner(cfg) {
+  const body = document.getElementById('fd-param-list');
+  if (!body) return;
+  body.innerHTML = cfg.params.map((param, pi) => `
+    <div class="fd-param-section" id="fd-param-${pi}">
+      <div class="fd-param-hdr" onclick="fdToggleParam(${pi})">
+        <i data-lucide="chevron-right" class="fd-chevron" id="fd-chev-${pi}" style="width:14px;height:14px;transition:transform .15s"></i>
+        <span class="fd-param-name">${param.label || '(unnamed)'}</span>
+        <span class="fd-type-badge">${param.type}</span>
+        <label class="fd-toggle-wrap" onclick="event.stopPropagation()" title="Enable/disable this filter">
+          <input type="checkbox" ${param.enabled ? 'checked' : ''} onchange="fdSetParamEnabled(${pi},this.checked)">
+          <span class="fd-toggle-track"></span>
+        </label>
+      </div>
+      <div class="fd-param-body" id="fd-pbody-${pi}" style="display:none">
+        <div class="fd-meta-row">
+          <div class="fd-meta-field"><label>Label</label>
+            <input type="text" value="${param.label}" oninput="fdSetParamField(${pi},'label',this.value)" />
+          </div>
+          <div class="fd-meta-field"><label>Type</label>
+            <select onchange="fdSetParamField(${pi},'type',this.value)">
+              <option value="preset"      ${param.type==='preset'?'selected':''}>Preset pills</option>
+              <option value="multiselect" ${param.type==='multiselect'?'selected':''}>Multiselect</option>
+              <option value="select"      ${param.type==='select'?'selected':''}>Select</option>
+            </select>
+          </div>
+        </div>
+        <div class="fd-mappings-label">Dataset → Column Mappings</div>
+        <table class="fd-map-table">
+          <thead><tr><th></th><th>Dataset</th><th>Column / Field</th></tr></thead>
+          <tbody id="fd-mapbody-${pi}">
+            ${(param.affectedDatasets||[]).map((m,mi) => _fdMapRow(pi,mi,m)).join('')}
+          </tbody>
+        </table>
+        <button class="fd-add-map" onclick="fdAddMapping(${pi})">
+          <i data-lucide="plus" style="width:11px;height:11px"></i> Add dataset
+        </button>
+      </div>
+    </div>
+  `).join('');
+  lucide.createIcons({ el: body });
+}
+
+function _fdMapRow(pi, mi, m) {
+  const off = !m.enabled;
+  return `<tr class="fd-map-row${off?' fd-row-off':''}" id="fd-mr-${pi}-${mi}">
+    <td><label class="fd-toggle-wrap sm" onclick="event.stopPropagation()">
+      <input type="checkbox" ${m.enabled?'checked':''} onchange="fdSetMapEnabled(${pi},${mi},this.checked)">
+      <span class="fd-toggle-track"></span>
+    </label></td>
+    <td><input type="text" class="fd-ds-inp" value="${m.datasetName||''}"
+               oninput="fdSetMapField(${pi},${mi},'datasetName',this.value)" ${off?'disabled':''} /></td>
+    <td><input type="text" class="fd-seg-inp" value="${m.segmentName||''}" placeholder="(not used)"
+               oninput="fdSetMapField(${pi},${mi},'segmentName',this.value)" ${off?'disabled':''} /></td>
+  </tr>`;
+}
+
+function fdToggleParam(pi) {
+  const b = document.getElementById(`fd-pbody-${pi}`);
+  const c = document.getElementById(`fd-chev-${pi}`);
+  if (!b) return;
+  const isOpen = b.style.display !== 'none';
+  b.style.display = isOpen ? 'none' : '';
+  if (c) c.style.transform = isOpen ? '' : 'rotate(90deg)';
+}
+function fdSetParamEnabled(pi, val) { if (_fdEditConfig) _fdEditConfig.params[pi].enabled = val; }
+function fdSetParamField(pi, field, val) { if (_fdEditConfig) _fdEditConfig.params[pi][field] = val; }
+function fdSetMapEnabled(pi, mi, val) {
+  if (!_fdEditConfig) return;
+  _fdEditConfig.params[pi].affectedDatasets[mi].enabled = val;
+  const row = document.getElementById(`fd-mr-${pi}-${mi}`);
+  if (row) { row.classList.toggle('fd-row-off', !val); row.querySelectorAll('input[type=text]').forEach(i=>i.disabled=!val); }
+}
+function fdSetMapField(pi, mi, field, val) {
+  if (_fdEditConfig) _fdEditConfig.params[pi].affectedDatasets[mi][field] = val || null;
+}
+function fdAddMapping(pi) {
+  if (!_fdEditConfig) return;
+  const mi = _fdEditConfig.params[pi].affectedDatasets.length;
+  _fdEditConfig.params[pi].affectedDatasets.push({ datasetName:'', segmentName:'', enabled:true });
+  const tbody = document.getElementById(`fd-mapbody-${pi}`);
+  if (tbody) {
+    const tr = document.createElement('tr');
+    tr.outerHTML = _fdMapRow(pi, mi, { datasetName:'', segmentName:'', enabled:true });
+    tbody.insertAdjacentHTML('beforeend', _fdMapRow(pi, mi, { datasetName:'', segmentName:'', enabled:true }));
+  }
+}
+function fdAddParam() {
+  if (!_fdEditConfig) return;
+  _fdEditConfig.params.push({ id:`param_${Date.now()}`, label:'New Filter', type:'multiselect', enabled:true, affectedDatasets:[] });
+  renderFilterDesigner(_fdEditConfig);
+}
+function fdSaveAndApply() {
+  _fcConfig = _fdEditConfig;
+  _fcSaveConfig(_fcConfig);
+  closeFilterDesigner();
+  renderFilterBar();
+  refreshDashboard();
 }
 
 /* ── Boot ─────────────────────────────────────────────────────────── */
 async function initDashboard() {
-  const now  = new Date();
-  const ago  = new Date(now); ago.setDate(ago.getDate() - 90);
-  const fromEl = document.getElementById('dash-date-from');
-  const toEl   = document.getElementById('dash-date-to');
+  _fcConfig = _fcLoadConfig();
+  _fcState  = _fcLoadState();
 
-  // Restore from localStorage or fall back to last 90 days
-  const hadSaved = _gfLoad();
-  if (hadSaved && _gf.dateFrom) {
-    if (fromEl) fromEl.value = _gf.dateFrom;
-    if (toEl)   toEl.value   = _gf.dateTo || now.toISOString().slice(0,10);
-  } else {
-    if (fromEl && !fromEl.value) fromEl.value = ago.toISOString().slice(0,10);
-    if (toEl   && !toEl.value)   toEl.value   = now.toISOString().slice(0,10);
-    _gf.dateFrom = fromEl?.value || '';
-    _gf.dateTo   = toEl?.value   || '';
+  // Populate yard options from the param's optionSource
+  const yardParam = _fcConfig.params.find(p => p.id === 'yard');
+  if (yardParam?.optionSource) {
+    try {
+      const r = await fetch(`${BASE_URL}/bi/segment-values?datasetName=${yardParam.optionSource}&segmentName=${yardParam.optionField || 'Yard'}&limit=100`);
+      const j = await r.json();
+      _allYardValues = (j.data?.values || []).map(v => v.value || v);
+    } catch(e) { _allYardValues = []; }
   }
 
-  await loadYardFilter();
-
-  // Restore yard checkbox states after loadYardFilter populates DOM
-  if (hadSaved && _gf.yards && _gf.yards.length > 0) {
-    document.querySelectorAll('#yard-ms-options input[type=checkbox]').forEach(cb => {
-      cb.checked = _gf.yards.includes(cb.value);
-    });
-    updateYardLabel();
-  }
-
+  renderFilterBar();
   await refreshDashboard();
-  // Finish Jobs is the default sub-tab — load it
-  const df = document.getElementById('dash-date-from')?.value || '';
-  const dt = document.getElementById('dash-date-to')?.value || '';
-  const dy = getSelectedYards();
-  await loadFinishJobs(df, dt, dy);
-  // ⓘ buttons injected inside each load function after data renders
+
+  // Default sub-tab: Finish Jobs
+  if (!jobLoaded['finish']) {
+    jobLoaded['finish'] = true;
+    loadFinishJobs();
+  }
   _setupInfoButtons();
 }
-
-/* ── Yard multi-select ──────────────────────────────────────────── */
-let _allYardValues = [];
-
-async function loadYardFilter() {
-  try {
-    const r = await fetch(`${BASE_URL}/bi/segment-values?datasetName=jobs_profit_loss&segmentName=Yard&limit=100`);
-    const j = await r.json();
-    const vals = (j.data?.values || []).map(v => v.value || v);
-    _allYardValues = vals;
-    const container = document.getElementById('yard-ms-options');
-    if (!container) return;
-    container.innerHTML = vals.map(v =>
-      `<label class="yard-ms-option">
-        <input type="checkbox" value="${v}" checked onchange="updateYardLabel()">
-        ${v}
-      </label>`
-    ).join('');
-    updateYardLabel();
-    lucide.createIcons();
-  } catch(e) {}
-}
-
-function toggleYardDropdown() {
-  document.getElementById('yard-ms-dropdown').classList.toggle('open');
-}
-
-// Close dropdown when clicking outside
-document.addEventListener('click', function(e) {
-  const wrap = document.getElementById('yard-ms-wrap');
-  if (wrap && !wrap.contains(e.target)) {
-    document.getElementById('yard-ms-dropdown')?.classList.remove('open');
-  }
-});
-
-function getSelectedYards() {
-  const yards = Array.from(document.querySelectorAll('#yard-ms-options input[type=checkbox]:checked'))
-    .map(cb => cb.value);
-  _gf.yards = yards;
-  return yards;
-}
-
-function updateYardLabel() {
-  const selected = getSelectedYards();
-  const total    = _allYardValues.length;
-  const label    = document.getElementById('yard-ms-label');
-  if (!label) return;
-  if (selected.length === 0)          label.textContent = 'No Yards';
-  else if (selected.length === total) label.textContent = 'All Yards';
-  else if (selected.length === 1)     label.textContent = selected[0];
-  else                                label.textContent = `${selected.length} Yards`;
-}
-
-function yardSelectAll() {
-  document.querySelectorAll('#yard-ms-options input[type=checkbox]').forEach(cb => cb.checked = true);
-  updateYardLabel();
-}
-
-function yardClearAll() {
-  document.querySelectorAll('#yard-ms-options input[type=checkbox]').forEach(cb => cb.checked = false);
-  updateYardLabel();
-}
-
-function buildYardFilter(yards) {
-  if (!yards || yards.length === 0) return [];
-  if (yards.length === _allYardValues.length && _allYardValues.length > 0) return []; // all selected = no filter
-  if (yards.length === 1) return [{ segmentName:'Yard', operator:'eq', value: yards[0] }];
-  return [{ segmentName:'Yard', operator:'in', value: yards }];
-}
-
 
 /* ── Tab switching ────────────────────────────────────────────────── */
 function switchDashTab(tab) {
@@ -157,33 +487,15 @@ function switchDashTab(tab) {
     document.getElementById(`dash-tab-${t}`)?.classList.toggle('active', t === tab);
     document.getElementById(`dash-${t}-content`).style.display = t === tab ? '' : 'none';
   });
-  // Lazy-load equipment / pm on first visit
-  const dateFrom = document.getElementById('dash-date-from')?.value || '';
-  const dateTo   = document.getElementById('dash-date-to')?.value   || '';
-  const yards    = getSelectedYards();
   if (tab === 'equipment' && !equipLoaded[activeEquipTab]) {
     equipLoaded[activeEquipTab] = true;
-    loadEquipSubTab(activeEquipTab, dateFrom, dateTo, yards);
+    loadEquipSubTab(activeEquipTab);
   }
-  if (tab === 'pm' && !pmLoaded) {
-    pmLoaded = true;
-    loadPM(dateFrom, dateTo, yards);
-  }
+  if (tab === 'pm' && !pmLoaded) { pmLoaded = true; loadPM(); }
 }
 
 /* ── Master refresh ───────────────────────────────────────────────── */
 async function refreshDashboard() {
-  const dateFrom = document.getElementById('dash-date-from')?.value || '';
-  const dateTo   = document.getElementById('dash-date-to')?.value   || '';
-  const yards    = getSelectedYards();
-
-  // Update and persist global filter state
-  _gf.dateFrom = dateFrom;
-  _gf.dateTo   = dateTo;
-  _gf.yards    = yards;
-  _gfSave();
-
-  // Reset lazy-load flags so sub-tabs re-fetch with new filters
   JOB_TABS.forEach(t   => { jobLoaded[t]   = false; });
   QUOTE_TABS.forEach(t => { quoteLoaded[t] = false; });
   EQUIP_TABS.forEach(t => { equipLoaded[t] = false; });
@@ -191,53 +503,47 @@ async function refreshDashboard() {
 
   setDashLoading(true);
   try {
-    // Always reload the Quotes Summary panel; Jobs default is Finish Jobs
     await Promise.all([
-      loadQuoteKpis(dateFrom, dateTo, yards),
-      loadQuoteMonthChart(dateFrom, dateTo, yards),
-      loadQuoteStatusChart(dateFrom, dateTo, yards),
-      loadQuoteSalespersonTable(dateFrom, dateTo, yards),
-      loadYardBreakoutQSummary(dateFrom, dateTo, yards),
+      loadQuoteKpis(),
+      loadQuoteMonthChart(),
+      loadQuoteStatusChart(),
+      loadQuoteSalespersonTable(),
+      loadYardBreakoutQSummary(),
     ]);
   } catch(e) { console.error('Dashboard refresh error:', e); }
   setDashLoading(false);
 
-  // Always reload whichever job and quote sub-tabs are currently visible
   jobLoaded[activeJobTab] = true;
-  loadJobSubTab(activeJobTab, dateFrom, dateTo, yards);
+  loadJobSubTab(activeJobTab);
 
   quoteLoaded[activeQuoteTab] = true;
-  if (activeQuoteTab !== 'summary') {
-    loadQuoteSubTab(activeQuoteTab, dateFrom, dateTo, yards);
-  }
-  if (activeDashTab === 'equipment') {
-    equipLoaded[activeEquipTab] = true;
-    loadEquipSubTab(activeEquipTab, dateFrom, dateTo, yards);
-  }
-  if (activeDashTab === 'pm') {
-    pmLoaded = true;
-    loadPM(dateFrom, dateTo, yards);
-  }
+  if (activeQuoteTab !== 'summary') loadQuoteSubTab(activeQuoteTab);
+
+  if (activeDashTab === 'equipment') { equipLoaded[activeEquipTab] = true; loadEquipSubTab(activeEquipTab); }
+  if (activeDashTab === 'pm')        { pmLoaded = true; loadPM(); }
 }
 
-/* ── Filter builders ──────────────────────────────────────────────── */
-function buildJobFilters(dateFrom, dateTo, yards) {
-  const f = [];
-  if (dateFrom && dateTo) f.push({ segmentName:'JobStartDate', operator:'between', value: dateFrom, secondValue: dateTo });
-  else if (dateFrom)      f.push({ segmentName:'JobStartDate', operator:'gte', value: dateFrom });
-  else if (dateTo)        f.push({ segmentName:'JobStartDate', operator:'lte', value: dateTo });
-  f.push(...buildYardFilter(yards));
-  return f;
+/* ── Reset ───────────────────────────────────────────────────────── */
+function resetDashFilters() {
+  _fcState = structuredClone(DEFAULT_FILTER_STATE);
+  _fcSaveState(_fcState);
+  renderFilterBar();
+  refreshDashboard();
 }
 
-function buildQuoteFilters(dateFrom, dateTo, yards) {
-  const f = [];
-  if (dateFrom && dateTo) f.push({ segmentName:'QuoteDate', operator:'between', value: dateFrom, secondValue: dateTo });
-  else if (dateFrom)      f.push({ segmentName:'QuoteDate', operator:'gte', value: dateFrom });
-  else if (dateTo)        f.push({ segmentName:'QuoteDate', operator:'lte', value: dateTo });
-  f.push(...buildYardFilter(yards));
-  return f;
+/* ── Filter builders (called by chart functions — no args needed) ── */
+// The (dateFrom, dateTo, yards) params are kept for signature compatibility
+// but the real values come from _fcState via _dsf().
+function buildJobFilters(dateFrom, dateTo, yards)   { return _dsf('jobs_profit_loss'); }
+function buildQuoteFilters(dateFrom, dateTo, yards) { return _dsf('Quotes_By_Status'); }
+function buildEquipFilters(dateFrom, dateTo, yards) { return _dsf('Equipment_Profit_Loss'); }
+function buildYardFilter(yards) { return []; }
+
+function _dsf(datasetName) {
+  return buildDatasetFilters(_fcConfig.params, _fcState)[datasetName] ?? [];
 }
+
+
 
 /* ══════════════════════════════════════════════════════════════════
    JOBS DASHBOARD
@@ -254,7 +560,7 @@ async function loadJobKpis(dateFrom, dateTo, yards) {
       { metricName:'LaborHours',    aggregation:'SUM',   alias:'LaborHours'    },
       { metricName:'JobCount',      aggregation:'COUNT', alias:'JobCount'      },
     ],
-    filters: buildJobFilters(dateFrom, dateTo, yards)
+    filters: _dsf('jobs_profit_loss')
   };
   try {
     _reg('dash-kpi-row','Jobs P/L — KPIs','/bi/kpis',body);
@@ -301,7 +607,7 @@ async function loadMonthChart(dateFrom, dateTo, yards) {
       { metricName:'TotalExpenses', aggregation:'SUM', alias:'TotalExpenses' },
       { metricName:'Profit',        aggregation:'SUM', alias:'Profit'        },
     ],
-    filters: buildJobFilters(dateFrom, dateTo, yards),
+    filters: _dsf('jobs_profit_loss'),
     orderBy: [{ field:'JobYear', direction:'ASC' },{ field:'JobMonth', direction:'ASC' }],
     limit: 60
   };
@@ -364,7 +670,7 @@ async function loadSalespersonPerf(dateFrom, dateTo, yards) {
       { metricName:'Profit',        aggregation:'SUM',   alias:'Profit'        },
       { metricName:'JobCount',      aggregation:'COUNT', alias:'JobCount'      },
     ],
-    filters: buildJobFilters(dateFrom, dateTo, yards),
+    filters: _dsf('jobs_profit_loss'),
     orderBy: [{ field:'Profit', direction:'DESC' }],
     limit: 20
   };
@@ -423,21 +729,21 @@ async function loadSalespersonPerf(dateFrom, dateTo, yards) {
         type: 'bar',
         data: {
           labels,
-          datasets: [
-            { label:'Revenue', data: revs,    backgroundColor: TEAL+'99', borderColor: TEAL, borderWidth:1 },
-            { label:'Profit',  data: profits, backgroundColor: NAVY+'cc', borderColor: NAVY, borderWidth:1 },
-          ]
+          datasets: hBarDatasets(labels, [
+            { label:'Revenue', data: revs,    color: TEAL+'99', borderColor: TEAL },
+            { label:'Profit',  data: profits, color: NAVY+'cc', borderColor: NAVY },
+          ])
         },
         options: {
           indexAxis: 'y',
           responsive: true, maintainAspectRatio: false,
           plugins: {
             legend: { position:'bottom', labels:{ boxWidth:12, font:{size:11} } },
-            tooltip: { callbacks:{ label: c => ` ${c.dataset.label}: ${dFmtCur(c.raw)}` } }
+            tooltip: { callbacks:{ label: c => ` ${c.dataset.label}: ${dFmtCur(c.parsed.x)}` } }
           },
           scales: {
-            x: { grid:{ color:'#e2e8f0' }, ticks:{ callback: v => dFmtCurShort(v), font:{size:10} }, beginAtZero:true },
-            y: { grid:{ display:false }, ticks:{ font:{size:11} } }
+            x: { type:'linear', grid:{ color:'#e2e8f0' }, ticks:{ callback: v => dFmtCurShort(v), font:{size:10} }, beginAtZero:true },
+            y: { type:'category', grid:{ display:false }, ticks:{ font:{size:11} } }
           }
         }
       });
@@ -457,7 +763,7 @@ async function loadStatusBreakdown(dateFrom, dateTo, yards) {
       { metricName:'JobCount',   aggregation:'COUNT', alias:'JobCount'   },
       { metricName:'JobRevenue', aggregation:'SUM',   alias:'JobRevenue' },
     ],
-    filters: buildJobFilters(dateFrom, dateTo, yards),
+    filters: _dsf('jobs_profit_loss'),
     orderBy: [{ field:'JobCount', direction:'DESC' }],
     limit: 20
   };
@@ -512,7 +818,7 @@ async function loadStatusBreakdown(dateFrom, dateTo, yards) {
    ══════════════════════════════════════════════════════════════════ */
 
 /* ── Quote KPI Tiles ──────────────────────────────────────────────── */
-async function loadQuoteKpis(dateFrom, dateTo, yards) {
+async function loadQuoteKpis() {
   const body = {
     datasetName: 'Quotes_By_Status',
     metrics: [
@@ -520,7 +826,7 @@ async function loadQuoteKpis(dateFrom, dateTo, yards) {
       { metricName:'TotalQuoteMax', aggregation:'SUM',   alias:'TotalQuoteMax' },
       { metricName:'TotalQuoteMin', aggregation:'SUM',   alias:'TotalQuoteMin' },
     ],
-    filters: buildQuoteFilters(dateFrom, dateTo, yards)
+    filters: _dsf('Quotes_By_Status')
   };
   try {
     _reg('quote-kpi-row','Quotes Summary — KPIs','/bi/kpis',body);
@@ -552,7 +858,7 @@ async function loadQuoteKpis(dateFrom, dateTo, yards) {
 }
 
 /* ── Quote Amount by Month ────────────────────────────────────────── */
-async function loadQuoteMonthChart(dateFrom, dateTo, yards) {
+async function loadQuoteMonthChart() {
   const body = {
     datasetName: 'Quote_Revenue_Forecast',
     groupBySegments: ['Year','Month'],
@@ -560,12 +866,7 @@ async function loadQuoteMonthChart(dateFrom, dateTo, yards) {
       { metricName:'TotalQuoteAmount', aggregation:'SUM',   alias:'TotalQuoteAmount' },
       { metricName:'QuoteCount',       aggregation:'COUNT', alias:'QuoteCount'       },
     ],
-    filters: (() => {
-      // Quote_Revenue_Forecast uses QuoteDate for filtering
-      const f = [];
-      if (dateFrom && dateTo) f.push({ segmentName:'QuoteDate', operator:'between', value: dateFrom, secondValue: dateTo });
-      return f;
-    })(),
+    filters: _dsf('Quote_Revenue_Forecast'),
     orderBy: [{ field:'Year', direction:'ASC' },{ field:'Month', direction:'ASC' }],
     limit: 60
   };
@@ -615,7 +916,7 @@ async function loadQuoteMonthChart(dateFrom, dateTo, yards) {
 }
 
 /* ── Quotes by Status ─────────────────────────────────────────────── */
-async function loadQuoteStatusChart(dateFrom, dateTo, yards) {
+async function loadQuoteStatusChart() {
   const body = {
     datasetName: 'Quotes_By_Status',
     groupBySegments: ['QuoteStatus'],
@@ -623,7 +924,7 @@ async function loadQuoteStatusChart(dateFrom, dateTo, yards) {
       { metricName:'TotalQuotes',   aggregation:'COUNT', alias:'TotalQuotes'   },
       { metricName:'TotalQuoteMax', aggregation:'SUM',   alias:'TotalQuoteMax' },
     ],
-    filters: buildQuoteFilters(dateFrom, dateTo, yards),
+    filters: _dsf('Quotes_By_Status'),
     orderBy: [{ field:'TotalQuotes', direction:'DESC' }],
     limit: 15
   };
@@ -675,7 +976,7 @@ async function loadQuoteStatusChart(dateFrom, dateTo, yards) {
 }
 
 /* ── Quote Salesperson Table ──────────────────────────────────────── */
-async function loadQuoteSalespersonTable(dateFrom, dateTo, yards) {
+async function loadQuoteSalespersonTable() {
   const body = {
     datasetName: 'Quotes_By_Status',
     groupBySegments: ['SalesPerson'],
@@ -684,7 +985,7 @@ async function loadQuoteSalespersonTable(dateFrom, dateTo, yards) {
       { metricName:'TotalQuoteMax', aggregation:'SUM',   alias:'TotalQuoteMax' },
       { metricName:'TotalQuoteMin', aggregation:'SUM',   alias:'TotalQuoteMin' },
     ],
-    filters: buildQuoteFilters(dateFrom, dateTo, yards),
+    filters: _dsf('Quotes_By_Status'),
     orderBy: [{ field:'TotalQuoteMax', direction:'DESC' }],
     limit: 20
   };
@@ -780,15 +1081,7 @@ function setDashLoading(on) {
   if (el) el.style.display = on ? 'flex' : 'none';
 }
 
-/* ── Reset ────────────────────────────────────────────────────────── */
-function resetDashFilters() {
-  const now = new Date();
-  const ago = new Date(now); ago.setDate(ago.getDate() - 90);
-  document.getElementById('dash-date-from').value = ago.toISOString().slice(0,10);
-  document.getElementById('dash-date-to').value   = now.toISOString().slice(0,10);
-  yardSelectAll();
-  refreshDashboard();
-}
+/* resetDashFilters moved to filter system above */
 
 /* ══════════════════════════════════════════════════════════════════
    JOB SUB-TAB SWITCHING + LAZY LOAD
@@ -807,23 +1100,14 @@ let activeQuoteTab = 'summary';
 
 function switchJobTab(tab) {
   activeJobTab = tab;
-  // Update button states
   document.querySelectorAll('.dash-sub-tab').forEach((btn, i) => {
     btn.classList.toggle('active', JOB_TABS[i] === tab);
   });
-  // Show/hide panels
   JOB_TABS.forEach(t => {
     const el = document.getElementById(`job-panel-${t}`);
     if (el) el.style.display = t === tab ? '' : 'none';
   });
-  // Lazy-load data on first visit
-  if (!jobLoaded[tab]) {
-    jobLoaded[tab] = true;
-    const dateFrom = document.getElementById('dash-date-from')?.value || '';
-    const dateTo   = document.getElementById('dash-date-to')?.value   || '';
-    const yards    = getSelectedYards();
-    loadJobSubTab(tab, dateFrom, dateTo, yards);
-  }
+  if (!jobLoaded[tab]) { jobLoaded[tab] = true; loadJobSubTab(tab); }
 }
 
 function switchQuoteTab(tab) {
@@ -835,26 +1119,38 @@ function switchQuoteTab(tab) {
     const el = document.getElementById(`quote-panel-${t}`);
     if (el) el.style.display = t === tab ? '' : 'none';
   });
-  if (!quoteLoaded[tab]) {
-    quoteLoaded[tab] = true;
-    const dateFrom = document.getElementById('dash-date-from')?.value || '';
-    const dateTo   = document.getElementById('dash-date-to')?.value   || '';
-    const yards    = getSelectedYards();
-    loadQuoteSubTab(tab, dateFrom, dateTo, yards);
-  }
+  if (!quoteLoaded[tab]) { quoteLoaded[tab] = true; loadQuoteSubTab(tab); }
 }
 
-function loadJobSubTab(tab, dateFrom, dateTo, yards) {
-  if (tab === 'finish')     { loadFinishJobs(dateFrom, dateTo, yards); }
-  if (tab === 'profitloss') { loadJobProfitLoss(dateFrom, dateTo, yards); }
-  if (tab === 'forecast')   { loadForecast(dateFrom, dateTo, yards); }
-  if (tab === 'revenue')    { loadRevenueReport(dateFrom, dateTo, yards); }
+function switchEquipTab(tab) {
+  activeEquipTab = tab;
+  // equip sub-tabs share .dash-sub-tab class within their parent container
+  const equipSubTabs = document.querySelectorAll('#dash-equipment-content .dash-sub-tab');
+  equipSubTabs.forEach((btn, i) => btn.classList.toggle('active', EQUIP_TABS[i] === tab));
+  EQUIP_TABS.forEach(t => {
+    const el = document.getElementById(`equip-panel-${t}`);
+    if (el) el.style.display = t === tab ? '' : 'none';
+  });
+  if (!equipLoaded[tab]) { equipLoaded[tab] = true; loadEquipSubTab(tab); }
 }
 
-function loadQuoteSubTab(tab, dateFrom, dateTo, yards) {
-  if (tab === 'bystatus')   { loadQuoteByStatus(dateFrom, dateTo, yards); }
-  if (tab === 'salesperson'){ loadQuoteBySalesperson(dateFrom, dateTo, yards); }
-  if (tab === 'forecast')   { loadQuoteForecast(dateFrom, dateTo, yards); }
+function loadJobSubTab(tab) {
+  if (tab === 'finish')     loadFinishJobs();
+  if (tab === 'profitloss') loadJobProfitLoss();
+  if (tab === 'forecast')   loadForecast();
+  if (tab === 'revenue')    loadRevenueReport();
+}
+
+function loadQuoteSubTab(tab) {
+  if (tab === 'bystatus')    loadQuoteByStatus();
+  if (tab === 'salesperson') loadQuoteBySalesperson();
+  if (tab === 'forecast')    loadQuoteForecast();
+}
+
+function loadEquipSubTab(tab) {
+  if (tab === 'pl')          loadEquipPL();
+  if (tab === 'utilization') loadEquipUtilization();
+  if (tab === 'workorders')  loadWorkOrders();
 }
 
 // (refreshDashboard consolidation — see master refresh above)
@@ -866,10 +1162,8 @@ function loadQuoteSubTab(tab, dateFrom, dateTo, yards) {
 let finishStatusChart = null;
 let finishPersonChart = null;
 
-async function loadFinishJobs(dateFrom, dateTo, yards) {
-  const filters = [];
-  if (dateFrom && dateTo) filters.push({ segmentName:'JobStartDate', operator:'between', value:dateFrom, secondValue:dateTo });
-  filters.push(...buildYardFilter(yards));
+async function loadFinishJobs() {
+  const filters = _dsf('Jobs_By_Status');
 
   // KPIs
   try {
@@ -963,19 +1257,19 @@ async function loadFinishJobs(dateFrom, dateTo, yards) {
       else {
         ctxP.style.display='';
         const ex=ctxP.parentElement.querySelector('.chart-empty'); if(ex) ex.remove();
+        const fpLabels = rows.map(r=>r.SalesPerson||'—');
         finishPersonChart = new Chart(ctxP, { type:'bar',
-          data:{ labels:rows.map(r=>r.SalesPerson||'—'),
-            datasets:[
-              { label:'Est. Value', data:rows.map(r=>parseFloat(r.TotalEstimatedValue||0)), backgroundColor:TEAL+'99', borderColor:TEAL, borderWidth:1 },
-              { label:'# Jobs', data:rows.map(r=>parseFloat(r.TotalJobs||0)), backgroundColor:NAVY+'66', borderColor:NAVY, borderWidth:1, yAxisID:'y2' },
-            ]},
+          data:{ datasets: hBarDatasets(fpLabels, [
+              { label:'Est. Value', data:rows.map(r=>parseFloat(r.TotalEstimatedValue||0)), color:TEAL+'99', borderColor:TEAL },
+              { label:'# Jobs',    data:rows.map(r=>parseFloat(r.TotalJobs||0)),            color:NAVY+'66', borderColor:NAVY, extra:{yAxisID:'y2'} },
+            ]) },
           options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false,
             plugins:{ legend:{position:'bottom',labels:{boxWidth:12,font:{size:11}}},
-              tooltip:{callbacks:{label:c=>c.datasetIndex===0?` Est. Value: ${dFmtCur(c.raw)}`:` Jobs: ${dFmtNum(c.raw,0)}`}} },
+              tooltip:{callbacks:{label:c=>c.datasetIndex===0?` Est. Value: ${dFmtCur(c.parsed.x)}`:` Jobs: ${dFmtNum(c.parsed.x,0)}`}} },
             scales:{
-              x:{ grid:{color:'#e2e8f0'}, ticks:{callback:v=>dFmtCurShort(v),font:{size:10}}, beginAtZero:true },
-              y:{ grid:{display:false}, ticks:{font:{size:11}} },
-              y2:{ display:false, beginAtZero:true }
+              x:{ type:'linear', grid:{color:'#e2e8f0'}, ticks:{callback:v=>dFmtCurShort(v),font:{size:10}}, beginAtZero:true },
+              y:{ type:'category', grid:{display:false}, ticks:{font:{size:11}} },
+              y2:{ display:false, type:'linear', beginAtZero:true }
             }
           }
         });
@@ -984,7 +1278,7 @@ async function loadFinishJobs(dateFrom, dateTo, yards) {
   }
 
   // Yard breakout
-  loadYardBreakoutFinish(dateFrom, dateTo, yards);
+  loadYardBreakoutFinish();
   _injectInfoButtons();
 }
 
@@ -994,10 +1288,8 @@ async function loadFinishJobs(dateFrom, dateTo, yards) {
 
 let jplChart = null;
 
-async function loadJobProfitLoss(dateFrom, dateTo, yards) {
-  const filters = [];
-  if (dateFrom && dateTo) filters.push({ segmentName:'JobStartDate', operator:'between', value:dateFrom, secondValue:dateTo });
-  filters.push(...buildYardFilter(yards));
+async function loadJobProfitLoss() {
+  const filters = _dsf('jobs_profit_by_invoice');
 
   // KPIs
   try {
@@ -1048,19 +1340,19 @@ async function loadJobProfitLoss(dateFrom, dateTo, yards) {
       else {
         ctx.style.display='';
         const ex=ctx.parentElement.querySelector('.chart-empty'); if(ex) ex.remove();
+        const jplLabels = rows.map(r=>r.SalesPersonName||'—');
         jplChart = new Chart(ctx, { type:'bar',
-          data:{ labels:rows.map(r=>r.SalesPersonName||'—'),
-            datasets:[
-              { label:'Revenue',  data:rows.map(r=>parseFloat(r.Revenue||0)),      backgroundColor:TEAL+'99', borderColor:TEAL, borderWidth:1 },
-              { label:'Labor',    data:rows.map(r=>parseFloat(r.LaborActual||0)),  backgroundColor:NAVY+'88', borderColor:NAVY, borderWidth:1 },
-              { label:'Material', data:rows.map(r=>parseFloat(r.MaterialActual||0)), backgroundColor:AMBER+'99', borderColor:AMBER, borderWidth:1 },
-            ]},
+          data:{ datasets: hBarDatasets(jplLabels, [
+              { label:'Revenue',  data:rows.map(r=>parseFloat(r.Revenue||0)),        color:TEAL+'99', borderColor:TEAL },
+              { label:'Labor',    data:rows.map(r=>parseFloat(r.LaborActual||0)),    color:NAVY+'88', borderColor:NAVY },
+              { label:'Material', data:rows.map(r=>parseFloat(r.MaterialActual||0)), color:AMBER+'99', borderColor:AMBER },
+            ]) },
           options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false,
             plugins:{ legend:{position:'bottom',labels:{boxWidth:12,font:{size:11}}},
-              tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${dFmtCur(c.raw)}`}} },
+              tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${dFmtCur(c.parsed.x)}`}} },
             scales:{
-              x:{ grid:{color:'#e2e8f0'}, ticks:{callback:v=>dFmtCurShort(v),font:{size:10}}, beginAtZero:true },
-              y:{ grid:{display:false}, ticks:{font:{size:10}} }
+              x:{ type:'linear', grid:{color:'#e2e8f0'}, ticks:{callback:v=>dFmtCurShort(v),font:{size:10}}, beginAtZero:true },
+              y:{ type:'category', grid:{display:false}, ticks:{font:{size:10}} }
             }
           }
         });
@@ -1083,7 +1375,7 @@ async function loadJobProfitLoss(dateFrom, dateTo, yards) {
   }
 
   // Yard breakout
-  loadYardBreakoutJPL(dateFrom, dateTo, yards);
+  loadYardBreakoutJPL();
   _injectInfoButtons();
 }
 
@@ -1094,10 +1386,8 @@ async function loadJobProfitLoss(dateFrom, dateTo, yards) {
 let forecastChart = null;
 let forecastPersonChart = null;
 
-async function loadForecast(dateFrom, dateTo, yards) {
-  const filters = [];
-  if (dateFrom && dateTo) filters.push({ segmentName:'JobStartDate', operator:'between', value:dateFrom, secondValue:dateTo });
-  filters.push(...buildYardFilter(yards));
+async function loadForecast() {
+  const filters = _dsf('Job_Revenue_Forecast');
 
   // KPIs
   try {
@@ -1187,18 +1477,18 @@ async function loadForecast(dateFrom, dateTo, yards) {
       else {
         ctxP.style.display='';
         const ex=ctxP.parentElement.querySelector('.chart-empty'); if(ex) ex.remove();
+        const fcpLabels = rows.map(r=>r.SalesPerson||'—');
         forecastPersonChart = new Chart(ctxP, { type:'bar',
-          data:{ labels:rows.map(r=>r.SalesPerson||'—'),
-            datasets:[
-              { label:'Estimated', data:rows.map(r=>parseFloat(r.EstimatedRevenue||0)), backgroundColor:NAVY+'88', borderColor:NAVY, borderWidth:1 },
-              { label:'Actual',    data:rows.map(r=>parseFloat(r.ActualRevenue||0)),    backgroundColor:TEAL+'bb', borderColor:TEAL, borderWidth:1 },
-            ]},
+          data:{ datasets: hBarDatasets(fcpLabels, [
+              { label:'Estimated', data:rows.map(r=>parseFloat(r.EstimatedRevenue||0)), color:NAVY+'88', borderColor:NAVY },
+              { label:'Actual',    data:rows.map(r=>parseFloat(r.ActualRevenue||0)),    color:TEAL+'bb', borderColor:TEAL },
+            ]) },
           options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false,
             plugins:{ legend:{position:'bottom',labels:{boxWidth:12,font:{size:11}}},
-              tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${dFmtCur(c.raw)}`}} },
+              tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${dFmtCur(c.parsed.x)}`}} },
             scales:{
-              x:{grid:{color:'#e2e8f0'},ticks:{callback:v=>dFmtCurShort(v),font:{size:10}},beginAtZero:true},
-              y:{grid:{display:false},ticks:{font:{size:11}}}
+              x:{ type:'linear', grid:{color:'#e2e8f0'}, ticks:{callback:v=>dFmtCurShort(v),font:{size:10}}, beginAtZero:true },
+              y:{ type:'category', grid:{display:false}, ticks:{font:{size:11}} }
             }
           }
         });
@@ -1207,7 +1497,7 @@ async function loadForecast(dateFrom, dateTo, yards) {
   }
 
   // Yard breakout
-  loadYardBreakoutForecast(dateFrom, dateTo, yards);
+  loadYardBreakoutForecast();
   _injectInfoButtons();
 }
 
@@ -1217,8 +1507,8 @@ async function loadForecast(dateFrom, dateTo, yards) {
 
 let revPersonChart = null;
 
-async function loadRevenueReport(dateFrom, dateTo, yards) {
-  const filters = buildJobFilters(dateFrom, dateTo, yards);
+async function loadRevenueReport() {
+  const filters = _dsf('jobs_profit_loss');
 
   // KPIs (reuse jobs_profit_loss)
   try {
@@ -1266,18 +1556,18 @@ datasetName:'jobs_profit_loss', groupBySegments:['SalesPerson'],
       else {
         ctx.style.display='';
         const ex=ctx.parentElement.querySelector('.chart-empty'); if(ex) ex.remove();
+        const rvpLabels = rows.map(r=>r.SalesPerson||'—');
         revPersonChart = new Chart(ctx, { type:'bar',
-          data:{ labels:rows.map(r=>r.SalesPerson||'—'),
-            datasets:[
-              { label:'Revenue', data:rows.map(r=>parseFloat(r.JobRevenue||0)), backgroundColor:TEAL+'99', borderColor:TEAL, borderWidth:1 },
-              { label:'Profit',  data:rows.map(r=>parseFloat(r.Profit||0)),     backgroundColor:NAVY+'cc', borderColor:NAVY, borderWidth:1 },
-            ]},
+          data:{ datasets: hBarDatasets(rvpLabels, [
+              { label:'Revenue', data:rows.map(r=>parseFloat(r.JobRevenue||0)), color:TEAL+'99', borderColor:TEAL },
+              { label:'Profit',  data:rows.map(r=>parseFloat(r.Profit||0)),     color:NAVY+'cc', borderColor:NAVY },
+            ]) },
           options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false,
             plugins:{ legend:{position:'bottom',labels:{boxWidth:12,font:{size:11}}},
-              tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${dFmtCur(c.raw)}`}} },
+              tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${dFmtCur(c.parsed.x)}`}} },
             scales:{
-              x:{grid:{color:'#e2e8f0'},ticks:{callback:v=>dFmtCurShort(v),font:{size:10}},beginAtZero:true},
-              y:{grid:{display:false},ticks:{font:{size:11}}}
+              x:{ type:'linear', grid:{color:'#e2e8f0'}, ticks:{callback:v=>dFmtCurShort(v),font:{size:10}}, beginAtZero:true },
+              y:{ type:'category', grid:{display:false}, ticks:{font:{size:11}} }
             }
           }
         });
@@ -1302,7 +1592,7 @@ datasetName:'jobs_profit_loss', groupBySegments:['SalesPerson'],
 
 /* ══════════════════════════════════════════════════════════════════
   // Yard breakout
-  loadYardBreakoutRevenue(dateFrom, dateTo, yards);
+  loadYardBreakoutRevenue();
 }
 
 /* ══════════════════════════════════════════════════════════════════
@@ -1313,8 +1603,8 @@ let qsDonutChart=null, qsValueChart=null;
 
 const STATUS_LABELS = { PEND:'Pending', AWD:'Awarded', BUD:'Budget', DUP:'Duplicate', CHECK:'In Review', REJ:'Rejected', LOST:'Lost' };
 
-async function loadQuoteByStatus(dateFrom, dateTo, yards) {
-  const filters = buildQuoteFilters(dateFrom, dateTo, yards);
+async function loadQuoteByStatus() {
+  const filters = _dsf('Quotes_By_Status');
   try {
     const r = await fetch(`${BASE_URL}/bi/query`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({
 datasetName:'Quotes_By_Status', groupBySegments:['QuoteStatus'],
@@ -1385,7 +1675,7 @@ datasetName:'Quotes_By_Status', groupBySegments:['QuoteStatus'],
   } catch(e) {}
 
   // Yard breakout
-  loadYardBreakoutQStatus(dateFrom, dateTo, yards);
+  loadYardBreakoutQStatus();
 }
 
 /* ══════════════════════════════════════════════════════════════════
@@ -1394,8 +1684,8 @@ datasetName:'Quotes_By_Status', groupBySegments:['QuoteStatus'],
 
 let qspBarChart=null;
 
-async function loadQuoteBySalesperson(dateFrom, dateTo, yards) {
-  const filters = buildQuoteFilters(dateFrom, dateTo, yards);
+async function loadQuoteBySalesperson() {
+  const filters = _dsf('Quotes_By_Status');
   try {
     const r = await fetch(`${BASE_URL}/bi/query`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({
 datasetName:'Quotes_By_Status', groupBySegments:['SalesPerson'],
@@ -1414,12 +1704,17 @@ datasetName:'Quotes_By_Status', groupBySegments:['SalesPerson'],
       if(qspBarChart){qspBarChart.destroy();qspBarChart=null;}
       ctx.style.display='';
       const ex=ctx.parentElement.querySelector('.chart-empty'); if(ex)ex.remove();
+      const qspLabels = rows.map(r=>r.SalesPerson||'—');
       qspBarChart=new Chart(ctx,{type:'bar',
-        data:{labels:rows.map(r=>r.SalesPerson||'—'),
-          datasets:[{label:'Est. Value',data:rows.map(r=>parseFloat(r.TotalQuoteMax||0)),backgroundColor:TEAL+'99',borderColor:TEAL,borderWidth:1}]},
+        data:{ datasets: hBarDatasets(qspLabels, [
+          { label:'Est. Value', data:rows.map(r=>parseFloat(r.TotalQuoteMax||0)), color:TEAL+'99', borderColor:TEAL }
+        ]) },
         options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
-          plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` Est. Value: ${dFmtCur(c.raw)}`}}},
-          scales:{x:{grid:{color:'#e2e8f0'},ticks:{callback:v=>dFmtCurShort(v),font:{size:10}},beginAtZero:true},y:{grid:{display:false},ticks:{font:{size:11}}}}
+          plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` Est. Value: ${dFmtCur(c.parsed.x)}`}}},
+          scales:{
+            x:{ type:'linear', grid:{color:'#e2e8f0'}, ticks:{callback:v=>dFmtCurShort(v),font:{size:10}}, beginAtZero:true },
+            y:{ type:'category', grid:{display:false}, ticks:{font:{size:11}} }
+          }
         }
       });
     }
@@ -1439,7 +1734,7 @@ datasetName:'Quotes_By_Status', groupBySegments:['SalesPerson'],
   } catch(e) {}
 
   // Yard breakout
-  loadYardBreakoutQSP(dateFrom, dateTo, yards);
+  loadYardBreakoutQSP();
 }
 
 /* ══════════════════════════════════════════════════════════════════
@@ -1448,10 +1743,9 @@ datasetName:'Quotes_By_Status', groupBySegments:['SalesPerson'],
 
 let qfMonthChart=null, qfCountChart=null;
 
-async function loadQuoteForecast(dateFrom, dateTo, yards) {
+async function loadQuoteForecast() {
   const filters=[];
-  if(dateFrom&&dateTo) filters.push({segmentName:'QuoteDate',operator:'between',value:dateFrom,secondValue:dateTo});
-  filters.push(...buildYardFilter(yards));
+  filters.push(..._dsf('Quote_Revenue_Forecast'));
 
   try {
     const r = await fetch(`${BASE_URL}/bi/query`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({
@@ -1502,7 +1796,7 @@ datasetName:'Quote_Revenue_Forecast', groupBySegments:['Year','Month'],
     }
   } catch(e) {}
   // Yard breakout
-  loadYardBreakoutQForecast(dateFrom, dateTo, yards);
+  loadYardBreakoutQForecast();
 }
 
 
@@ -1576,11 +1870,11 @@ async function loadYardBreakout({ canvasId, datasetName, filters, metrics, label
 
 // ── Per-panel yard breakout loaders ──────────────────────────────
 
-async function loadYardBreakoutPL(dateFrom, dateTo, yards) {
+async function loadYardBreakoutPL() {
   await loadYardBreakout({
     canvasId: 'yard-breakout-pl-chart',
     datasetName: 'jobs_profit_loss',
-    filters: buildJobFilters(dateFrom, dateTo, yards),
+    filters: _dsf('jobs_profit_loss'),
     metrics: [
       { metricName:'TotalRevenue', aggregation:'SUM', alias:'TotalRevenue' },
       { metricName:'TotalProfit',  aggregation:'SUM', alias:'TotalProfit'  },
@@ -1590,11 +1884,11 @@ async function loadYardBreakoutPL(dateFrom, dateTo, yards) {
   });
 }
 
-async function loadYardBreakoutFinish(dateFrom, dateTo, yards) {
+async function loadYardBreakoutFinish() {
   await loadYardBreakout({
     canvasId: 'yard-breakout-finish-chart',
     datasetName: 'Jobs_By_Status',
-    filters: buildJobFilters(dateFrom, dateTo, yards),
+    filters: _dsf('jobs_profit_loss'),
     metrics: [
       { metricName:'TotalJobs',           aggregation:'COUNT', alias:'TotalJobs' },
       { metricName:'TotalEstimatedValue', aggregation:'SUM',   alias:'TotalEstimatedValue' },
@@ -1604,11 +1898,11 @@ async function loadYardBreakoutFinish(dateFrom, dateTo, yards) {
   });
 }
 
-async function loadYardBreakoutJPL(dateFrom, dateTo, yards) {
+async function loadYardBreakoutJPL() {
   await loadYardBreakout({
     canvasId: 'yard-breakout-jpl-chart',
     datasetName: 'jobs_profit_by_invoice',
-    filters: buildJobFilters(dateFrom, dateTo, yards),
+    filters: _dsf('jobs_profit_loss'),
     groupBySegments: ['YardName'],
     metrics: [
       { metricName:'Revenue',      aggregation:'SUM', alias:'Revenue'      },
@@ -1619,11 +1913,11 @@ async function loadYardBreakoutJPL(dateFrom, dateTo, yards) {
   });
 }
 
-async function loadYardBreakoutForecast(dateFrom, dateTo, yards) {
+async function loadYardBreakoutForecast() {
   await loadYardBreakout({
     canvasId: 'yard-breakout-forecast-chart',
     datasetName: 'Job_Revenue_Forecast',
-    filters: buildJobFilters(dateFrom, dateTo, yards),
+    filters: _dsf('jobs_profit_loss'),
     metrics: [
       { metricName:'EstimatedRevenue', aggregation:'SUM', alias:'EstimatedRevenue' },
       { metricName:'ActualRevenue',    aggregation:'SUM', alias:'ActualRevenue'    },
@@ -1633,11 +1927,11 @@ async function loadYardBreakoutForecast(dateFrom, dateTo, yards) {
   });
 }
 
-async function loadYardBreakoutRevenue(dateFrom, dateTo, yards) {
+async function loadYardBreakoutRevenue() {
   await loadYardBreakout({
     canvasId: 'yard-breakout-rev-chart',
     datasetName: 'jobs_profit_loss',
-    filters: buildJobFilters(dateFrom, dateTo, yards),
+    filters: _dsf('jobs_profit_loss'),
     metrics: [
       { metricName:'TotalRevenue', aggregation:'SUM', alias:'TotalRevenue' },
       { metricName:'TotalProfit',  aggregation:'SUM', alias:'TotalProfit'  },
@@ -1647,11 +1941,11 @@ async function loadYardBreakoutRevenue(dateFrom, dateTo, yards) {
   });
 }
 
-async function loadYardBreakoutQSummary(dateFrom, dateTo, yards) {
+async function loadYardBreakoutQSummary() {
   await loadYardBreakout({
     canvasId: 'yard-breakout-qsummary-chart',
     datasetName: 'Quotes_By_Status',
-    filters: buildQuoteFilters(dateFrom, dateTo, yards),
+    filters: _dsf('Quotes_By_Status'),
     metrics: [
       { metricName:'QuoteCount',   aggregation:'COUNT', alias:'QuoteCount' },
       { metricName:'TotalQuoteMax',aggregation:'SUM',   alias:'TotalQuoteMax' },
@@ -1661,33 +1955,33 @@ async function loadYardBreakoutQSummary(dateFrom, dateTo, yards) {
   });
 }
 
-async function loadYardBreakoutQStatus(dateFrom, dateTo, yards) {
+async function loadYardBreakoutQStatus() {
   await loadYardBreakout({
     canvasId: 'yard-breakout-qstatus-chart',
     datasetName: 'Quotes_By_Status',
-    filters: buildQuoteFilters(dateFrom, dateTo, yards),
+    filters: _dsf('Quotes_By_Status'),
     metrics: [{ metricName:'QuoteCount', aggregation:'COUNT', alias:'QuoteCount' }],
     labels: ['Quote Count'],
     colors: [TEAL],
   });
 }
 
-async function loadYardBreakoutQSP(dateFrom, dateTo, yards) {
+async function loadYardBreakoutQSP() {
   await loadYardBreakout({
     canvasId: 'yard-breakout-qsp-chart',
     datasetName: 'Quotes_By_Status',
-    filters: buildQuoteFilters(dateFrom, dateTo, yards),
+    filters: _dsf('Quotes_By_Status'),
     metrics: [{ metricName:'QuoteCount', aggregation:'COUNT', alias:'QuoteCount' }],
     labels: ['Quote Count'],
     colors: [TEAL],
   });
 }
 
-async function loadYardBreakoutQForecast(dateFrom, dateTo, yards) {
+async function loadYardBreakoutQForecast() {
   await loadYardBreakout({
     canvasId: 'yard-breakout-qforecast-chart',
     datasetName: 'Quote_Revenue_Forecast',
-    filters: buildQuoteFilters(dateFrom, dateTo, yards),
+    filters: _dsf('Quotes_By_Status'),
     metrics: [{ metricName:'TotalQuoteAmount', aggregation:'SUM', alias:'TotalQuoteAmount' }],
     labels: ['Estimated Revenue'],
     colors: [TEAL],
@@ -1700,17 +1994,10 @@ async function loadYardBreakoutQForecast(dateFrom, dateTo, yards) {
 
 let eplYardChart = null, eplExpenseChart = null;
 
-function buildEquipFilters(dateFrom, dateTo, yards) {
-  const f = [];
-  if (dateFrom && dateTo) f.push({ segmentName:'InvoiceDate', operator:'between', value: dateFrom, secondValue: dateTo });
-  else if (dateFrom)      f.push({ segmentName:'InvoiceDate', operator:'gte', value: dateFrom });
-  else if (dateTo)        f.push({ segmentName:'InvoiceDate', operator:'lte', value: dateTo });
-  f.push(...buildYardFilter(yards));
-  return f;
-}
+function buildEquipFilters() { return _dsf('Equipment_Profit_Loss'); }
 
-async function loadEquipPL(dateFrom, dateTo, yards) {
-  const filters = buildEquipFilters(dateFrom, dateTo, yards);
+async function loadEquipPL() {
+  const filters = _dsf('Equipment_Profit_Loss');
 
   // KPIs
   try {
@@ -1849,9 +2136,8 @@ datasetName:'Equipment_Profit_Loss', groupBySegments:['Yard'],
 
 let utilYardChart = null, utilDowntimeChart = null;
 
-async function loadEquipUtilization(dateFrom, dateTo, yards) {
-  // Utilization uses Year/Month not a date field — skip date filter, use yard only
-  const filters = buildYardFilter(yards);
+async function loadEquipUtilization() {
+  const filters = _dsf('Equipment_Utilization');
 
   // KPIs
   try {
@@ -1983,14 +2269,10 @@ datasetName:'Equipment_Utilization', groupBySegments:['Yard'],
 
 let woYardChart = null, woCostChart = null;
 
-function buildWOFilters(dateFrom, dateTo, yards) {
-  // WO_Dashboard uses InvoiceDate — check if it has a date segment
-  // For now use yard only as WO doesn't expose a date segment in its schema
-  return buildYardFilter(yards);
-}
+function buildWOFilters() { return _dsf('WO_Dashboard'); }
 
-async function loadWorkOrders(dateFrom, dateTo, yards) {
-  const filters = buildWOFilters(dateFrom, dateTo, yards);
+async function loadWorkOrders() {
+  const filters = _dsf('WO_Dashboard');
 
   // KPIs
   try {
@@ -2123,8 +2405,8 @@ const PM_STATUS_LABELS = { 0: 'Coming Due', 1: 'Past Due' };
 
 let pmTypeChart = null, pmYardChart = null;
 
-async function loadPM(dateFrom, dateTo, yards) {
-  const filters = buildYardFilter(yards);
+async function loadPM() {
+  const filters = _dsf('Preventive_Maintenance');
 
   // KPIs
   try {
