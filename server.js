@@ -1279,6 +1279,7 @@ app.get('/api/bi/fiscal/presets', async (req, res) => {
     const { rows: [today] } = await pool.query(
       `SELECT fiscal_week, fiscal_week_start,
               fiscal_month, fiscal_month_start, fiscal_month_end,
+              fiscal_quarter,
               fiscal_year, fiscal_year_start, fiscal_year_end
        FROM fiscal_days
        WHERE calendar_id=$1 AND calendar_date=$2::date`,
