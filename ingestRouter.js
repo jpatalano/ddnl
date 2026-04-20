@@ -22,10 +22,12 @@
  *   DELETE /api/admin/api-keys/:id                  — revoke key
  */
 
-const express = require('express');
-const crypto  = require('crypto');
-const { pool } = require('./db');
-const es      = require('./esClient');
+const express    = require('express');
+const crypto     = require('crypto');
+const multer     = require('multer');
+const { parse: csvParse } = require('csv-parse/sync');
+const { pool }   = require('./db');
+const es         = require('./esClient');
 
 const router = express.Router();
 
@@ -683,9 +685,6 @@ router.delete('/admin/api-keys/:id', requireApiKey, async (req, res) => {
 
 
 // ── Channel management routes ─────────────────────────────────────────────────
-const multer = require('multer');
-const { parse: csvParse } = require('csv-parse/sync');
-
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 100 * 1024 * 1024 }  // 100MB max CSV
