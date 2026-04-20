@@ -681,4 +681,282 @@ router.delete('/admin/api-keys/:id', requireApiKey, async (req, res) => {
   res.json({ success: true });
 });
 
+
+// ── Channel management routes ─────────────────────────────────────────────────
+const multer = require('multer');
+const { parse: csvParse } = require('csv-parse/sync');
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 100 * 1024 * 1024 }  // 100MB max CSV
+});
+
+// GET /api/ingest/:dataset/channels — list all channels for this dataset
+router.get('/:dataset/channels', requireApiKey, async (req, res) => {
+  const { clientId } = req.ingestCtx;
+  const { dataset }  = req.params;
+  const def = await getDatasetDef(clientId, dataset);
+  if (!def) return res.status(404).json({ error: `Dataset '${dataset}' not found` });
+
+  const { rows } = await pool.query(
+    `SELECT id, channel_name, method, mode, id_field, is_active, options,
+            last_run_at, last_run_count, last_run_ok, webhook_token, created_at, updated_at
+     FROM ingest_channels WHERE dataset_id=$1 ORDER BY created_at`,
+    [def.id]
+  );
+  // Mask webhook_token — only show last 6 chars
+  const safe = rows.map(r => ({
+    ...r,
+    webhook_url: r.webhook_token
+      ? `${process.env.PUBLIC_URL || ''}/api/ingest/${dataset}/webhook/${r.webhook_token}`
+      : null,
+    webhook_token: r.webhook_token ? '••••' + r.webhook_token.slice(-6) : null
+  }));
+  res.json({ success: true, channels: safe });
+});
+
+// POST /api/ingest/:dataset/channels — create or update a channel
+// Body: { channel_name, method, mode, id_field, is_active, options }
+router.post('/:dataset/channels', requireApiKey, async (req, res) => {
+  const { clientId } = req.ingestCtx;
+  const { dataset }  = req.params;
+  const { channel_name, method, mode = 'batch', id_field, is_active = true, options = {} } = req.body;
+
+  if (!channel_name || !method) return res.status(400).json({ error: 'channel_name and method are required' });
+  const VALID_METHODS = ['api_push', 'csv', 'webhook', 'sftp'];
+  if (!VALID_METHODS.includes(method)) return res.status(400).json({ error: `method must be one of: ${VALID_METHODS.join(', ')}` });
+
+  const def = await getDatasetDef(clientId, dataset);
+  if (!def) return res.status(404).json({ error: `Dataset '${dataset}' not found` });
+
+  // Auto-generate webhook token for webhook channels
+  let webhookToken = null;
+  if (method === 'webhook') {
+    const { rows: existing } = await pool.query(
+      `SELECT webhook_token FROM ingest_channels WHERE dataset_id=$1 AND channel_name=$2`,
+      [def.id, channel_name]
+    );
+    webhookToken = existing[0]?.webhook_token || crypto.randomBytes(24).toString('hex');
+  }
+
+  const { rows: [ch] } = await pool.query(
+    `INSERT INTO ingest_channels
+       (dataset_id, client_id, channel_name, method, mode, id_field, is_active, options, webhook_token)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+     ON CONFLICT (dataset_id, channel_name) DO UPDATE
+       SET method=$4, mode=$5, id_field=$6, is_active=$7, options=$8,
+           webhook_token=COALESCE(ingest_channels.webhook_token, $9),
+           updated_at=NOW()
+     RETURNING *`,
+    [def.id, clientId, channel_name, method, mode, id_field || null,
+     is_active, JSON.stringify(options), webhookToken]
+  );
+
+  res.json({
+    success: true,
+    channel: {
+      ...ch,
+      webhook_url: ch.webhook_token
+        ? `${process.env.PUBLIC_URL || ''}/api/ingest/${dataset}/webhook/${ch.webhook_token}`
+        : null,
+      webhook_token: ch.webhook_token ? '••••' + ch.webhook_token.slice(-6) : null
+    }
+  });
+});
+
+// PATCH /api/ingest/:dataset/channels/:channelName — toggle active or update options
+router.patch('/:dataset/channels/:channelName', requireApiKey, async (req, res) => {
+  const { clientId } = req.ingestCtx;
+  const { dataset, channelName } = req.params;
+  const def = await getDatasetDef(clientId, dataset);
+  if (!def) return res.status(404).json({ error: `Dataset '${dataset}' not found` });
+
+  const updates = [];
+  const vals    = [def.id, channelName];
+  let i = 3;
+  if (req.body.is_active  !== undefined) { updates.push(`is_active=$${i++}`);  vals.push(req.body.is_active); }
+  if (req.body.id_field   !== undefined) { updates.push(`id_field=$${i++}`);   vals.push(req.body.id_field || null); }
+  if (req.body.options    !== undefined) { updates.push(`options=$${i++}`);    vals.push(JSON.stringify(req.body.options)); }
+  if (req.body.mode       !== undefined) { updates.push(`mode=$${i++}`);       vals.push(req.body.mode); }
+  if (!updates.length) return res.status(400).json({ error: 'Nothing to update' });
+
+  updates.push('updated_at=NOW()');
+  const { rows: [ch] } = await pool.query(
+    `UPDATE ingest_channels SET ${updates.join(',')}
+     WHERE dataset_id=$1 AND channel_name=$2 RETURNING *`,
+    vals
+  );
+  if (!ch) return res.status(404).json({ error: 'Channel not found' });
+  res.json({ success: true, channel: ch });
+});
+
+// ── CSV ingest ─────────────────────────────────────────────────────────────────
+// POST /api/ingest/:dataset/csv
+// Multipart: field "file" = CSV file, optional field "channel" = channel_name
+// Resolves id_field from the named channel (or falls back to null = auto-id).
+router.post('/:dataset/csv', requireApiKey, upload.single('file'), async (req, res) => {
+  const { clientId, label } = req.ingestCtx;
+  const { dataset } = req.params;
+  const channelName = req.body?.channel || 'Nightly CSV';
+  const t0 = Date.now();
+
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded — use multipart field "file"' });
+
+  const def = await getDatasetDef(clientId, dataset);
+  if (!def) return res.status(404).json({ error: `Dataset '${dataset}' not found` });
+
+  // Resolve channel config for id_field
+  const { rows: [ch] } = await pool.query(
+    `SELECT id_field FROM ingest_channels
+     WHERE dataset_id=$1 AND channel_name=$2 AND method='csv'`,
+    [def.id, channelName]
+  );
+  const idField = ch?.id_field || null;
+
+  // Parse CSV
+  let rows;
+  try {
+    rows = csvParse(req.file.buffer, {
+      columns:          true,    // first row = header
+      skip_empty_lines: true,
+      trim:             true,
+      cast:             true,    // auto-cast numbers/booleans
+    });
+  } catch (e) {
+    return res.status(400).json({ error: `CSV parse error: ${e.message}` });
+  }
+
+  if (!rows.length) return res.status(400).json({ error: 'CSV contained no data rows' });
+
+  try {
+    const result = await es.bulkIndex(clientId, dataset, rows, idField);
+    const durationMs = Date.now() - t0;
+
+    // Update channel last_run stats
+    if (ch) {
+      await pool.query(
+        `UPDATE ingest_channels SET last_run_at=NOW(), last_run_count=$1, last_run_ok=$2
+         WHERE dataset_id=$3 AND channel_name=$4`,
+        [result.indexed, result.failed === 0, def.id, channelName]
+      );
+    }
+    await logIngest(clientId, dataset, 'csv', result, label, durationMs);
+    syncLookupFromDocs(clientId, dataset, def.id, rows).catch(() => {});
+
+    res.json({ success: true, channel: channelName, idField, rows: rows.length,
+               indexed: result.indexed, failed: result.failed, errors: result.errors, durationMs });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Webhook ingest ─────────────────────────────────────────────────────────────
+// POST /api/ingest/:dataset/webhook/:token
+// No X-Api-Key needed — token in URL authenticates the channel.
+// Body: single doc object OR { docs: [...] } array
+// Optional HMAC: header X-Webhook-Signature: sha256=<hex> verifies against channel options.secret
+router.post('/:dataset/webhook/:token', async (req, res) => {
+  const { dataset, token } = req.params;
+  const t0 = Date.now();
+
+  // Resolve channel by webhook token
+  const { rows: [ch] } = await pool.query(
+    `SELECT ic.*, dd.client_id as owner_client_id, dd.id as ds_id
+     FROM ingest_channels ic
+     JOIN dataset_definitions dd ON dd.id = ic.dataset_id
+     WHERE ic.webhook_token=$1 AND ic.method='webhook' AND ic.is_active=TRUE
+       AND dd.name=$2`,
+    [token, dataset]
+  );
+  if (!ch) return res.status(401).json({ error: 'Invalid or inactive webhook token' });
+
+  // Optional HMAC signature verification
+  const secret = ch.options?.secret;
+  if (secret) {
+    const sig = req.headers['x-webhook-signature'] || '';
+    const expected = 'sha256=' + crypto
+      .createHmac('sha256', secret)
+      .update(JSON.stringify(req.body))
+      .digest('hex');
+    if (sig !== expected) {
+      return res.status(401).json({ error: 'Invalid webhook signature' });
+    }
+  }
+
+  const payload = req.body;
+  const docs    = Array.isArray(payload)       ? payload
+                : Array.isArray(payload?.docs)  ? payload.docs
+                : [payload];
+
+  if (!docs.length || !docs[0]) return res.status(400).json({ error: 'No documents in payload' });
+
+  const idField = ch.id_field || null;
+  try {
+    const result = await es.bulkIndex(ch.owner_client_id, dataset, docs, idField);
+    const durationMs = Date.now() - t0;
+
+    // Update channel last_run stats
+    await pool.query(
+      `UPDATE ingest_channels SET last_run_at=NOW(), last_run_count=$1, last_run_ok=$2 WHERE id=$3`,
+      [result.indexed, result.failed === 0, ch.id]
+    );
+    await logIngest(ch.owner_client_id, dataset, 'webhook', result, `webhook:${token.slice(-6)}`, durationMs);
+
+    const def = await getDatasetDef(ch.owner_client_id, dataset);
+    if (def) syncLookupFromDocs(ch.owner_client_id, dataset, def.id, docs).catch(() => {});
+
+    res.json({ success: true, indexed: result.indexed, failed: result.failed, durationMs });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Bulk with channel ─────────────────────────────────────────────────────────
+// Override the original /bulk to resolve id_field from channel config if channel param given
+// POST /api/ingest/:dataset/bulk?channel=<channel_name>
+// (The original router.post('/:dataset/bulk') already exists above — we patch id_field resolution)
+// Add a dedicated api_push route that auto-resolves channel:
+router.post('/:dataset/push', requireApiKey, async (req, res) => {
+  const { clientId, label } = req.ingestCtx;
+  const { dataset } = req.params;
+  const channelName = req.query.channel || req.body?.channel || 'API Push';
+  const { docs = [], replace = false } = req.body;
+  const t0 = Date.now();
+
+  if (!Array.isArray(docs) || !docs.length) return res.status(400).json({ error: 'docs must be a non-empty array' });
+
+  const def = await getDatasetDef(clientId, dataset);
+  if (!def) return res.status(404).json({ error: `Dataset '${dataset}' not found` });
+
+  // Resolve id_field from channel
+  const { rows: [ch] } = await pool.query(
+    `SELECT id, id_field FROM ingest_channels
+     WHERE dataset_id=$1 AND channel_name=$2 AND method='api_push'`,
+    [def.id, channelName]
+  );
+  const idField = ch?.id_field || null;
+
+  try {
+    const result = replace
+      ? await es.replaceAll(clientId, dataset, docs)
+      : await es.bulkIndex(clientId, dataset, docs, idField);
+
+    const durationMs = Date.now() - t0;
+    if (ch) {
+      await pool.query(
+        `UPDATE ingest_channels SET last_run_at=NOW(), last_run_count=$1, last_run_ok=$2 WHERE id=$3`,
+        [result.indexed, result.failed === 0, ch.id]
+      );
+    }
+    await logIngest(clientId, dataset, replace ? 'replace' : 'push', result, label, durationMs);
+    syncLookupFromDocs(clientId, dataset, def.id, docs).catch(() => {});
+
+    res.json({ success: true, channel: channelName, idField, indexed: result.indexed,
+               failed: result.failed, errors: result.errors, durationMs });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+
 module.exports = { router, resolveApiKey, hashKey, generateKey };

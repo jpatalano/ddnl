@@ -127,17 +127,23 @@ async function deleteIndex(instanceId, datasetName, version) {
 /**
  * Bulk index documents into the current alias.
  * docs: array of plain objects — we add __instance_id + __ingested_at.
+ * idField: optional field name to use as ES _id (enables upsert semantics via 'index' action).
+ *   When set, re-indexing the same idField value updates the doc in-place — no duplicates.
+ *   When null/undefined, ES auto-generates _id (append-only, fine for immutable event logs).
  * Returns { indexed, failed, errors[] }
  */
-async function bulkIndex(instanceId, datasetName, docs) {
+async function bulkIndex(instanceId, datasetName, docs, idField = null) {
   const es    = getClient();
   const alias = aliasName(instanceId, datasetName);
   const now   = new Date().toISOString();
 
-  const body = docs.flatMap(doc => [
-    { index: { _index: alias } },
-    { ...doc, __instance_id: instanceId, __ingested_at: now }
-  ]);
+  const body = docs.flatMap(doc => {
+    const enriched = { ...doc, __instance_id: instanceId, __ingested_at: now };
+    const action   = idField && doc[idField] != null
+      ? { index: { _index: alias, _id: String(doc[idField]) } }  // upsert by id
+      : { index: { _index: alias } };                             // auto-id (append)
+    return [action, enriched];
+  });
 
   const result = await es.bulk({ refresh: true, body });
 

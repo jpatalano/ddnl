@@ -352,6 +352,31 @@ const MIGRATIONS = [
   // lookup_key_field: field in the lookup dataset to match against (defaults to lookup's key_field if null)
   `ALTER TABLE dataset_field_metadata
     ADD COLUMN IF NOT EXISTS lookup_key_field VARCHAR(255)`
+  // 011 — ingest channels (one row per dataset × channel config)
+  // A dataset can have multiple channels simultaneously (e.g. nightly CSV + realtime webhook).
+  // Each channel has its own id_field (upsert key), mode, schedule, and method-specific options.
+  // Methods: 'api_push' | 'csv' | 'webhook' | 'sftp'
+  // Modes:   'batch' (full or delta) | 'realtime' (one doc at a time)
+  `CREATE TABLE IF NOT EXISTS ingest_channels (
+    id             SERIAL PRIMARY KEY,
+    dataset_id     INTEGER NOT NULL REFERENCES dataset_definitions(id) ON DELETE CASCADE,
+    client_id      VARCHAR(255) NOT NULL,
+    channel_name   VARCHAR(255) NOT NULL,            -- human label e.g. 'Nightly CSV'
+    method         VARCHAR(64) NOT NULL,             -- 'api_push' | 'csv' | 'webhook' | 'sftp'
+    mode           VARCHAR(32) NOT NULL DEFAULT 'batch', -- 'batch' | 'realtime'
+    id_field       VARCHAR(255),                     -- ES _id field for upserts (null = auto-generate)
+    is_active      BOOLEAN DEFAULT TRUE,
+    options        JSONB NOT NULL DEFAULT '{}',      -- method-specific: sftp_path, webhook_secret, schedule, etc.
+    last_run_at    TIMESTAMPTZ,
+    last_run_count INTEGER,                          -- docs indexed in last run
+    last_run_ok    BOOLEAN,
+    webhook_token  VARCHAR(255),                     -- auto-generated token for webhook URL
+    created_at     TIMESTAMPTZ DEFAULT NOW(),
+    updated_at     TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(dataset_id, channel_name)
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_ingest_channels_dataset ON ingest_channels(dataset_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_ingest_channels_webhook ON ingest_channels(webhook_token) WHERE webhook_token IS NOT NULL`,
 ];
 
 async function initDb() {

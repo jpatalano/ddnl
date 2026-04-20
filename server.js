@@ -1257,6 +1257,94 @@ app.get('/api/bi/admin/fiscal', async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+
+// GET /api/bi/fiscal/presets?date=YYYY-MM-DD
+// Returns date boundaries for all fiscal presets for the given date (defaults to today).
+// Client calls this once on init — no need to ship fiscal_days to the browser.
+app.get('/api/bi/fiscal/presets', async (req, res) => {
+  const inst = resolveInstance(req);
+  if (inst.adapter !== 'internal') return res.json({ success: true, data: null });
+
+  const refDate = req.query.date || new Date().toISOString().slice(0, 10);
+
+  try {
+    const calRow = await pool.query(
+      `SELECT id FROM fiscal_calendars WHERE client_id=$1 AND is_active=TRUE ORDER BY id LIMIT 1`,
+      [inst.clientId]
+    );
+    if (!calRow.rows.length) return res.json({ success: true, data: null });
+    const calId = calRow.rows[0].id;
+
+    // Look up the fiscal_days row for refDate to get week/month/year membership
+    const { rows: [today] } = await pool.query(
+      `SELECT fiscal_week, fiscal_week_start,
+              fiscal_month, fiscal_month_start, fiscal_month_end,
+              fiscal_year, fiscal_year_start, fiscal_year_end
+       FROM fiscal_days
+       WHERE calendar_id=$1 AND calendar_date=$2::date`,
+      [calId, refDate]
+    );
+
+    if (!today) return res.json({ success: true, data: null, reason: 'refDate not in fiscal_days' });
+
+    // Fiscal week: start of this week → refDate (or end of week for full week view)
+    const [fwRow] = (await pool.query(
+      `SELECT MIN(calendar_date)::text AS from_, MAX(calendar_date)::text AS to_
+       FROM fiscal_days
+       WHERE calendar_id=$1 AND fiscal_week=$2
+         AND fiscal_year=$3`,
+      [calId, today.fiscal_week, today.fiscal_year]
+    )).rows;
+
+    // Last fiscal week
+    const [fwLastRow] = (await pool.query(
+      `SELECT MIN(calendar_date)::text AS from_, MAX(calendar_date)::text AS to_
+       FROM fiscal_days
+       WHERE calendar_id=$1 AND fiscal_week=$2
+         AND fiscal_year=$3`,
+      [calId, today.fiscal_week - 1, today.fiscal_year]
+    )).rows;
+
+    // Fiscal month
+    const [fmRow] = (await pool.query(
+      `SELECT MIN(calendar_date)::text AS from_, MAX(calendar_date)::text AS to_
+       FROM fiscal_days
+       WHERE calendar_id=$1 AND fiscal_month=$2
+         AND fiscal_year=$3`,
+      [calId, today.fiscal_month, today.fiscal_year]
+    )).rows;
+
+    // Last fiscal month
+    const [fmLastRow] = (await pool.query(
+      `SELECT MIN(calendar_date)::text AS from_, MAX(calendar_date)::text AS to_
+       FROM fiscal_days
+       WHERE calendar_id=$1 AND fiscal_month=$2
+         AND fiscal_year=$3`,
+      [calId, today.fiscal_month - 1, today.fiscal_year]
+    )).rows;
+
+    // Fiscal year
+    const [fyRow] = (await pool.query(
+      `SELECT MIN(calendar_date)::text AS from_, MAX(calendar_date)::text AS to_
+       FROM fiscal_days
+       WHERE calendar_id=$1 AND fiscal_year=$2`,
+      [calId, today.fiscal_year]
+    )).rows;
+
+    res.json({
+      success: true,
+      data: {
+        refDate,
+        fiscal_week:       fwRow?.from_     ? { from: fwRow.from_,     to: fwRow.to_     } : null,
+        fiscal_week_last:  fwLastRow?.from_  ? { from: fwLastRow.from_,  to: fwLastRow.to_  } : null,
+        fiscal_month:      fmRow?.from_     ? { from: fmRow.from_,     to: fmRow.to_     } : null,
+        fiscal_month_last: fmLastRow?.from_  ? { from: fmLastRow.from_,  to: fmLastRow.to_  } : null,
+        fiscal_year:       fyRow?.from_     ? { from: fyRow.from_,     to: fyRow.to_     } : null,
+      }
+    });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 // GET /api/bi/fiscal/compare-range?from=YYYY-MM-DD&to=YYYY-MM-DD
 // Returns same-period-last-year and prior-period date windows using fiscal_days
 app.get('/api/bi/fiscal/compare-range', async (req, res) => {

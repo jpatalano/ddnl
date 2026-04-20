@@ -375,10 +375,15 @@ function buildSalesDocs(dates) {
           const price         = round2(item.base_price * rand(0.95, 1.05));
           const revenue       = round2(units * price);
           const transactions  = randInt(Math.ceil(units / 4), Math.max(1, units));
+          // item_count: total individual items across all transactions (units × avg items per txn)
+          const item_count    = randInt(units, Math.round(units * 1.4));
+          // sales_pk: deterministic composite key — enables upsert/idempotent re-indexing
+          const sales_pk      = `${date}__${store.id}__${item.plu}`;
           docs.push({
             __instance_id: INSTANCE_ID,
             __ingested_at: new Date().toISOString(),
             date,
+            sales_pk,
             store_id:      store.id,
             store_name:    store.name,
             city:          store.city,
@@ -392,6 +397,7 @@ function buildSalesDocs(dates) {
             plu_code:      item.plu,
             unit_type:     item.unit,
             units_sold:    units,
+            item_count,
             unit_price:    price,
             revenue,
             transactions,
@@ -504,7 +510,9 @@ const SALES_FIELDS = [
   { name: 'item_name',    type: 'keyword', role: 'segment' },
   { name: 'plu_code',     type: 'keyword', role: 'segment' },
   { name: 'unit_type',    type: 'keyword', role: 'segment' },
+  { name: 'sales_pk',     type: 'keyword', role: 'segment', isIdField: true          },
   { name: 'units_sold',   type: 'integer', role: 'metric', aggregationType: 'sum'   },
+  { name: 'item_count',   type: 'integer', role: 'metric', aggregationType: 'sum'   },
   { name: 'unit_price',   type: 'float',   role: 'metric', aggregationType: 'avg'   },
   { name: 'revenue',      type: 'float',   role: 'metric', aggregationType: 'sum'   },
   { name: 'transactions', type: 'integer', role: 'metric', aggregationType: 'sum'   },
@@ -743,6 +751,91 @@ async function registerLookupDatasets(datasetIdMap) {
   } finally { client.release(); }
 }
 
+// ─── Ingest channel registration ─────────────────────────────────────────────
+// Seeds the default ingest channel config for each dataset.
+// Uses ON CONFLICT DO NOTHING so manual Designer edits are never overwritten.
+
+async function registerIngestChannels(datasetIdMap) {
+  if (!pool) { console.log('  No DATABASE_URL — skipping ingest channel registration'); return; }
+  const client = await pool.connect();
+  try {
+    // Sales: nightly CSV + realtime webhook (both use sales_pk as id_field)
+    const salesId = datasetIdMap['sales'];
+    if (salesId) {
+      await client.query(`
+        INSERT INTO ingest_channels
+          (dataset_id, client_id, channel_name, method, mode, id_field, is_active, options)
+        VALUES
+          ($1, $2, 'Nightly CSV',       'csv',      'batch',    'sales_pk', TRUE,
+           '{"schedule":"nightly","description":"Full or delta CSV drop from POS system"}'),
+          ($1, $2, 'Realtime Webhook',  'webhook',  'realtime', 'sales_pk', FALSE,
+           '{"description":"Per-transaction push from POS or middleware"}'),
+          ($1, $2, 'SFTP Drop',         'sftp',     'batch',    'sales_pk', FALSE,
+           '{"sftp_path":"/exports/sales_*.csv","description":"SFTP file drop — polling worker (future)"}')
+        ON CONFLICT (dataset_id, channel_name) DO NOTHING
+      `, [salesId, INSTANCE_ID]);
+      console.log('  Registered ingest channels for sales ✓');
+    }
+
+    // Shrinkage: nightly CSV only
+    const shrinkId = datasetIdMap['shrinkage'];
+    if (shrinkId) {
+      await client.query(`
+        INSERT INTO ingest_channels
+          (dataset_id, client_id, channel_name, method, mode, id_field, is_active, options)
+        VALUES
+          ($1, $2, 'Nightly CSV', 'csv', 'batch', NULL, FALSE,
+           '{"schedule":"nightly","description":"Daily shrinkage report CSV"}')
+        ON CONFLICT (dataset_id, channel_name) DO NOTHING
+      `, [shrinkId, INSTANCE_ID]);
+      console.log('  Registered ingest channels for shrinkage ✓');
+    }
+
+    // Customers: API push
+    const custId = datasetIdMap['customers'];
+    if (custId) {
+      await client.query(`
+        INSERT INTO ingest_channels
+          (dataset_id, client_id, channel_name, method, mode, id_field, is_active, options)
+        VALUES
+          ($1, $2, 'API Push', 'api_push', 'batch', NULL, FALSE,
+           '{"description":"CRM or CDP nightly export via API push"}')
+        ON CONFLICT (dataset_id, channel_name) DO NOTHING
+      `, [custId, INSTANCE_ID]);
+      console.log('  Registered ingest channels for customers ✓');
+    }
+  } catch (e) {
+    console.warn('  Ingest channel registration failed:', e.message);
+  } finally { client.release(); }
+}
+
+// Also seed field metadata for sales_pk + item_count
+async function registerSalesFieldMetadata(salesDatasetId) {
+  if (!pool || !salesDatasetId) return;
+  const client = await pool.connect();
+  try {
+    // sales_pk — hidden segment, it's a key field not meant for grouping/display
+    await client.query(`
+      INSERT INTO dataset_field_metadata
+        (dataset_id, field_name, label, field_type, format, is_hidden, sort_order, updated_by)
+      VALUES ($1, 'sales_pk', 'Sale PK', 'segment', 'text', TRUE, 0, 'seed')
+      ON CONFLICT (dataset_id, field_name) DO NOTHING
+    `, [salesDatasetId]);
+
+    // item_count — visible metric, number format, no decimals
+    await client.query(`
+      INSERT INTO dataset_field_metadata
+        (dataset_id, field_name, label, field_type, format, decimal_places, sort_order, updated_by)
+      VALUES ($1, 'item_count', 'Item Count', 'metric', 'number', 0, 50, 'seed')
+      ON CONFLICT (dataset_id, field_name) DO NOTHING
+    `, [salesDatasetId]);
+
+    console.log('  Field metadata seeded for sales_pk + item_count ✓');
+  } catch(e) {
+    console.warn('  Field metadata seed failed:', e.message);
+  } finally { client.release(); }
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 (async () => {
@@ -786,6 +879,13 @@ async function registerLookupDatasets(datasetIdMap) {
   // Lookup datasets — Stores master record
   console.log('\n── Lookup Datasets ───────────────────────────────────────────────────');
   await registerLookupDatasets({ sales: salesId, shrinkage: shrinkId, customers: custId });
+
+  // Ingest channels
+  console.log('\n── Ingest Channels ───────────────────────────────────────────────────');
+  await registerIngestChannels({ sales: salesId, shrinkage: shrinkId, customers: custId });
+
+  // Field metadata for new sales fields
+  await registerSalesFieldMetadata(salesId);
 
   console.log('\n✓ Seed complete');
   if (pool) await pool.end();

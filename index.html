@@ -3073,6 +3073,7 @@ let gridApi        = null;
 let lastRowData    = [];
 let savedReports   = []; // populated from API
 let _fiscalCalendar = null; // active fiscal calendar (or null if none configured)
+let _fiscalPresets  = null; // server-resolved preset date ranges (fiscal_week, fiscal_month, etc.)
 const _lastGridMeta = {}; // targetId → { filters, mets, datasetName, dateFrom, dateTo, dateSeg }
 const _ctCompare    = {}; // targetId → 'none' | 'splyr' | 'prior'
 // Tree grid state
@@ -3261,6 +3262,12 @@ async function init() {
   apiFetch(`${BASE}/bi/admin/fiscal`).then(r => r.json()).then(j => {
     const cal = (j.calendars || []).find(c => c.is_active && c.day_count > 0);
     _fiscalCalendar = cal || null;
+    if (_fiscalCalendar) {
+      // Load server-resolved preset ranges (avoids shipping fiscal_days to browser)
+      apiFetch(`${BASE}/bi/fiscal/presets`).then(r => r.json()).then(p => {
+        if (p.success && p.data) _fiscalPresets = p.data;
+      }).catch(() => {});
+    }
   }).catch(() => {});
   renderSavedList();
   // Land on first visible tab — skip dashboard if hidden by instance config
@@ -8499,46 +8506,19 @@ function _myDashPresetRange(presetId) {
   const ymd = d => d.toISOString().slice(0, 10);
   const startOfWeek = d => { const c = new Date(d); c.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return c; }; // Mon
 
-  // ── Fiscal presets — use fiscal_days if available, else fall back to calendar equivalents ──
+  // ── Fiscal presets — use server-resolved ranges when available ──────────────
   if (presetId.startsWith('fiscal_') && _fiscalCalendar) {
-    const cal  = _fiscalCalendar;
-    const days = cal.fiscal_days || [];
-    const todayStr = ymd(today);
-
-    if (days.length) {
-      // Use fiscal_days lookup for true fiscal week/period/year boundaries
-      const todayEntry = days.find(d => d.calendar_date === todayStr);
-      if (todayEntry) {
-        if (presetId === 'fiscal_week') {
-          const wk = todayEntry.fiscal_week;
-          const wkDays = days.filter(d => d.fiscal_week === wk && d.fiscal_year === todayEntry.fiscal_year);
-          return { dateFrom: wkDays[0].calendar_date, dateTo: wkDays[wkDays.length-1].calendar_date };
-        }
-        if (presetId === 'fiscal_week_last') {
-          const prevWk = todayEntry.fiscal_week - 1;
-          const prevYr = todayEntry.fiscal_year;
-          const wkDays = days.filter(d => d.fiscal_week === prevWk && d.fiscal_year === prevYr);
-          if (wkDays.length) return { dateFrom: wkDays[0].calendar_date, dateTo: wkDays[wkDays.length-1].calendar_date };
-        }
-        if (presetId === 'fiscal_month') {
-          const mo = todayEntry.fiscal_month;
-          const moDays = days.filter(d => d.fiscal_month === mo && d.fiscal_year === todayEntry.fiscal_year);
-          return { dateFrom: moDays[0].calendar_date, dateTo: moDays[moDays.length-1].calendar_date };
-        }
-        if (presetId === 'fiscal_month_last') {
-          const prevMo = todayEntry.fiscal_month - 1;
-          const prevYr = todayEntry.fiscal_year;
-          const moDays = days.filter(d => d.fiscal_month === prevMo && d.fiscal_year === prevYr);
-          if (moDays.length) return { dateFrom: moDays[0].calendar_date, dateTo: moDays[moDays.length-1].calendar_date };
-        }
-        if (presetId === 'fiscal_year') {
-          const yrDays = days.filter(d => d.fiscal_year === todayEntry.fiscal_year);
-          return { dateFrom: yrDays[0].calendar_date, dateTo: yrDays[yrDays.length-1].calendar_date };
-        }
-      }
+    // _fiscalPresets is populated on init from /api/bi/fiscal/presets (server does the fiscal_days math)
+    if (_fiscalPresets) {
+      const key = presetId === 'fiscal_week_last' ? 'fiscal_week_last'
+                : presetId === 'fiscal_month_last' ? 'fiscal_month_last'
+                : presetId; // fiscal_week | fiscal_month | fiscal_year
+      const r = _fiscalPresets[key];
+      if (r?.from && r?.to) return { dateFrom: r.from, dateTo: r.to };
     }
 
-    // Fallback: no fiscal_days — map to calendar equivalents using fiscal year start
+    // Fallback if presets not yet loaded: calendar-math approximation
+    const cal          = _fiscalCalendar;
     const fyStartMonth = (cal.fiscal_year_start_month || 1) - 1; // 0-indexed
     const fyStartDay   = (cal.fiscal_year_start_day   || 1);
     if (presetId === 'fiscal_week')      { const mon = startOfWeek(today); const sun = new Date(mon); sun.setDate(mon.getDate()+6); return { dateFrom: ymd(mon), dateTo: ymd(sun) }; }
@@ -8546,7 +8526,6 @@ function _myDashPresetRange(presetId) {
     if (presetId === 'fiscal_month')     { const fm = new Date(today.getFullYear(), today.getMonth(), 1); const lm = new Date(today.getFullYear(), today.getMonth()+1, 0); return { dateFrom: ymd(fm), dateTo: ymd(lm) }; }
     if (presetId === 'fiscal_month_last'){ const fm = new Date(today.getFullYear(), today.getMonth()-1, 1); const lm = new Date(today.getFullYear(), today.getMonth(), 0); return { dateFrom: ymd(fm), dateTo: ymd(lm) }; }
     if (presetId === 'fiscal_year') {
-      // Fiscal year start: fyStartMonth/fyStartDay
       let fyStart = new Date(today.getFullYear(), fyStartMonth, fyStartDay);
       if (fyStart > today) fyStart = new Date(today.getFullYear()-1, fyStartMonth, fyStartDay);
       const fyEnd = new Date(fyStart.getFullYear()+1, fyStartMonth, fyStartDay-1);
