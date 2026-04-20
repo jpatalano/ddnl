@@ -7692,6 +7692,7 @@ let _myDashSliceMeta = {}; // { [segmentName]: [{ value, displayValue }] } — f
 function _myDashResetFilterState() {
   _myDashFilterState = { dateRange: { presetId: 'this_month', dateFrom: '', dateTo: '' }, slices: {} };
   _myDashSliceMeta = {};
+  _myDashCompareRange = null;
 }
 
 // _dashConfig is kept in memory; persisted to Postgres via API
@@ -8620,25 +8621,14 @@ function _myDashPresetRange(presetId) {
 }
 
 // Format a date range for display: "Apr 20 – Apr 26" or "Apr 20" for single day
-// Debug caption: shows resolved ISO dates + fiscal period/year for troubleshooting
-function _myDashDebugCaption(dateFrom, dateTo, presetId) {
+// Caption showing resolved ISO dates + optional 'comparing to' range
+let _myDashCompareRange = null; // { from, to } set when compare data arrives
+
+function _myDashDebugCaption(dateFrom, dateTo, presetId, compareRange) {
   if (!dateFrom) return '';
   let s = `${dateFrom} → ${dateTo}`;
-  if (_fiscalPresets) {
-    const FISCAL_MAP = {
-      this_week: 'fiscal_week', last_week: 'fiscal_week_last',
-      this_month: 'fiscal_month', last_month: 'fiscal_month_last',
-      this_quarter: 'fiscal_quarter', last_quarter: 'fiscal_quarter_last',
-      this_year: 'fiscal_year', last_year: 'fiscal_year_last',
-    };
-    const key = FISCAL_MAP[presetId];
-    const fp  = key ? _fiscalPresets[key] : null;
-    const fy  = _fiscalPresets.fiscal_year;
-    const fyL = _fiscalPresets.fiscal_year_last;
-    const periodLabel = fp ? ` · fiscal ${fp.from} → ${fp.to}` : '';
-    const fyLabel = fy ? ` · FY ${fy.from.slice(0,4)}` : '';
-    s += periodLabel || fyLabel;
-  }
+  const cr = compareRange || _myDashCompareRange;
+  if (cr?.from && cr?.to) s += ` · comparing to ${cr.from} → ${cr.to}`;
   return s;
 }
 
@@ -8898,6 +8888,7 @@ function myDashSliceClear(dim) {
 }
 
 function myDashSelectPreset(presetId) {
+  _myDashCompareRange = null; // reset so caption re-populates with new compare range
   _myDashFilterState.dateRange.presetId = presetId;
   if (presetId !== 'custom') {
     const range = _myDashPresetRange(presetId);
@@ -8931,6 +8922,7 @@ function myDashApplyCustomDate() {
   const from = document.getElementById('myd-date-from')?.value;
   const to   = document.getElementById('myd-date-to')?.value;
   if (!from || !to) return;
+  _myDashCompareRange = null;
   _myDashFilterState.dateRange = { presetId: 'custom', dateFrom: from, dateTo: to };
   myDashRefreshTiles();
 }
@@ -9119,7 +9111,19 @@ async function myDashFetchTile(tile, pi, ti) {
       renderDashKpis(null); // immediate render
       // Async compare fetch — re-render tiles with delta pills once data arrives
       _kpiCompareFetch(body, dateFrom, dateTo, tile.dateSegment || tile.dateField || null).then(priorMap => {
-        if (priorMap) renderDashKpis(priorMap);
+        if (priorMap) {
+          renderDashKpis(priorMap);
+          // Update caption with compare range (only once, first KPI tile wins)
+          if (!_myDashCompareRange && priorMap.__compareFrom) {
+            _myDashCompareRange = { from: priorMap.__compareFrom, to: priorMap.__compareTo };
+            const lbl = document.querySelector('.df-group .df-date-label');
+            if (lbl) {
+              const { presetId } = _myDashFilterState.dateRange;
+              const { dateFrom: rf, dateTo: rt } = _myDashActiveDateRange();
+              lbl.textContent = _myDashDebugCaption(rf, rt, presetId, _myDashCompareRange);
+            }
+          }
+        }
       });
     } catch(e) {
       chartEl.innerHTML = `<div style="color:var(--red);font-size:12px;padding:16px;text-align:center">Error: ${e.message}</div>`;
