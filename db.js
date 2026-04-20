@@ -351,7 +351,7 @@ const MIGRATIONS = [
     ADD COLUMN IF NOT EXISTS lookup_dataset_id INTEGER REFERENCES lookup_datasets(id) ON DELETE SET NULL`,
   // lookup_key_field: field in the lookup dataset to match against (defaults to lookup's key_field if null)
   `ALTER TABLE dataset_field_metadata
-    ADD COLUMN IF NOT EXISTS lookup_key_field VARCHAR(255)`
+    ADD COLUMN IF NOT EXISTS lookup_key_field VARCHAR(255)`,
   // 011 — ingest channels (one row per dataset × channel config)
   // A dataset can have multiple channels simultaneously (e.g. nightly CSV + realtime webhook).
   // Each channel has its own id_field (upsert key), mode, schedule, and method-specific options.
