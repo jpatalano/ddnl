@@ -1,0 +1,42 @@
+sales_pk,date,store_id,store_name,store_city,store_state,store_region,store_type,department,category,subcategory,item_name,plu_code,unit_type,units_sold,item_count,unit_price,revenue,transactions
+BADPK-19738,2026-04-20,,,,,,,Fresh Produce,Vegetables,Leafy Greens,Romaine Lettuce,PLU-3053,head,180,204,2.6,468,97
+BADPK-80754,2026-04-20,,,,,,,Fresh Produce,Vegetables,Leafy Greens,Iceberg Lettuce,PLU-3054,head,145,154,2.02,292.9,84
+BADPK-50940,2026-04-20,,,,,,,Fresh Produce,Vegetables,Leafy Greens,Spinach,PLU-3090,bag,80,110,3.37,269.6,52
+BADPK-6726,2026-04-20,,,,,,,Fresh Produce,Vegetables,Leafy Greens,Kale,PLU-3627,bunch,50,62,3.13,156.5,29
+BADPK-99437,2026-04-20,,,,,,,Fresh Produce,Vegetables,Leafy Greens,Arugula,PLU-3096,bag,39,41,4.15,161.85,30
+BADPK-3037,2026-04-20,,,,,,,Fresh Produce,Vegetables,Root Vegetables,Carrots,PLU-4562,bag,134,183,1.53,205.02,70
+BADPK-90941,2026-04-20,,,,,,,Fresh Produce,Vegetables,Root Vegetables,Beets,PLU-3082,bunch,84,97,2.73,229.32,66
+BADPK-62261,2026-04-20,,,,,,,Fresh Produce,Vegetables,Root Vegetables,Turnips,PLU-3163,bunch,27,29,2.05,55.35,13
+BADPK-82157,2026-04-20,,,,,,,Fresh Produce,Vegetables,Root Vegetables,Parsnips,PLU-3213,bunch,35,43,2.3,80.5,18
+BADPK-29926,2026-04-20,,,,,,,Fresh Produce,Vegetables,Root Vegetables,Sweet Potato,PLU-4072,lb,172,224,1.32,227.04,82
+BADPK-82581,2026-04-20,,,,,,,Fresh Produce,Vegetables,Brassicas,Broccoli,PLU-3083,head,123,153,2.57,316.11,81
+BADPK-78599,2026-04-20,,,,,,,Fresh Produce,Vegetables,Brassicas,Cauliflower,PLU-3149,head,78,100,3.13,244.14,39
+BADPK-79635,2026-04-20,,,,,,,Fresh Produce,Vegetables,Brassicas,Cabbage,PLU-3069,head,104,121,1.72,178.88,65
+BADPK-86870,2026-04-20,\N,\N,,,,,Fresh Produce,Vegetables,Brassicas,Brussels Sprouts,PLU-3924,bag,72,86,3.98,286.56,39
+BADPK-91590,2026-04-20,,,,,,,Fresh Produce,Vegetables,Brassicas,Bok Choy,PLU-4565,head,56,73,2.3,128.8,36
+BADPK-98157,2026-04-20,,,,,,,Fresh Produce,Fruit,Citrus,Navel Oranges,PLU-3107,each,306,346,1.3,397.8,140
+BADPK-93156,2026-04-20,,,,,,,Fresh Produce,Fruit,Citrus,Lemons,PLU-4053,each,431,585,0.81,349.11,244
+BADPK-41794,2026-04-20,#VALUE!,\N,,,,,Fresh Produce,Fruit,Citrus,Limes,PLU-4286,each,318,378,0.59,187.62,195
+BADPK-8461,2026-04-20,,,,,,,Fresh Produce,Fruit,Citrus,Ruby Grapefruit,PLU-4279,each,146,158,1.43,208.78,114
+BADPK-8461,2026-04-20,,,,,,,Fresh Produce,Fruit,Citrus,Ruby Grapefruit,PLU-4279,each,146,158,1.43,208.78,114
+BADPK-27772,2026-04-20,,,,,,,Fresh Produce,Fruit,Citrus,Clementines,PLU-3668,bag,104,120,5.03,523.12,82
+BADPK-22602,2026-04-20,,,,,,,Fresh Produce,Fruit,Tropical,Bananas,PLU-4011,lb,656,879,0.48,314.88,493
+BADPK-41084,2026-04-20,,,,,,,Fresh Produce,Fruit,Tropical,Mangoes,PLU-3114,each,129,140,1.49,192.21,64
+BADPK-7215,2026-04-20,,,,,,,Fresh Produce,Fruit,Tropical,Pineapple,PLU-4430,each,79,101,2.88,227.52,49
+BADPK-19244,2026-04-20,,,,,,,Fresh Produce,Fruit,Tropical,Avocado,PLU-4046,each,292,301,1.33,388.36,229
+BADPK-83035,2026-04-20,,,,,,,Fresh Produce,Fruit,Tropical,Papaya,PLU-4394,each,42,49,2.44,102.48,23
+BADPK-65746,2026-04-20,,,,,,,Fresh Produce,Fruit,Berries,Strawberries,PLU-3143,pint,152,204,4.03,612.56,101
+BADPK-80568,2026-04-20,,,,,,,Fresh Produce,Fruit,Berries,Blueberries,PLU-3219,pint,108,135,4.66,503.28,66
+BADPK-51995,2026-04-20,,,,,,,Fresh Produce,Fruit,Berries,Raspberries,PLU-3218,pint,81,105,4.76,385.56,54
+BADPK-40207,2026-04-20,,,,,,,Fresh Produce,Fruit,Berries,Blackberries,PLU-3221,pint,52,53,5.05,262.6,41
+BADPK-73465,2026-04-20,,,,,,,Organic,Organic Vegetables,Organic Greens,Organic Spinach,PLU-O3090,bag,46,62,5.56,255.76,27
+BADPK-45291,2026-04-20,,,,,,,Organic,Organic Vegetables,Organic Greens,Organic Kale,PLU-O3627,bunch,67,73,4.43,296.81,51
+BADPK-5273,2026-04-20,,,,,,,Organic,Organic Vegetables,Organic Greens,Organic Arugula,PLU-O3096,bag,28,35,6.08,170.24,18
+BADPK-92614,2026-04-20,,,,,,,Organic,Organic Fruit,Organic Berries,Organic Strawberries,PLU-O3143,pint,112,132,6.24,698.88,56
+BADPK-76069,2026-04-20,,,,,,,Organic,Organic Fruit,Organic Berries,Organic Blueberries,PLU-O3219,pint,86,93,7.04,605.44,51
+BADPK-24980,2026-04-20,,,,,,,Fresh Herbs,Culinary Herbs,Fresh Herbs,Basil,PLU-4899,bunch,55,76,2.42,133.1,44
+BADPK-226,2026-04-20,,,,,,,Fresh Herbs,Culinary Herbs,Fresh Herbs,Cilantro,PLU-4898,bunch,173,201,1.44,249.12,124
+BADPK-92601,2026-04-20,,,,,,,Fresh Herbs,Culinary Herbs,Fresh Herbs,Parsley,PLU-4901,bunch,136,173,1.28,174.08,60
+BADPK-65891,2026-04-20,,,,,,,Fresh Herbs,Culinary Herbs,Fresh Herbs,Mint,PLU-4902,bunch,44,46,1.96,86.24,18
+BADPK-65891,2026-04-20,,,,,,,Fresh Herbs,Culinary Herbs,Fresh Herbs,Mint,PLU-4902,bunch,44,46,1.96,86.24,18
+BADPK-81274,2026-04-20,,,,,,,Fresh Herbs,Culinary Herbs,Fresh Herbs,Rosemary,PLU-4903,bunch,31,39,2.26,70.06,13

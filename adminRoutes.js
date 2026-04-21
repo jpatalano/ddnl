@@ -97,60 +97,76 @@ router.get('/ingest/overview', async (req, res) => {
 });
 
 // ─── GET /api/admin/ingest/history ───────────────────────────────────────────
-// Poller run log: one entry per file processed, enriched with run metadata
+// Poller run log grouped by poll_id.
+// Log schema uses flat top-level fields (poll_id, run_id, msg) — NOT event/data nesting.
 router.get('/ingest/history', (req, res) => {
   try {
-    const pollerLog  = readJsonl(logPath('poller.log.jsonl'));
+    const pollerLog   = readJsonl(logPath('poller.log.jsonl'));
     const pollerState = readJson(statePath('ftp-poller-state.json'));
-    const processed  = pollerState.processed || {};
+    const processed   = pollerState.processed || {};
 
-    // Group log entries by poll_id
+    // Group by poll_id (top-level field on every entry)
     const polls = {};
     for (const entry of pollerLog) {
-      const pid = entry.poll_id || entry.data?.poll_id;
+      const pid = entry.poll_id;
       if (!pid) continue;
-      if (!polls[pid]) polls[pid] = { poll_id: pid, events: [], files: [] };
-      polls[pid].events.push(entry);
-      if (entry.event === 'file_complete' || entry.event === 'file_error') {
-        polls[pid].files.push(entry);
-      }
-      if (entry.event === 'poll_complete' || entry.event === 'poll_started') {
-        Object.assign(polls[pid], entry.data || {});
+      if (!polls[pid]) polls[pid] = { poll_id: pid, entries: [], fileEntries: [] };
+      polls[pid].entries.push(entry);
+      // "File complete" entries carry rows_total/rows_valid/rows_rejected/upserted at top level
+      if (entry.msg && entry.msg.startsWith('File complete:')) {
+        polls[pid].fileEntries.push(entry);
       }
     }
 
-    // Enrich with state file data
     const runs = Object.values(polls)
       .map(p => {
-        const started   = p.events.find(e => e.event === 'poll_started');
-        const completed = p.events.find(e => e.event === 'poll_complete');
+        const started   = p.entries.find(e => e.msg === 'Poll started');
+        const completed = p.entries.find(e => e.msg === 'Poll complete');
+        const alerts    = p.entries.filter(e => e.level === 'warn' || e.level === 'error' || e.level === 'alert');
+
         return {
-          poll_id:       p.poll_id,
-          started_at:    started?.ts  || null,
-          completed_at:  completed?.ts || null,
-          files_processed: p.files.filter(f => f.event === 'file_complete').length,
-          files_errored:   p.files.filter(f => f.event === 'file_error').length,
-          total_upserted:  p.files.reduce((s,f) => s + (f.data?.upserted || 0), 0),
-          total_rejected:  p.files.reduce((s,f) => s + (f.data?.rows_rejected || 0), 0),
-          files: p.files.map(f => ({
-            filename:      f.data?.filename || f.filename,
-            store_id:      f.data?.store_id,
-            date:          f.data?.date,
-            rows_total:    f.data?.rows_total,
-            rows_valid:    f.data?.rows_valid,
-            rows_rejected: f.data?.rows_rejected,
-            upserted:      f.data?.upserted,
-            failed:        f.data?.failed,
-            duration_ms:   f.data?.duration_ms,
-            event:         f.event
+          poll_id:         p.poll_id,
+          started_at:      started?.ts    || null,
+          completed_at:    completed?.ts  || null,
+          files_processed: completed?.processed ?? p.fileEntries.length,
+          files_skipped:   completed?.skipped   ?? 0,
+          files_errored:   completed?.errors    ?? 0,
+          total_upserted:  p.fileEntries.reduce((s, f) => s + (f.upserted      || 0), 0),
+          total_rejected:  p.fileEntries.reduce((s, f) => s + (f.rows_rejected || 0), 0),
+          files: p.fileEntries.map(f => ({
+            filename:      f.filename,
+            store_id:      f.store_id,
+            date:          f.date,
+            rows_total:    f.rows_total,
+            rows_valid:    f.rows_valid,
+            rows_rejected: f.rows_rejected,
+            upserted:      f.upserted,
+            failed:        f.failed,
+            duration_ms:   f.duration_ms,
+            status:        'complete'
           })),
-          alerts: p.events.filter(e => e.level === 'warn' || e.level === 'error')
-                          .map(e => ({ ts: e.ts, level: e.level, event: e.event, data: e.data }))
+          alerts: alerts.map(e => ({ ts: e.ts, level: e.level, msg: e.msg, run_id: e.run_id, store_id: e.store_id, filename: e.filename }))
         };
       })
-      .sort((a,b) => (b.started_at||'') > (a.started_at||'') ? 1 : -1);
+      .sort((a, b) => (b.started_at || '') > (a.started_at || '') ? 1 : -1);
 
     res.json({ success: true, runs, processed_files: Object.keys(processed).length });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ─── GET /api/admin/ingest/history/:pollId/logs ─────────────────────────────
+// All log entries for a specific poll run, optionally filtered by filename.
+// Returns raw log entries so the UI can search/sort/filter client-side.
+router.get('/ingest/history/:pollId/logs', (req, res) => {
+  try {
+    const { pollId } = req.params;
+    const { filename } = req.query;
+    const allEntries = readJsonl(logPath('poller.log.jsonl'));
+    let entries = allEntries.filter(e => e.poll_id === pollId);
+    if (filename) entries = entries.filter(e => e.filename === filename);
+    // Newest-first within the run
+    entries = entries.slice().sort((a, b) => (a.ts || '') > (b.ts || '') ? 1 : -1);
+    res.json({ success: true, poll_id: pollId, filename: filename || null, count: entries.length, entries });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

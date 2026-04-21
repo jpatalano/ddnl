@@ -1,0 +1,41 @@
+sales_pk,date,store_id,store_name,store_city,store_state,store_region,store_type,department,category,subcategory,item_name,plu_code,unit_type,units_sold,item_count,unit_price,revenue,transactions
+BADPK-28546,2026-04-20,store_005,South Congress,Austin,TX,Central,Urban,Fresh Produce,Vegetables,Leafy Greens,Romaine Lettuce,PLU-3053,head,85,98,2.58,219.3,64
+BADPK-17505,2026-04-20,store_005,South Congress,Austin,TX,Central,Urban,Fresh Produce,Vegetables,Leafy Greens,Iceberg Lettuce,PLU-3054,head,176,186,2.09,367.84,113
+2099-12-31__store_005__PLU-3090,2099-12-31,store_005,South Congress,Austin,TX,Central,Urban,Fresh Produce,Vegetables,Leafy Greens,Spinach,PLU-3090,bag,119,128,3.4,404.6,86
+2099-12-31__store_005__PLU-3090,2099-12-31,store_005,South Congress,Austin,TX,Central,Urban,Fresh Produce,Vegetables,Leafy Greens,Spinach,PLU-3090,bag,119,128,3.4,404.6,86
+BADPK-62744,2026-04-20,store_005,South Congress,Austin,TX,Central,Urban,Fresh Produce,Vegetables,Leafy Greens,Kale,PLU-3627,bunch,75,104,3.12,234,57
+BADPK-65603,2026-04-20,store_005,South Congress,Austin,TX,Central,Urban,Fresh Produce,Vegetables,Leafy Greens,Arugula,PLU-3096,bag,62,77,3.8,235.6,42
+BADPK-76839,2026-04-20,store_005,South Congress,Austin,TX,Central,Urban,Fresh Produce,Vegetables,Root Vegetables,Carrots,PLU-4562,bag,264,332,1.44,380.16,116
+BADPK-74616,2026-04-20,store_005,South Congress,Austin,TX,Central,Urban,Fresh Produce,Vegetables,Root Vegetables,Beets,PLU-3082,bunch,67,71,2.9,19430,51
+BADPK-6800,2026-04-20,store_005,South Congress,Austin,TX,Central,Urban,Fresh Produce,Vegetables,Root Vegetables,Turnips,PLU-3163,bunch,47,54,2.04,95.88,32
+2099-12-31__store_005__PLU-3213,2099-12-31,store_005,South Congress,Austin,TX,Central,Urban,Fresh Produce,Vegetables,Root Vegetables,Parsnips,PLU-3213,bunch,27,28,2.36,63.72,13
+BADPK-15811,2026-04-20,store_005,South Congress,Austin,TX,Central,Urban,Fresh Produce,Vegetables,Root Vegetables,Sweet Potato,PLU-4072,lb,124,149,-1.33,-164.92,90
+BADPK-11782,2026-04-20,store_005,South Congress,Austin,TX,Central,Urban,Fresh Produce,Vegetables,Brassicas,Broccoli,PLU-3083,head,170,224,2.61,443.7,72
+BADPK-13756,2026-04-20,store_005,South Congress,Austin,TX,Central,Urban,Fresh Produce,Vegetables,Brassicas,Cauliflower,PLU-3149,head,111,125,3.16,350.76,54
+BADPK-70721,2026-04-20,store_005,South Congress,Austin,TX,Central,Urban,Fresh Produce,Vegetables,Brassicas,Cabbage,PLU-3069,head,95,130,1.78,169.1,46
+BADPK-90534,2026-04-20,store_005,South Congress,Austin,TX,Central,Urban,Fresh Produce,Vegetables,Brassicas,Brussels Sprouts,PLU-3924,bag,44,44,4.01,176.44,31
+,2026-04-20,store_005,South Congress,Austin,TX,Central,Urban,Fresh Produce,Vegetables,Brassicas,Bok Choy,PLU-4565,head,35,37,2.14,74.9,17
+BADPK-7535,2026-04-20,store_005,South Congress,Austin,TX,Central,Urban,Fresh Produce,Fruit,Citrus,Navel Oranges,PLU-3107,each,233,292,a lot,TWELVE DOLLARS,139
+BADPK-17109,2026-04-20,store_005,South Congress,Austin,TX,Central,Urban,Fresh Produce,Fruit,Citrus,Lemons,PLU-4053,each,375,407,0.75,281.25,246
+BADPK-37959,2026-04-20,store_005,South Congress,Austin,TX,Central,Urban,Fresh Produce,Fruit,Citrus,Limes,PLU-4286,each,359,428,0.58,208.22,257
+BADPK-65174,2026-04-20,store_005,South Congress,Austin,TX,Central,Urban,Fresh Produce,Fruit,Citrus,Ruby Grapefruit,PLU-4279,each,170,198,1.45,246.5,109
+BADPK-51065,2026-04-20,store_005,South Congress,Austin,TX,Central,Urban,Fresh Produce,Fruit,Citrus,Clementines,PLU-3668,bag,108,134,4.75,513,70
+BADPK-88403,2026-04-20,store_005,South Congress,Austin,TX,Central,Urban,Fresh Produce,Fruit,Tropical,Bananas,PLU-4011,lb,692,803,0.5,346,301
+BADPK-40741,2026-04-20,store_005,South Congress,Austin,TX,Central,Urban,Fresh Produce,Fruit,Tropical,Mangoes,PLU-3114,each,96,104,1.49,143.04,47
+BADPK-60353,2026-04-20,store_005,South Congress,Austin,TX,Central,Urban,Fresh Produce,Fruit,Tropical,Pineapple,PLU-4430,each,91,98,3.04,276.64,60
+BADPK-84649,2026-04-20,store_005,South Congress,Austin,TX,Central,Urban,Fresh Produce,Fruit,Tropical,Avocado,PLU-4046,each,332,336,1.27,421.64,174
+BADPK-71830,2026-04-20,store_005,South Congress,Austin,TX,Central,Urban,Fresh Produce,Fruit,Tropical,Papaya,PLU-4394,each,57,65,2.43,138.51,38
+BADPK-92394,2026-04-20,store_005,South Congress,Austin,TX,Central,Urban,Fresh Produce,Fruit,Berries,Strawberries,PLU-3143,pint,114,130,4.15,473.1,68
+BADPK-2932,2026-04-20,store_005,South Congress,Austin,TX,Central,Urban,Fresh Produce,Fruit,Berries,Blueberries,PLU-3219,pint,95,124,4.61,437.95,59
+BADPK-10933,2026-04-20,store_005,South Congress,Austin,TX,Central,Urban,Fresh Produce,Fruit,Berries,Raspberries,PLU-3218,pint,70,85,4.88,341.6,56
+BADPK-73162,2026-04-20,store_005,South Congress,Austin,TX,Central,Urban,Fresh Produce,Fruit,Berries,Blackberries,PLU-3221,pint,41,50,4.78,195.98,23
+BADPK-16811,2026-04-20,store_005,South Congress,Austin,TX,Central,Urban,Organic,Organic Vegetables,Organic Greens,Organic Spinach,PLU-O3090,bag,50,52,5.56,278,34
+BADPK-67185,2026-04-20,store_005,South Congress,Austin,TX,Central,Urban,Organic,Organic Vegetables,Organic Greens,Organic Kale,PLU-O3627,bunch,51,64,4.7,239.7,33
+BADPK-66173,2026-04-20,store_005,South Congress,Austin,TX,Central,Urban,Organic,Organic Vegetables,Organic Greens,Organic Arugula,PLU-O3096,bag,29,30,5.94,172.26,20
+BADPK-38639,2026-04-20,store_005,South Congress,Austin,TX,Central,Urban,Organic,Organic Fruit,Organic Berries,Organic Strawberries,PLU-O3143,pint,51,55,6.51,332.01,36
+BADPK-38735,2026-04-20,store_005,South Congress,Austin,TX,Central,Urban,Organic,Organic Fruit,Organic Berries,Organic Blueberries,PLU-O3219,pint,43,53,6.77,291.11,19
+BADPK-18351,2026-04-20,---,---,Austin,TX,Central,Urban,Fresh Herbs,Culinary Herbs,Fresh Herbs,Basil,PLU-4899,bunch,75,80,2.37,177.75,40
+BADPK-98706,2026-04-20,store_005,South Congress,Austin,TX,Central,Urban,,,Fresh Herbs,Cilantro,PLU-4898,bunch,84,90,1.53,128.52,66
+,2026-04-20,store_005,South Congress,Austin,TX,Central,Urban,Fresh Herbs,Culinary Herbs,Fresh Herbs,Parsley,PLU-4901,bunch,94,111,1.33,125.02,72
+BADPK-35199,2026-04-20,store_005,South Congress,Austin,TX,Central,Urban,Fresh Herbs,Culinary Herbs,Fresh Herbs,Mint,PLU-4902,bunch,75,83,1.94,145.5,33
+BADPK-61589,2026-04-20,store_005,South Congress,Austin,TX,Central,Urban,Fresh Herbs,Culinary Herbs,Fresh Herbs,Rosemary,PLU-4903,bunch,27,33,2.22,59.94,17

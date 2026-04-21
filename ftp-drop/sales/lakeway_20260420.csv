@@ -1,0 +1,40 @@
+sales_pk,date,store_id,store_name,store_city,store_state,store_region,store_type,department,category,subcategory,item_name,plu_code,unit_type,units_sold,item_count,unit_price,revenue,transactions
+2026-04-20__store_006__PLU-3053,2026-04-20,store_006,Lakeway Fresh,Lakeway,TX,Central,Suburban,Fresh Produce,Vegetables,Leafy Greens,Romaine Lettuce,PLU-3053,head,76,95,2.57,195.32,42
+2026-04-20__store_006__PLU-3054,2026-04-20,store_006,Lakeway Fresh,Lakeway,TX,Central,Suburban,Fresh Produce,Vegetables,Leafy Greens,Iceberg Lettuce,PLU-3054,head,114,131,1.93,220.02,85
+2026-04-20__store_006__PLU-3090,2026-04-20,store_006,Lakeway Fresh,Lakeway,TX,Central,Suburban,Fresh Produce,Vegetables,Leafy Greens,Spinach,PLU-3090,bag,63,83,3.45,217.35,28
+2026-04-20__store_006__PLU-3627,2026-04-20,store_006,Lakeway Fresh,Lakeway,TX,Central,Suburban,Fresh Produce,Vegetables,Leafy Greens,Kale,PLU-3627,bunch,60,77,2.97,178.2,41
+2026-04-20__store_006__PLU-3096,2026-04-20,store_006,Lakeway Fresh,Lakeway,TX,Central,Suburban,Fresh Produce,Vegetables,Leafy Greens,Arugula,PLU-3096,bag,43,55,3.81,163.83,27
+2026-04-20__store_006__PLU-4562,2026-04-20,store_006,Lakeway Fresh,Lakeway,TX,Central,Suburban,Fresh Produce,Vegetables,Root Vegetables,Carrots,PLU-4562,bag,160,217,1.54,246.4,105
+2026-04-20__store_006__PLU-3082,2026-04-20,store_006,Lakeway Fresh,Lakeway,TX,Central,Suburban,Fresh Produce,Vegetables,Root Vegetables,Beets,PLU-3082,bunch,30,36,2.72,81.6,14
+2026-04-20__store_006__PLU-3163,2026-04-20,store_006,Lakeway Fresh,Lakeway,TX,Central,Suburban,Fresh Produce,Vegetables,Root Vegetables,Turnips,PLU-3163,bunch,38,50,1.97,74.86,21
+2026-04-20__store_006__PLU-3213,2026-04-20,store_006,Lakeway Fresh,Lakeway,TX,Central,Suburban,Fresh Produce,Vegetables,Root Vegetables,Parsnips,PLU-3213,bunch,17,22,2.31,39.27,13
+2026-04-20__store_006__PLU-4072,2026-04-20,store_006,Lakeway Fresh,Lakeway,TX,Central,Suburban,Fresh Produce,Vegetables,Root Vegetables,Sweet Potato,PLU-4072,lb,101,131,1.26,127.26,52
+2026-04-20__store_006__PLU-3083,2026-04-20,store_006,Lakeway Fresh,Lakeway,TX,Central,Suburban,Fresh Produce,Vegetables,Brassicas,Broccoli,PLU-3083,head,165,176,2.57,424.05,92
+2026-04-20__store_006__PLU-3149,2026-04-20,store_006,Lakeway Fresh,Lakeway,TX,Central,Suburban,Fresh Produce,Vegetables,Brassicas,Cauliflower,PLU-3149,head,69,80,3.16,218.04,46
+2026-04-20__store_006__PLU-3069,2026-04-20,store_006,Lakeway Fresh,Lakeway,TX,Central,Suburban,Fresh Produce,Vegetables,Brassicas,Cabbage,PLU-3069,head,47,53,1.76,82.72,36
+2026-04-20__store_006__PLU-3924,2026-04-20,store_006,Lakeway Fresh,Lakeway,TX,Central,Suburban,Fresh Produce,Vegetables,Brassicas,Brussels Sprouts,PLU-3924,bag,55,76,4.18,229.9,31
+2026-04-20__store_006__PLU-4565,2026-04-20,store_006,Lakeway Fresh,Lakeway,TX,Central,Suburban,Fresh Produce,Vegetables,Brassicas,Bok Choy,PLU-4565,head,26,31,2.22,57.72,14
+2026-04-20__store_006__PLU-3107,2026-04-20,store_006,Lakeway Fresh,Lakeway,TX,Central,Suburban,Fresh Produce,Fruit,Citrus,Navel Oranges,PLU-3107,each,180,218,1.31,235.8,122
+2026-04-20__store_006__PLU-4053,2026-04-20,store_006,Lakeway Fresh,Lakeway,TX,Central,Suburban,Fresh Produce,Fruit,Citrus,Lemons,PLU-4053,each,200,238,0.8,160,131
+2026-04-20__store_006__PLU-4286,2026-04-20,store_006,Lakeway Fresh,Lakeway,TX,Central,Suburban,Fresh Produce,Fruit,Citrus,Limes,PLU-4286,each,209,225,0.56,117.04,156
+2026-04-20__store_006__PLU-4279,2026-04-20,store_006,Lakeway Fresh,Lakeway,TX,Central,Suburban,Fresh Produce,Fruit,Citrus,Ruby Grapefruit,PLU-4279,each,134,165,1.5,201,61
+2026-04-20__store_006__PLU-3668,2026-04-20,store_006,Lakeway Fresh,Lakeway,TX,Central,Suburban,Fresh Produce,Fruit,Citrus,Clementines,PLU-3668,bag,52,53,5.04,262.08,24
+2026-04-20__store_006__PLU-4011,2026-04-20,store_006,Lakeway Fresh,Lakeway,TX,Central,Suburban,Fresh Produce,Fruit,Tropical,Bananas,PLU-4011,lb,295,357,0.49,144.55,191
+2026-04-20__store_006__PLU-3114,2026-04-20,store_006,Lakeway Fresh,Lakeway,TX,Central,Suburban,Fresh Produce,Fruit,Tropical,Mangoes,PLU-3114,each,92,97,1.45,133.4,38
+2026-04-20__store_006__PLU-4430,2026-04-20,store_006,Lakeway Fresh,Lakeway,TX,Central,Suburban,Fresh Produce,Fruit,Tropical,Pineapple,PLU-4430,each,48,55,2.84,136.32,32
+2026-04-20__store_006__PLU-4046,2026-04-20,store_006,Lakeway Fresh,Lakeway,TX,Central,Suburban,Fresh Produce,Fruit,Tropical,Avocado,PLU-4046,each,288,334,1.29,371.52,190
+2026-04-20__store_006__PLU-4394,2026-04-20,store_006,Lakeway Fresh,Lakeway,TX,Central,Suburban,Fresh Produce,Fruit,Tropical,Papaya,PLU-4394,each,47,62,2.48,116.56,36
+2026-04-20__store_006__PLU-3143,2026-04-20,store_006,Lakeway Fresh,Lakeway,TX,Central,Suburban,Fresh Produce,Fruit,Berries,Strawberries,PLU-3143,pint,94,110,3.83,360.02,59
+2026-04-20__store_006__PLU-3219,2026-04-20,store_006,Lakeway Fresh,Lakeway,TX,Central,Suburban,Fresh Produce,Fruit,Berries,Blueberries,PLU-3219,pint,101,107,4.36,440.36,70
+2026-04-20__store_006__PLU-3218,2026-04-20,store_006,Lakeway Fresh,Lakeway,TX,Central,Suburban,Fresh Produce,Fruit,Berries,Raspberries,PLU-3218,pint,75,83,4.98,373.5,37
+2026-04-20__store_006__PLU-3221,2026-04-20,store_006,Lakeway Fresh,Lakeway,TX,Central,Suburban,Fresh Produce,Fruit,Berries,Blackberries,PLU-3221,pint,62,72,5.24,324.88,38
+2026-04-20__store_006__PLU-O3090,2026-04-20,store_006,Lakeway Fresh,Lakeway,TX,Central,Suburban,Organic,Organic Vegetables,Organic Greens,Organic Spinach,PLU-O3090,bag,29,36,5.61,162.69,14
+2026-04-20__store_006__PLU-O3627,2026-04-20,store_006,Lakeway Fresh,Lakeway,TX,Central,Suburban,Organic,Organic Vegetables,Organic Greens,Organic Kale,PLU-O3627,bunch,46,61,4.71,216.66,34
+2026-04-20__store_006__PLU-O3096,2026-04-20,store_006,Lakeway Fresh,Lakeway,TX,Central,Suburban,Organic,Organic Vegetables,Organic Greens,Organic Arugula,PLU-O3096,bag,14,17,6.02,84.28,9
+2026-04-20__store_006__PLU-O3143,2026-04-20,store_006,Lakeway Fresh,Lakeway,TX,Central,Suburban,Organic,Organic Fruit,Organic Berries,Organic Strawberries,PLU-O3143,pint,64,79,6.31,403.84,40
+2026-04-20__store_006__PLU-O3219,2026-04-20,store_006,Lakeway Fresh,Lakeway,TX,Central,Suburban,Organic,Organic Fruit,Organic Berries,Organic Blueberries,PLU-O3219,pint,35,41,7.31,255.85,20
+2026-04-20__store_006__PLU-4899,2026-04-20,store_006,Lakeway Fresh,Lakeway,TX,Central,Suburban,Fresh Herbs,Culinary Herbs,Fresh Herbs,Basil,PLU-4899,bunch,38,52,2.43,92.34,23
+2026-04-20__store_006__PLU-4898,2026-04-20,store_006,Lakeway Fresh,Lakeway,TX,Central,Suburban,Fresh Herbs,Culinary Herbs,Fresh Herbs,Cilantro,PLU-4898,bunch,86,93,1.42,122.12,40
+2026-04-20__store_006__PLU-4901,2026-04-20,store_006,Lakeway Fresh,Lakeway,TX,Central,Suburban,Fresh Herbs,Culinary Herbs,Fresh Herbs,Parsley,PLU-4901,bunch,68,92,1.35,91.8,51
+2026-04-20__store_006__PLU-4902,2026-04-20,store_006,Lakeway Fresh,Lakeway,TX,Central,Suburban,Fresh Herbs,Culinary Herbs,Fresh Herbs,Mint,PLU-4902,bunch,36,50,2.06,74.16,22
+2026-04-20__store_006__PLU-4903,2026-04-20,store_006,Lakeway Fresh,Lakeway,TX,Central,Suburban,Fresh Herbs,Culinary Herbs,Fresh Herbs,Rosemary,PLU-4903,bunch,37,49,2.28,84.36,19

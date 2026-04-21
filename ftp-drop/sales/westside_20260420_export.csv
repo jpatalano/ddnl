@@ -1,0 +1,40 @@
+sales_pk,date,store_id,store_name,store_city,store_state,store_region,store_type,department,category,subcategory,item_name,plu_code,unit_type,units_sold,item_count,unit_price,revenue,transactions
+2026-04-20__store_002__PLU-3053,2026-04-20,store_002,Westside Fresh,Austin,TX,Central,Urban,Fresh Produce,Vegetables,Leafy Greens,Romaine Lettuce,PLU-3053,head,185,236,2.49,460.65,94
+2026-04-20__store_002__PLU-3054,2026-04-20,store_002,Westside Fresh,Austin,TX,Central,Urban,Fresh Produce,Vegetables,Leafy Greens,Iceberg Lettuce,PLU-3054,head,170,211,1.98,336.6,130
+2026-04-20__store_002__PLU-3090,2026-04-20,store_002,Westside Fresh,Austin,TX,Central,Urban,Fresh Produce,Vegetables,Leafy Greens,Spinach,PLU-3090,bag,95,130,3.35,318.25,51
+2026-04-20__store_002__PLU-3627,2026-04-20,store_002,Westside Fresh,Austin,TX,Central,Urban,Fresh Produce,Vegetables,Leafy Greens,Kale,PLU-3627,bunch,61,66,3.11,189.71,30
+2026-04-20__store_002__PLU-3096,2026-04-20,store_002,Westside Fresh,Austin,TX,Central,Urban,Fresh Produce,Vegetables,Leafy Greens,Arugula,PLU-3096,bag,40,55,3.83,153.2,20
+2026-04-20__store_002__PLU-4562,2026-04-20,store_002,Westside Fresh,Austin,TX,Central,Urban,Fresh Produce,Vegetables,Root Vegetables,Carrots,PLU-4562,bag,240,260,1.49,357.6,147
+2026-04-20__store_002__PLU-3082,2026-04-20,store_002,Westside Fresh,Austin,TX,Central,Urban,Fresh Produce,Vegetables,Root Vegetables,Beets,PLU-3082,bunch,75,92,2.79,209.25,45
+2026-04-20__store_002__PLU-3163,2026-04-20,store_002,Westside Fresh,Austin,TX,Central,Urban,Fresh Produce,Vegetables,Root Vegetables,Turnips,PLU-3163,bunch,50,64,1.91,95.5,22
+2026-04-20__store_002__PLU-3213,2026-04-20,store_002,Westside Fresh,Austin,TX,Central,Urban,Fresh Produce,Vegetables,Root Vegetables,Parsnips,PLU-3213,bunch,36,38,2.33,83.88,25
+2026-04-20__store_002__PLU-4072,2026-04-20,store_002,Westside Fresh,Austin,TX,Central,Urban,Fresh Produce,Vegetables,Root Vegetables,Sweet Potato,PLU-4072,lb,156,158,1.26,196.56,67
+2026-04-20__store_002__PLU-3083,2026-04-20,store_002,Westside Fresh,Austin,TX,Central,Urban,Fresh Produce,Vegetables,Brassicas,Broccoli,PLU-3083,head,194,258,2.57,498.58,120
+2026-04-20__store_002__PLU-3149,2026-04-20,store_002,Westside Fresh,Austin,TX,Central,Urban,Fresh Produce,Vegetables,Brassicas,Cauliflower,PLU-3149,head,134,177,3.34,447.56,61
+2026-04-20__store_002__PLU-3069,2026-04-20,store_002,Westside Fresh,Austin,TX,Central,Urban,Fresh Produce,Vegetables,Brassicas,Cabbage,PLU-3069,head,146,165,1.79,261.34,87
+2026-04-20__store_002__PLU-3924,2026-04-20,store_002,Westside Fresh,Austin,TX,Central,Urban,Fresh Produce,Vegetables,Brassicas,Brussels Sprouts,PLU-3924,bag,103,130,4.12,424.36,59
+2026-04-20__store_002__PLU-4565,2026-04-20,store_002,Westside Fresh,Austin,TX,Central,Urban,Fresh Produce,Vegetables,Brassicas,Bok Choy,PLU-4565,head,57,70,2.2,125.4,33
+2026-04-20__store_002__PLU-3107,2026-04-20,store_002,Westside Fresh,Austin,TX,Central,Urban,Fresh Produce,Fruit,Citrus,Navel Oranges,PLU-3107,each,245,296,1.28,313.6,189
+2026-04-20__store_002__PLU-4053,2026-04-20,store_002,Westside Fresh,Austin,TX,Central,Urban,Fresh Produce,Fruit,Citrus,Lemons,PLU-4053,each,389,438,0.77,299.53,273
+2026-04-20__store_002__PLU-4286,2026-04-20,store_002,Westside Fresh,Austin,TX,Central,Urban,Fresh Produce,Fruit,Citrus,Limes,PLU-4286,each,572,791,0.58,331.76,312
+2026-04-20__store_002__PLU-4279,2026-04-20,store_002,Westside Fresh,Austin,TX,Central,Urban,Fresh Produce,Fruit,Citrus,Ruby Grapefruit,PLU-4279,each,187,231,1.44,269.28,124
+2026-04-20__store_002__PLU-3668,2026-04-20,??,N/A,Austin,TX,Central,Urban,Fresh Produce,Fruit,Citrus,Clementines,PLU-3668,bag,73,82,4.83,352.59,54
+2026-04-20__store_002__PLU-4011,2026-04-20,store_002,Westside Fresh,Austin,TX,Central,Urban,Fresh Produce,Fruit,Tropical,Bananas,PLU-4011,lb,671,834,0.49,328.79,452
+2026-04-20__store_002__PLU-3114,2026-04-20,store_002,Westside Fresh,Austin,TX,Central,Urban,Fresh Produce,Fruit,Tropical,Mangoes,PLU-3114,each,130,161,1.49,193.7,92
+2026-04-20__store_002__PLU-4430,2026-04-20,store_002,Westside Fresh,Austin,TX,Central,Urban,Fresh Produce,Fruit,Tropical,Pineapple,PLU-4430,each,113,141,2.94,332.22,48
+2026-04-20__store_002__PLU-4046,2026-04-20,store_002,Westside Fresh,Austin,TX,Central,Urban,Fresh Produce,Fruit,Tropical,Avocado,PLU-4046,each,433,503,1.31,567.23,258
+2026-04-20__store_002__PLU-4394,2026-04-20,store_002,Westside Fresh,Austin,TX,Central,Urban,Fresh Produce,Fruit,Tropical,Papaya,PLU-4394,each,43,58,2.46,105.78,28
+2026-04-20__store_002__PLU-3143,2026-04-20,store_002,Westside Fresh,Austin,TX,Central,Urban,Fresh Produce,Fruit,Berries,Strawberries,PLU-3143,pint,174,236,4.18,727.32,72
+2026-04-20__store_002__PLU-3219,2026-04-20,store_002,Westside Fresh,Austin,TX,Central,Urban,Fresh Produce,Fruit,Berries,Blueberries,PLU-3219,pint,189,210,4.33,818.37,144
+2026-04-20__store_002__PLU-3218,2026-04-20,store_002,Westside Fresh,Austin,TX,Central,Urban,Fresh Produce,Fruit,Berries,Raspberries,PLU-3218,pint,118,137,5,590,64
+2026-04-20__store_002__PLU-3221,2026-04-20,store_002,Westside Fresh,Austin,TX,Central,Urban,Fresh Produce,Fruit,Berries,Blackberries,PLU-3221,pint,65,83,5.18,336.7,52
+2026-04-20__store_002__PLU-O3090,2026-04-20,store_002,Westside Fresh,Austin,TX,Central,Urban,Organic,Organic Vegetables,Organic Greens,Organic Spinach,PLU-O3090,bag,65,88,5.59,363.35,30
+2026-04-20__store_002__PLU-O3627,2026-04-20,store_002,Westside Fresh,Austin,TX,Central,Urban,Organic,Organic Vegetables,Organic Greens,Organic Kale,PLU-O3627,bunch,45,52,4.36,196.2,34
+2026-04-20__store_002__PLU-O3096,2026-04-20,store_002,Westside Fresh,Austin,TX,Central,Urban,Organic,Organic Vegetables,Organic Greens,Organic Arugula,PLU-O3096,bag,49,51,6.07,297.43,25
+2026-04-20__store_002__PLU-O3143,2026-04-20,store_002,Westside Fresh,Austin,TX,Central,Urban,Organic,Organic Fruit,Organic Berries,Organic Strawberries,PLU-O3143,pint,83,83,6.7,556.1,42
+2026-04-20__store_002__PLU-O3219,2026-04-20,store_002,Westside Fresh,Austin,TX,Central,Urban,Organic,Organic Fruit,Organic Berries,\N,NULL,pint,77,90,7.03,541.31,45
+2026-04-20__store_002__PLU-4899,2026-04-20,store_002,Westside Fresh,Austin,TX,Central,Urban,Fresh Herbs,Culinary Herbs,Fresh Herbs,Basil,PLU-4899,bunch,87,109,2.58,224.46,66
+2026-04-20__store_002__PLU-4898,2026-04-20,store_002,Westside Fresh,Austin,TX,Central,Urban,Fresh Herbs,Culinary Herbs,Fresh Herbs,Cilantro,PLU-4898,bunch,122,151,1.44,175.68,87
+2026-04-20__store_002__PLU-4901,2026-04-20,store_002,Westside Fresh,Austin,TX,Central,Urban,Fresh Herbs,Culinary Herbs,Fresh Herbs,Parsley,PLU-4901,bunch,154,182,1.32,203.28,112
+2026-04-20__store_002__PLU-4902,2026-04-20,#VALUE!,---,Austin,TX,Central,Urban,Fresh Herbs,Culinary Herbs,Fresh Herbs,Mint,PLU-4902,bunch,104,117,1.94,201.76,53
+2026-04-20__store_002__PLU-4903,2026-04-20,store_002,Westside Fresh,Austin,TX,Central,Urban,Fresh Herbs,Culinary Herbs,Fresh Herbs,Rosemary,PLU-4903,bunch,65,91,2.3,149.5,47

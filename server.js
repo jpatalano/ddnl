@@ -11,7 +11,7 @@ const adminRouter = require('./adminRoutes');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 
 // ─── Basic Auth ──────────────────────────────────────────────────────────────
 // Credentials via env vars — fallback to defaults for local dev
@@ -1417,14 +1417,46 @@ app.get('/api/bi/fiscal/compare-range', async (req, res) => {
     const lyrFrom = splyr.rows[0]?.lyr_from;
     const lyrTo   = splyr.rows[0]?.lyr_to;
 
-    // 2. Prior period: shift back by the same number of days
+    // 2. Prior period: anchor-aware shift
+    // Rule: if `from` is the 1st day of its month/quarter/year, the prior period
+    // starts on the 1st of the equivalent prior period and runs the same elapsed
+    // day count forward.  e.g. Apr 1→Apr 20 → prior = Mar 1→Mar 20.
+    // For mid-period custom ranges we fall back to shifting the whole window back.
     const dayCount = await pool.query(
-      `SELECT ($1::date - $2::date)::int AS span`, [to, from]
+      `SELECT
+         ($1::date - $2::date)::int                                   AS span,
+         -- how many days into the month is \`from\`? (0 = 1st of month)
+         ($2::date - date_trunc('month',  $2::date)::date)::int       AS month_offset,
+         -- how many days into the quarter is \`from\`? (0 = 1st of quarter)
+         ($2::date - date_trunc('quarter',$2::date)::date)::int       AS qtr_offset,
+         -- how many days into the year is \`from\`? (0 = 1 Jan)
+         ($2::date - date_trunc('year',   $2::date)::date)::int       AS year_offset,
+         -- period-start anchors one level back
+         (date_trunc('month',  $2::date) - interval '1 month')::date  AS prior_month_start,
+         (date_trunc('quarter',$2::date) - interval '3 months')::date AS prior_qtr_start,
+         (date_trunc('year',   $2::date) - interval '1 year')::date   AS prior_year_start`,
+      [to, from]
     );
-    const span = dayCount.rows[0]?.span || 0;
-    // Prior period ends day before `from`, same length as current period (span+1 days)
-    const priorTo   = new Date(new Date(from + 'T00:00:00').getTime() - 86400000).toISOString().slice(0,10);
-    const priorFrom = new Date(new Date(from + 'T00:00:00').getTime() - 86400000 * (span + 1)).toISOString().slice(0,10);
+    const r    = dayCount.rows[0];
+    const span = r?.span || 0;
+    // pg returns ::date columns as JS Date objects — normalise all anchors to YYYY-MM-DD strings
+    const toYMD = v => !v ? null : (v instanceof Date ? v.toISOString().slice(0,10) : String(v).slice(0,10));
+    let priorFrom, priorTo;
+    // Priority: most specific anchor wins (year > quarter > month > fallback)
+    if (r?.year_offset === 0 && r?.prior_year_start) {
+      // from = 1 Jan → anchor to 1 Jan last year
+      priorFrom = toYMD(r.prior_year_start);
+    } else if (r?.qtr_offset === 0 && r?.prior_qtr_start) {
+      // from = 1st of quarter → anchor to 1st of prior quarter
+      priorFrom = toYMD(r.prior_qtr_start);
+    } else if (r?.month_offset === 0 && r?.prior_month_start) {
+      // from = 1st of month → anchor to 1st of prior month
+      priorFrom = toYMD(r.prior_month_start);
+    } else {
+      // Custom / mid-period: slide the whole window back by (span+1) days
+      priorFrom = new Date(new Date(from + 'T00:00:00').getTime() - 86400000 * (span + 1)).toISOString().slice(0,10);
+    }
+    priorTo = new Date(new Date(priorFrom + 'T00:00:00').getTime() + 86400000 * span).toISOString().slice(0,10);
 
     res.json({
       success: true,

@@ -200,6 +200,78 @@
     /* ─── Inline store dot ────────────────────────────────────────────── */
     .store-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
 
+
+    /* ─── Log viewer overlay (file drill-down) ─────────────────────────── */
+    #log-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 300;
+      display: none; align-items: flex-start; justify-content: center;
+      padding-top: 40px;
+    }
+    #log-overlay.open { display: flex; }
+    #log-pane {
+      width: 92vw; max-width: 1100px; max-height: calc(100vh - 80px);
+      background: var(--surface); border-radius: var(--radius);
+      box-shadow: 0 8px 48px rgba(0,0,0,.28); display: flex; flex-direction: column;
+      overflow: hidden;
+    }
+    #log-header {
+      padding: 14px 18px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 10px; background: var(--surface2);
+      flex-shrink: 0;
+    }
+    #log-title { font-size: 13.5px; font-weight: 700; color: var(--navy); flex: 1;
+      font-family: 'DM Mono', monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #log-close { background: none; border: none; cursor: pointer; color: var(--text-muted); padding: 4px; display: flex; }
+    #log-close:hover { color: var(--text); }
+    #log-toolbar {
+      display: flex; gap: 8px; align-items: center; padding: 10px 14px;
+      border-bottom: 1px solid var(--border); flex-wrap: wrap; flex-shrink: 0;
+      background: var(--surface);
+    }
+    #log-search {
+      flex: 1; min-width: 180px; padding: 6px 10px; border: 1px solid var(--border);
+      border-radius: 6px; font-size: 12.5px; background: var(--surface2);
+      color: var(--text); outline: none;
+    }
+    #log-search:focus { border-color: var(--navy); }
+    #log-level-filter {
+      padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px;
+      font-size: 12.5px; background: var(--surface2); color: var(--text); outline: none;
+    }
+    #log-count { font-size: 11.5px; color: var(--text-muted); white-space: nowrap; margin-left: auto; }
+    #log-body { flex: 1; overflow-y: auto; }
+    .log-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .log-table th {
+      text-align: left; padding: 8px 12px; font-size: 10.5px; font-weight: 700;
+      color: var(--text-muted); text-transform: uppercase; letter-spacing: .06em;
+      border-bottom: 2px solid var(--border); background: var(--surface2);
+      white-space: nowrap; cursor: pointer; user-select: none; position: sticky; top: 0; z-index: 1;
+    }
+    .log-table th:hover { color: var(--navy); }
+    .log-table th .sort-arrow { margin-left: 4px; opacity: .4; font-size: 10px; }
+    .log-table th.sorted .sort-arrow { opacity: 1; color: var(--teal); }
+    .log-table td { padding: 7px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    .log-table tr:last-child td { border-bottom: none; }
+    .log-table tr.log-row:hover td { background: var(--surface2); cursor: pointer; }
+    .log-table tr.log-row.expanded td { background: #f0f9ff; }
+    .log-expand-row td {
+      padding: 0; background: #f8fcff; border-bottom: 1px solid var(--border);
+    }
+    .log-expand-inner {
+      padding: 10px 14px; font-family: 'DM Mono', monospace; font-size: 11px;
+      color: var(--text); white-space: pre-wrap; word-break: break-all;
+      border-left: 3px solid var(--teal); margin: 6px 14px 6px 28px;
+      background: #f0fdf8; border-radius: 4px; max-height: 240px; overflow-y: auto;
+    }
+    .log-level-badge {
+      display: inline-block; padding: 1px 7px; border-radius: 4px;
+      font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+    }
+    .log-level-info  { background: #dbeafe; color: #1e40af; }
+    .log-level-warn  { background: #fef3c7; color: #92400e; }
+    .log-level-error { background: #fee2e2; color: #991b1b; }
+    .log-level-debug { background: var(--surface2); color: var(--text-muted); border: 1px solid var(--border); }
+
     /* ─── Misc ────────────────────────────────────────────────────────── */
     .ts { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-muted); white-space: nowrap; }
     .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 240px; }
@@ -479,6 +551,46 @@
   </div>
 </div>
 
+<!-- ─── Log viewer overlay (file drill-down) ─────────────────────────────── -->
+<div id="log-overlay" onclick="closeLogViewer(event)">
+  <div id="log-pane">
+    <div id="log-header">
+      <span id="log-title">File Log</span>
+      <button id="log-close" onclick="closeLogViewer()">
+        <i data-lucide="x" style="width:16px;height:16px"></i>
+      </button>
+    </div>
+    <div id="log-toolbar">
+      <input id="log-search" type="text" placeholder="Search messages, filenames, store IDs…" oninput="_logRender()" />
+      <select id="log-level-filter" onchange="_logRender()">
+        <option value="">All levels</option>
+        <option value="info">Info</option>
+        <option value="warn">Warn</option>
+        <option value="error">Error</option>
+      </select>
+      <span id="log-count"></span>
+    </div>
+    <div id="log-body">
+      <table class="log-table" id="log-table">
+        <thead>
+          <tr>
+            <th onclick="_logSort('ts')"      data-col="ts">      Time        <span class="sort-arrow">↕</span></th>
+            <th onclick="_logSort('level')"   data-col="level">   Level       <span class="sort-arrow">↕</span></th>
+            <th onclick="_logSort('msg')"     data-col="msg">     Message     <span class="sort-arrow">↕</span></th>
+            <th onclick="_logSort('filename')" data-col="filename">File       <span class="sort-arrow">↕</span></th>
+            <th onclick="_logSort('store_id')" data-col="store_id">Store      <span class="sort-arrow">↕</span></th>
+            <th onclick="_logSort('upserted')" data-col="upserted" style="text-align:right">Upserted   <span class="sort-arrow">↕</span></th>
+            <th onclick="_logSort('rows_rejected')" data-col="rows_rejected" style="text-align:right">Rejected <span class="sort-arrow">↕</span></th>
+            <th onclick="_logSort('duration_ms')" data-col="duration_ms" style="text-align:right">Duration <span class="sort-arrow">↕</span></th>
+            <th style="width:20px"></th>
+          </tr>
+        </thead>
+        <tbody id="log-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
 <script>
 // ─── Config ─────────────────────────────────────────────────────────────────
 const BASE = '/api/admin';
@@ -638,6 +750,11 @@ function drillRun(pollId) {
       <div><div style="font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.06em">Files</div><div class="row-count">${run.files_processed || 0}</div></div>
       <div><div style="font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.06em">Upserted</div><div class="row-count">${fmtNum(run.total_upserted)}</div></div>
       <div><div style="font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.06em">Rejected</div><div class="row-count" style="color:${run.total_rejected>0?'var(--red)':'inherit'}">${fmtNum(run.total_rejected)}</div></div>
+      <div style="margin-left:auto">
+        <button class="btn" style="font-size:11.5px;padding:5px 12px" onclick="drillFile(null,'${esc(pollId)}')">
+          <i data-lucide="scroll-text" style="width:12px;height:12px"></i> View All Logs
+        </button>
+      </div>
     </div>
 
     ${run.alerts?.length ? `
@@ -656,7 +773,7 @@ function drillRun(pollId) {
       </tr></thead>
       <tbody>
         ${(run.files||[]).map(f => `
-          <tr>
+          <tr style="cursor:pointer" title="Click to view log entries" onclick="drillFile('${esc(f.filename)}','${esc(pollId)}')">
             <td class="truncate mono" title="${esc(f.filename)}">${esc(f.filename)}</td>
             <td><span class="store-dot" style="background:${storeColor(f.store_id)}"></span>${esc(f.store_id||'—')}</td>
             <td class="right row-count">${fmtNum(f.rows_total)}</td>
@@ -700,9 +817,12 @@ function renderFiles() {
   const tbody = document.getElementById('files-tbody');
   if (!files.length) { tbody.innerHTML = '<tr><td colspan="8" class="empty">No files found</td></tr>'; return; }
 
-  tbody.innerHTML = files.map(f => `
-    <tr>
-      <td class="mono" style="font-size:12px">${esc(f.filename)}${f.removed ? ' <span style="color:var(--text-muted);font-size:10px">(removed)</span>' : ''}</td>
+  tbody.innerHTML = files.map(f => {
+    const canDrill = f.processed && f.poll_id;
+    const rowClick = canDrill ? `style="cursor:pointer" title="Click to view log entries" onclick="drillFile('${esc(f.filename)}','${f.poll_id}')"` : '';
+    return `
+    <tr ${rowClick}>
+      <td class="mono" style="font-size:12px">${esc(f.filename)}${f.removed ? ' <span style="color:var(--text-muted);font-size:10px">(removed)</span>' : ''}${canDrill ? ' <span style="color:var(--teal);font-size:10px">⬡</span>' : ''}</td>
       <td>${f.store_id ? `<span class="store-dot" style="background:${storeColor(f.store_id)}"></span>${esc(f.store_id)}` : '<span style="color:var(--text-muted)">—</span>'}</td>
       <td>${f.date || '<span style="color:var(--text-muted)">—</span>'}</td>
       <td class="right mono">${fmtBytes(f.size_bytes)}</td>
@@ -710,7 +830,8 @@ function renderFiles() {
       <td class="right row-count" style="color:${f.rows_rejected>0?'var(--red)':'inherit'}">${f.rows_rejected != null ? fmtNum(f.rows_rejected) : '<span style="color:var(--text-muted)">—</span>'}</td>
       <td class="ts">${fmtTs(f.processed_at)}</td>
       <td>${f.processed ? chip('Processed','green') : chip('Pending','amber')}</td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
 }
 
 // ─── QUARANTINE ──────────────────────────────────────────────────────────────
@@ -877,6 +998,151 @@ async function loadAlerts() {
     lucide.createIcons();
   } catch(e) {
     body.innerHTML = `<div class="empty" style="color:var(--red)">${esc(e.message)}</div>`;
+  }
+}
+
+
+// ─── LOG VIEWER ───────────────────────────────────────────────────────────────
+let _logEntries   = [];   // raw fetched entries
+let _logSortCol   = 'ts'; // active sort column
+let _logSortAsc   = true;
+let _logExpanded  = new Set(); // expanded row indices
+
+async function drillFile(filename, pollId) {
+  if (!pollId) return;
+  document.getElementById('log-title').textContent =
+    filename ? filename : ('Run · ' + pollId + ' · all files');
+  document.getElementById('log-tbody').innerHTML =
+    '<tr><td colspan="9" class="empty"><span class="loading-spin"></span></td></tr>';
+  document.getElementById('log-search').value = '';
+  document.getElementById('log-level-filter').value = '';
+  _logEntries  = [];
+  _logSortCol  = 'ts';
+  _logSortAsc  = true;
+  _logExpanded = new Set();
+  openLogViewer();
+
+  try {
+    let url = `${BASE}/ingest/history/${encodeURIComponent(pollId)}/logs`;
+    if (filename) url += `?filename=${encodeURIComponent(filename)}`;
+    const d = await apiFetch(url);
+    const j = await d.json();
+    if (!j.success) throw new Error(j.error || 'Failed to load logs');
+    _logEntries = j.entries || [];
+    _logRender();
+    lucide.createIcons({ el: document.getElementById('log-pane') });
+  } catch(e) {
+    document.getElementById('log-tbody').innerHTML =
+      `<tr><td colspan="9" class="empty" style="color:var(--red)">${esc(e.message)}</td></tr>`;
+    document.getElementById('log-count').textContent = '';
+  }
+}
+
+function openLogViewer() {
+  document.getElementById('log-overlay').classList.add('open');
+}
+
+function closeLogViewer(e) {
+  if (e && e.target !== document.getElementById('log-overlay') &&
+      !e.target.closest('#log-close')) return;
+  document.getElementById('log-overlay').classList.remove('open');
+}
+
+function _logSort(col) {
+  if (_logSortCol === col) _logSortAsc = !_logSortAsc;
+  else { _logSortCol = col; _logSortAsc = true; }
+  _logExpanded.clear();
+  _logRender();
+}
+
+function _logRender() {
+  const search   = (document.getElementById('log-search').value || '').toLowerCase().trim();
+  const level    = document.getElementById('log-level-filter').value;
+  const col      = _logSortCol;
+  const asc      = _logSortAsc;
+
+  // Update sort header indicators
+  document.querySelectorAll('#log-table th[data-col]').forEach(th => {
+    th.classList.toggle('sorted', th.dataset.col === col);
+    const arrow = th.querySelector('.sort-arrow');
+    if (arrow) arrow.textContent = th.dataset.col === col ? (asc ? '↑' : '↓') : '↕';
+  });
+
+  // Filter
+  let rows = _logEntries.filter(e => {
+    if (level && e.level !== level) return false;
+    if (search) {
+      const haystack = [e.msg, e.filename, e.store_id, e.level, e.run_id]
+        .filter(Boolean).join(' ').toLowerCase();
+      if (!haystack.includes(search)) return false;
+    }
+    return true;
+  });
+
+  // Sort
+  rows = rows.slice().sort((a, b) => {
+    const va = a[col] ?? '';
+    const vb = b[col] ?? '';
+    const numA = parseFloat(va), numB = parseFloat(vb);
+    const cmp = (!isNaN(numA) && !isNaN(numB))
+      ? numA - numB
+      : String(va).localeCompare(String(vb));
+    return asc ? cmp : -cmp;
+  });
+
+  document.getElementById('log-count').textContent = `${rows.length.toLocaleString()} entries`;
+
+  if (!rows.length) {
+    document.getElementById('log-tbody').innerHTML =
+      '<tr><td colspan="9" class="empty">No entries match</td></tr>';
+    return;
+  }
+
+  const levelBadge = lvl => {
+    const cls = lvl === 'error' ? 'log-level-error'
+              : lvl === 'warn'  ? 'log-level-warn'
+              : lvl === 'debug' ? 'log-level-debug'
+              : 'log-level-info';
+    return `<span class="log-level-badge ${cls}">${esc(lvl||'info')}</span>`;
+  };
+
+  const fmtNum2 = n => n == null ? '' : Number(n).toLocaleString();
+
+  const tbody = document.getElementById('log-tbody');
+  tbody.innerHTML = rows.map((e, idx) => {
+    const expanded = _logExpanded.has(idx);
+    const expandRow = expanded ? `
+      <tr class="log-expand-row" id="log-expand-${idx}">
+        <td colspan="9"><div class="log-expand-inner">${esc(JSON.stringify(e, null, 2))}</div></td>
+      </tr>` : '';
+    return `
+      <tr class="log-row${expanded ? ' expanded' : ''}" onclick="_logToggle(${idx}, this)">
+        <td class="ts">${fmtTs(e.ts)}</td>
+        <td>${levelBadge(e.level)}</td>
+        <td style="max-width:320px;word-break:break-word">${esc(e.msg||'—')}</td>
+        <td class="mono" style="font-size:11px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(e.filename)}">${esc(e.filename||'—')}</td>
+        <td>${e.store_id ? `<span class="store-dot" style="background:${storeColor(e.store_id)}"></span>${esc(e.store_id)}` : '<span style="color:var(--text-muted)">—</span>'}</td>
+        <td class="right row-count" style="text-align:right">${e.upserted != null ? fmtNum2(e.upserted) : ''}</td>
+        <td class="right row-count" style="text-align:right;color:${e.rows_rejected>0?'var(--red)':'inherit'}">${e.rows_rejected != null ? fmtNum2(e.rows_rejected) : ''}</td>
+        <td class="mono" style="text-align:right">${fmtDur(e.duration_ms)}</td>
+        <td style="text-align:center;color:var(--text-muted);font-size:11px">${expanded ? '▲' : '▼'}</td>
+      </tr>
+      ${expandRow}`;
+  }).join('');
+}
+
+function _logToggle(idx, rowEl) {
+  // Ignore if click was on expand row itself
+  if (rowEl.classList.contains('log-expand-row')) return;
+  if (_logExpanded.has(idx)) {
+    _logExpanded.delete(idx);
+    const exRow = document.getElementById(`log-expand-${idx}`);
+    if (exRow) exRow.remove();
+    rowEl.classList.remove('expanded');
+    rowEl.querySelector('td:last-child').textContent = '▼';
+  } else {
+    _logExpanded.add(idx);
+    _logRender(); // re-render to insert expand row in correct position
   }
 }
 

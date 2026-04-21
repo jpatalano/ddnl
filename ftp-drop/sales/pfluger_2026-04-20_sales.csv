@@ -1,0 +1,44 @@
+sales_pk,date,store_id,store_name,store_city,store_state,store_region,store_type,department,category,subcategory,item_name,plu_code,unit_type,units_sold,item_count,unit_price,revenue,transactions
+,2026-04-20,store_007,Pflugerville Pick,Pflugerville,TX,Central,Rural,Fresh Produce,Vegetables,Leafy Greens,Romaine Lettuce,PLU-3053,head,52,62,2.52,131.04,25
+2026-04-20__store_007__PLU-3054,2026-04-20,store_007,Pflugerville Pick,Pflugerville,TX,Central,Rural,Fresh Produce,Vegetables,Leafy Greens,Iceberg Lettuce,PLU-3054,head,88,121,1.95,171.6,43
+2026-04-20__store_007__PLU-3090,2026-04-20,store_007,Pflugerville Pick,Pflugerville,TX,Central,Rural,Fresh Produce,Vegetables,Leafy Greens,Spinach,PLU-3090,bag,63,68,3.62,228.06,31
+2026-04-20__store_007__PLU-3627,2026-04-20,store_007,Pflugerville Pick,Pflugerville,TX,Central,Rural,Fresh Produce,Vegetables,Leafy Greens,Kale,PLU-3627,bunch,44,47,2.84,124.96,19
+2026-04-20__store_007__PLU-3627,2026-04-20,store_007,Pflugerville Pick,Pflugerville,TX,Central,Rural,Fresh Produce,Vegetables,Leafy Greens,Kale,PLU-3627,bunch,44,47,2.84,124.96,19
+2026-04-20__store_007__PLU-3096,2026-04-20,store_007,Pflugerville Pick,Pflugerville,TX,Central,Rural,Fresh Produce,Vegetables,Leafy Greens,Arugula,PLU-3096,bag,21,22,4.12,86.52,9
+2026-04-20__store_007__PLU-4562,2026-04-20,store_007,Pflugerville Pick,Pflugerville,TX,Central,Rural,Fresh Produce,Vegetables,Root Vegetables,Carrots,PLU-4562,bag,135,164,1.56,210.6,65
+2026-04-20__store_007__PLU-3082,2026-04-20,store_007,Pflugerville Pick,Pflugerville,TX,Central,Rural,Fresh Produce,Vegetables,Root Vegetables,Beets,PLU-3082,bunch,32,41,2.67,85.44,22
+2026-04-20__store_007__PLU-3163,2026-04-20,store_007,Pflugerville Pick,Pflugerville,TX,Central,Rural,Fresh Produce,Vegetables,Root Vegetables,Turnips,PLU-3163,bunch,13,16,1.96,25.48,9
+2026-04-20__store_007__PLU-3213,2026-04-20,store_007,Pflugerville Pick,Pflugerville,TX,Central,Rural,Fresh Produce,Vegetables,Root Vegetables,Parsnips,PLU-3213,bunch,18,25,2.21,39.78,11
+2026-04-20__store_007__PLU-4072,2026-04-20,store_007,Pflugerville Pick,Pflugerville,TX,Central,Rural,Fresh Produce,Vegetables,Root Vegetables,NULL,N/A,lb,62,83,1.33,82.46,30
+2026-04-20__store_007__PLU-4072,2026-04-20,store_007,Pflugerville Pick,Pflugerville,TX,Central,Rural,Fresh Produce,Vegetables,Root Vegetables,NULL,N/A,lb,62,83,1.33,82.46,30
+2026-04-20__store_007__PLU-3083,2026-04-20,store_007,Pflugerville Pick,Pflugerville,TX,Central,Rural,Fresh Produce,Vegetables,Brassicas,Broccoli,PLU-3083,head,89,119,2.39,212.71,41
+2026-04-20__store_007__PLU-3149,2026-04-20,store_007,Pflugerville Pick,Pflugerville,TX,Central,Rural,Fresh Produce,Vegetables,Brassicas,Cauliflower,PLU-3149,head,37,46,3.35,123.95,19
+2026-04-20__store_007__PLU-3069,2026-04-20,store_007,Pflugerville Pick,Pflugerville,TX,Central,Rural,Fresh Produce,Vegetables,Brassicas,Cabbage,PLU-3069,head,54,54,1.88,101.52,40
+2026-04-20__store_007__PLU-3924,2026-04-20,store_007,Pflugerville Pick,Pflugerville,TX,Central,Rural,Fresh Produce,Vegetables,Brassicas,Brussels Sprouts,PLU-3924,bag,26,29,3.98,103.48,14
+2026-04-20__store_007__PLU-4565,2026-04-20,store_007,Pflugerville Pick,Pflugerville,TX,Central,Rural,Fresh Produce,Vegetables,Brassicas,Bok Choy,PLU-4565,head,21,25,2.27,47.67,15
+2026-04-20__store_007__PLU-3107,2026-04-20,store_007,Pflugerville Pick,Pflugerville,TX,Central,Rural,Fresh Produce,Fruit,Citrus,Navel Oranges,PLU-3107,each,101,133,1.34,135.34,46
+2026-04-20__store_007__PLU-4053,2026-04-20,store_007,Pflugerville Pick,Pflugerville,TX,Central,Rural,Fresh Produce,Fruit,Citrus,Lemons,PLU-4053,each,135,177,0.76,102.6,86
+2026-04-20__store_007__PLU-4053,2026-04-20,store_007,Pflugerville Pick,Pflugerville,TX,Central,Rural,Fresh Produce,Fruit,Citrus,Lemons,PLU-4053,each,135,177,0.76,102.6,86
+2026-04-20__store_007__PLU-4286,2026-04-20,store_007,Pflugerville Pick,Pflugerville,TX,Central,Rural,Fresh Produce,Fruit,Citrus,Limes,PLU-4286,each,105,141,0.59,61.95,67
+2026-04-20__store_007__PLU-4279,2026-04-20,store_007,Pflugerville Pick,Pflugerville,TX,Central,Rural,Fresh Produce,Fruit,Citrus,Ruby Grapefruit,PLU-4279,each,75,82,1.53,114.75,31
+2026-04-20__store_007__PLU-3668,2026-04-20,store_007,Pflugerville Pick,Pflugerville,TX,Central,Rural,,,Citrus,Clementines,PLU-3668,bag,50,64,5.21,260.5,23
+2026-04-20__store_007__PLU-4011,2026-04-20,store_007,Pflugerville Pick,Pflugerville,TX,Central,Rural,Fresh Produce,Fruit,Tropical,Bananas,PLU-4011,lb,330,380,0.48,158.4,132
+2026-04-20__store_007__PLU-3114,2026-04-20,store_007,Pflugerville Pick,Pflugerville,TX,Central,Rural,Fresh Produce,Fruit,Tropical,Mangoes,PLU-3114,each,68,86,1.44,97.92,29
+2026-04-20__store_007__PLU-4430,2026-04-20,store_007,Pflugerville Pick,Pflugerville,TX,Central,Rural,Fresh Produce,Fruit,Tropical,Pineapple,PLU-4430,each,31,40,2.91,90.21,23
+2026-04-20__store_007__PLU-4046,2026-04-20,store_007,Pflugerville Pick,Pflugerville,TX,Central,Rural,Fresh Produce,Fruit,Tropical,Avocado,PLU-4046,each,89,123,1.28,113.92,58
+2026-04-20__store_007__PLU-4394,2026-04-20,store_007,Pflugerville Pick,Pflugerville,TX,Central,Rural,Fresh Produce,Fruit,Tropical,Papaya,PLU-4394,each,31,38,2.57,79.67,14
+2026-04-20__store_007__PLU-3143,2026-04-20,store_007,Pflugerville Pick,Pflugerville,TX,Central,Rural,Fresh Produce,Fruit,Berries,Strawberries,PLU-3143,pint,104,106,3.84,399.36,61
+2026-04-20__store_007__PLU-3219,2026-04-20,store_007,Pflugerville Pick,Pflugerville,TX,Central,Rural,Fresh Produce,Fruit,Berries,Blueberries,PLU-3219,pint,74,86,4.31,318.94,49
+2026-04-20__store_007__PLU-3218,2026-04-20,store_007,Pflugerville Pick,Pflugerville,TX,Central,Rural,Fresh Produce,Fruit,Berries,Raspberries,PLU-3218,pint,41,44,5.05,207.05,27
+2026-04-20__store_007__PLU-3221,2026-04-20,store_007,Pflugerville Pick,Pflugerville,TX,Central,Rural,Fresh Produce,Fruit,Berries,Blackberries,PLU-3221,pint,23,29,5.18,119.14,10
+2026-04-20__store_007__PLU-O3090,2026-04-20,store_007,Pflugerville Pick,Pflugerville,TX,Central,Rural,Organic,Organic Vegetables,Organic Greens,Organic Spinach,PLU-O3090,bag,21,23,5.48,115.08,10
+2026-04-20__store_007__PLU-O3090,2026-04-20,store_007,Pflugerville Pick,Pflugerville,TX,Central,Rural,Organic,Organic Vegetables,Organic Greens,Organic Spinach,PLU-O3090,bag,21,23,5.48,115.08,10
+2026-04-20__store_007__PLU-O3627,2026-04-20,store_007,Pflugerville Pick,Pflugerville,TX,Central,Rural,Organic,Organic Vegetables,Organic Greens,Organic Kale,PLU-O3627,bunch,16,22,4.56,72.96,10
+2026-04-20__store_007__PLU-O3096,2026-04-20,store_007,Pflugerville Pick,Pflugerville,TX,Central,Rural,Organic,Organic Vegetables,Organic Greens,Organic Arugula,PLU-O3096,bag,21,24,6.05,127.05,10
+2026-04-20__store_007__PLU-O3143,2026-04-20,store_007,Pflugerville Pick,Pflugerville,TX,Central,Rural,Organic,Organic Fruit,Organic Berries,Organic Strawberries,PLU-O3143,pint,50,60,6.44,322,37
+2026-04-20__store_007__PLU-O3219,2026-04-20,store_007,Pflugerville Pick,Pflugerville,TX,Central,Rural,Organic,Organic Fruit,Organic Berries,Organic Blueberries,PLU-O3219,pint,42,49,6.67,280.14,21
+2026-04-20__store_007__PLU-4899,2026-04-20,store_007,Pflugerville Pick,Pflugerville,TX,Central,Rural,Fresh Herbs,Culinary Herbs,Fresh Herbs,Basil,PLU-4899,bunch,39,40,2.55,99.45,30
+2026-04-20__store_007__PLU-4898,2026-04-20,store_007,Pflugerville Pick,Pflugerville,TX,Central,Rural,Fresh Herbs,Culinary Herbs,Fresh Herbs,Cilantro,PLU-4898,bunch,39,44,1.43,55.77,25
+2026-04-20__store_007__PLU-4901,2026-04-20,store_007,Pflugerville Pick,Pflugerville,TX,Central,Rural,Fresh Herbs,Culinary Herbs,Fresh Herbs,Parsley,PLU-4901,bunch,33,35,1.35,44.55,18
+2026-04-20__store_007__PLU-4902,2026-04-20,store_007,Pflugerville Pick,Pflugerville,TX,Central,Rural,Fresh Herbs,Culinary Herbs,Fresh Herbs,Mint,PLU-4902,bunch,41,56,2.04,83.64,17
+,2026-04-20,store_007,Pflugerville Pick,Pflugerville,TX,Central,Rural,Fresh Herbs,Culinary Herbs,Fresh Herbs,Rosemary,PLU-4903,bunch,20,28,2.28,45.6,11

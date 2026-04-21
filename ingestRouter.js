@@ -389,10 +389,11 @@ router.get('/admin/datasets', requireApiKey, async (req, res) => {
 // Body: { name, label, description, fields: [{name, fieldType, segmentType, displayFormat, aggregationType, prefix, suffix, isFilterable, isGroupable}] }
 router.post('/admin/datasets', requireApiKey, async (req, res) => {
   const { clientId, label: keyLabel } = req.ingestCtx;
-  const { name, label, description, fields = [] } = req.body;
+  const { name, label, description, fields = [], dataset_type = 'client' } = req.body;
 
   if (!name || !label) return res.status(400).json({ error: 'name and label are required' });
   if (!fields.length)  return res.status(400).json({ error: 'at least one field is required' });
+  if (!['client','provided'].includes(dataset_type)) return res.status(400).json({ error: 'dataset_type must be client or provided' });
 
   const client = await pool.connect();
   try {
@@ -400,9 +401,9 @@ router.post('/admin/datasets', requireApiKey, async (req, res) => {
 
     // 1. Create dataset definition
     const { rows: [def] } = await client.query(
-      `INSERT INTO dataset_definitions (client_id, name, label, description, current_version)
-       VALUES ($1,$2,$3,$4,1) RETURNING *`,
-      [clientId, name.toLowerCase().replace(/\s+/g, '_'), label, description]
+      `INSERT INTO dataset_definitions (client_id, name, label, description, current_version, dataset_type)
+       VALUES ($1,$2,$3,$4,1,$5) RETURNING *`,
+      [clientId, name.toLowerCase().replace(/\s+/g, '_'), label, description, dataset_type]
     );
 
     // 2. Create schema version 1
@@ -1046,3 +1047,228 @@ router.post('/:dataset/push', requireApiKey, async (req, res) => {
 
 
 module.exports = { router, resolveApiKey, hashKey, generateKey };
+
+// ── Customer import — geocoding + tag engine ───────────────────────────────────
+//
+// POST /api/ingest/customers/import
+//
+// Enriched customer upsert pipeline:
+//   1. Validate required fields (customer_id)
+//   2. Geocode if address changed AND instance geocoding_enabled=true
+//   3. Apply system tags based on configurable rules
+//   4. Merge manual tags (preserve existing, append new from payload)
+//   5. Upsert to ES via customer_id
+//
+// Body: { docs: [...customers], channel?: 'API Push' }
+// Each doc may include any customer fields; partial updates supported.
+//
+const https = require('https');
+const CUSTOMER_DATASET = 'customers';
+
+function addressHash(doc) {
+  const raw = [doc.address_line1, doc.address_line2, doc.city, doc.state, doc.zip]
+    .filter(Boolean).join('|').toLowerCase().replace(/\s+/g, ' ').trim();
+  return require('crypto').createHash('md5').update(raw).digest('hex');
+}
+
+async function geocodeAddress(doc, provider, apiKey) {
+  if (!doc.address_line1 || !doc.city || !doc.state) {
+    return { geocode_status: 'skipped', geocode_confidence: 0, lat: null, lon: null };
+  }
+  const query = encodeURIComponent(`${doc.address_line1}, ${doc.city}, ${doc.state} ${doc.zip || ''}`);
+
+  if (provider === 'mapbox') {
+    return new Promise((resolve) => {
+      const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${query}.json?access_token=${apiKey}&limit=1&types=address`;
+      https.get(url, res => {
+        let data = '';
+        res.on('data', d => data += d);
+        res.on('end', () => {
+          try {
+            const j = JSON.parse(data);
+            const feat = j.features?.[0];
+            if (!feat) return resolve({ geocode_status: 'not_found', geocode_confidence: 0, lat: null, lon: null });
+            const [lon, lat] = feat.geometry.coordinates;
+            const confidence = feat.relevance ?? 0.5;
+            resolve({ geocode_status: confidence >= 0.5 ? 'ok' : 'low_confidence', geocode_confidence: parseFloat(confidence.toFixed(3)), lat, lon });
+          } catch(e) {
+            resolve({ geocode_status: 'failed', geocode_confidence: 0, lat: null, lon: null });
+          }
+        });
+      }).on('error', () => resolve({ geocode_status: 'failed', geocode_confidence: 0, lat: null, lon: null }));
+    });
+  }
+
+  if (provider === 'google') {
+    return new Promise((resolve) => {
+      const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${query}&key=${apiKey}`;
+      https.get(url, res => {
+        let data = '';
+        res.on('data', d => data += d);
+        res.on('end', () => {
+          try {
+            const j = JSON.parse(data);
+            const r = j.results?.[0];
+            if (!r) return resolve({ geocode_status: 'not_found', geocode_confidence: 0, lat: null, lon: null });
+            const { lat, lng } = r.geometry.location;
+            const isRooftop = r.geometry.location_type === 'ROOFTOP';
+            resolve({ geocode_status: 'ok', geocode_confidence: isRooftop ? 0.98 : 0.75, lat, lon: lng });
+          } catch(e) {
+            resolve({ geocode_status: 'failed', geocode_confidence: 0, lat: null, lon: null });
+          }
+        });
+      }).on('error', () => resolve({ geocode_status: 'failed', geocode_confidence: 0, lat: null, lon: null }));
+    });
+  }
+
+  return { geocode_status: 'skipped', geocode_confidence: 0, lat: null, lon: null };
+}
+
+function applySystemTags(doc, existingDoc) {
+  const tags = new Set(
+    (existingDoc?.system_tags || doc.system_tags || '')
+      .split(',').map(t => t.trim()).filter(Boolean)
+  );
+
+  const totalSpend   = parseFloat(doc.total_spend   ?? existingDoc?.total_spend   ?? 0);
+  const totalVisits  = parseInt(doc.total_visits    ?? existingDoc?.total_visits  ?? 0);
+  const firstVisit   = doc.first_visit_date ?? existingDoc?.first_visit_date;
+  const lastVisit    = doc.last_visit_date  ?? existingDoc?.last_visit_date;
+
+  // Recency
+  const daysSinceLast = lastVisit
+    ? Math.floor((Date.now() - new Date(lastVisit + 'T00:00:00').getTime()) / 86400000)
+    : null;
+  const isNew = firstVisit && new Date(firstVisit) >= new Date(Date.now() - 90 * 86400000);
+
+  // Clear rule-based tags before re-applying so stale tags don't persist
+  ['high_value','low_spend','loyal','one_time','at_risk','lapsed','new_customer','no_contact'].forEach(t => tags.delete(t));
+
+  if (totalSpend > 2000)         tags.add('high_value');
+  if (totalSpend > 0 && totalSpend < 100) tags.add('low_spend');
+  if (totalVisits >= 50)         tags.add('loyal');
+  if (totalVisits === 1)         tags.add('one_time');
+  if (daysSinceLast != null && daysSinceLast > 180)  tags.add('at_risk');
+  if (daysSinceLast != null && daysSinceLast > 365)  tags.add('lapsed');
+  if (isNew)                     tags.add('new_customer');
+  if (doc.messaging_preference === 'none') tags.add('no_contact');
+
+  return [...tags].filter(Boolean).join(',');
+}
+
+router.post('/customers/import', requireApiKey, async (req, res) => {
+  const { clientId } = req.ingestCtx;
+  const { docs = [], channel = 'API Push' } = req.body;
+  const batchId  = require('crypto').randomBytes(8).toString('hex');
+  const t0       = Date.now();
+
+  if (!Array.isArray(docs) || !docs.length) {
+    return res.status(400).json({ success: false, error: 'docs must be a non-empty array', batch_id: batchId });
+  }
+  if (docs.length > 10_000) {
+    return res.status(400).json({ success: false, error: 'Max 10,000 customers per call', batch_id: batchId });
+  }
+
+  // Instance geocoding config (from INSTANCE_CONFIG env var on the server, passed down)
+  const instCfg   = JSON.parse(process.env.INSTANCE_CONFIG || '{}');
+  const geoCfg    = instCfg.geocoding || {};
+  const geoEnabled = geoCfg.enabled === true && !!geoCfg.api_key;
+  const geoProvider = geoCfg.provider || 'mapbox';
+
+  const def = await getDatasetDef(clientId, CUSTOMER_DATASET);
+  if (!def) return res.status(404).json({ success: false, error: 'customers dataset not found' });
+
+  const alias = def.es_alias || esClient.aliasName(clientId, CUSTOMER_DATASET);
+
+  // Fetch existing docs for address-change detection (batch mget)
+  const ids = docs.map(d => d.customer_id).filter(Boolean);
+  let existingMap = {};
+  if (ids.length) {
+    try {
+      const mget = await esClient.getClient().mget({
+        index: alias,
+        body:  { ids },
+      });
+      (mget.docs || mget.body?.docs || []).forEach(hit => {
+        if (hit.found) existingMap[hit._id] = hit._source;
+      });
+    } catch(e) {
+      console.warn(`[customers/import] batch_id=${batchId} mget failed:`, e.message);
+    }
+  }
+
+  const enriched = [];
+  const skipped  = [];
+  let geocoded   = 0;
+  let geocodeFailed = 0;
+
+  for (const raw of docs) {
+    if (!raw.customer_id) { skipped.push({ doc: raw, reason: 'missing customer_id' }); continue; }
+
+    const existing = existingMap[raw.customer_id];
+    const doc      = { ...raw };
+
+    // Geocode if address changed (or new record) and geocoding is enabled
+    const newHash = addressHash(doc);
+    const oldHash = existing?.address_hash;
+    if (geoEnabled && doc.address_line1 && newHash !== oldHash) {
+      const geo = await geocodeAddress(doc, geoProvider, geoCfg.api_key);
+      Object.assign(doc, geo, { address_hash: newHash });
+      if (geo.geocode_status === 'ok' || geo.geocode_status === 'low_confidence') geocoded++;
+      else geocodeFailed++;
+    } else if (!doc.lat && existing?.lat) {
+      // Preserve existing coords if no change
+      doc.lat               = existing.lat;
+      doc.lon               = existing.lon;
+      doc.geocode_status    = existing.geocode_status;
+      doc.geocode_confidence = existing.geocode_confidence;
+      doc.address_hash      = oldHash || newHash;
+    } else if (!geoEnabled) {
+      doc.address_hash = newHash;
+    }
+
+    // System tags (re-evaluated on every import)
+    doc.system_tags = applySystemTags(doc, existing);
+
+    // Manual tags: merge (don't clobber existing manual tags)
+    if (existing?.tags && !doc.tags) {
+      doc.tags = existing.tags;
+    }
+
+    // Timestamps
+    doc.__instance_id = clientId;
+    doc.__ingested_at = doc.__ingested_at || new Date().toISOString();
+    doc.__updated_at  = new Date().toISOString();
+
+    enriched.push(doc);
+  }
+
+  // Bulk upsert
+  let result = { indexed: 0, failed: 0, errors: [] };
+  if (enriched.length) {
+    const idField = 'customer_id';
+    result = await esClient.bulkUpsert(clientId, CUSTOMER_DATASET, enriched, idField).catch(e => ({
+      indexed: 0, failed: enriched.length, errors: [e.message]
+    }));
+  }
+
+  const durationMs = Date.now() - t0;
+
+  // Log to ingest_log
+  await logIngest(clientId, CUSTOMER_DATASET, 'api_push', result, `customer_import:${batchId}`, durationMs).catch(() => {});
+
+  console.log(`[customers/import] batch_id=${batchId} enriched=${enriched.length} indexed=${result.indexed} failed=${result.failed} geocoded=${geocoded} skipped=${skipped.length} ${durationMs}ms`);
+
+  res.json({
+    success:    result.failed === 0 || result.indexed > 0,
+    batch_id:   batchId,
+    indexed:    result.indexed,
+    failed:     result.failed,
+    skipped:    skipped.length,
+    geocoded,
+    geocode_failed: geocodeFailed,
+    durationMs,
+    errors:     result.errors,
+    skip_details: skipped.slice(0, 20),
+  });
+});

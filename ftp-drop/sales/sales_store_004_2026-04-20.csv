@@ -1,0 +1,40 @@
+sales_pk,date,store_id,store_name,store_city,store_state,store_region,store_type,department,category,subcategory,item_name,plu_code,unit_type,units_sold,item_count,unit_price,revenue,transactions
+2026-04-20__store_004__PLU-3053,2026-04-20,store_004,Round Rock Market,Round Rock,TX,Central,Suburban,Fresh Produce,Vegetables,Leafy Greens,Romaine Lettuce,PLU-3053,head,117,159,2.53,296.01,82
+2026-04-20__store_004__PLU-3054,2026-04-20,store_004,Round Rock Market,Round Rock,TX,Central,Suburban,Fresh Produce,Vegetables,Leafy Greens,Iceberg Lettuce,PLU-3054,head,192,217,1.9,364.8,120
+2026-04-20__store_004__PLU-3090,2026-04-20,store_004,Round Rock Market,Round Rock,TX,Central,Suburban,Fresh Produce,Vegetables,Leafy Greens,Spinach,PLU-3090,bag,82,112,3.37,276.34,40
+2026-04-20__store_004__PLU-3627,2026-04-20,store_004,Round Rock Market,Round Rock,TX,Central,Suburban,Fresh Produce,Vegetables,Leafy Greens,Kale,PLU-3627,bunch,53,62,2.99,158.47,40
+2026-04-20__store_004__PLU-3096,2026-04-20,store_004,Round Rock Market,Round Rock,TX,Central,Suburban,Fresh Produce,Vegetables,Leafy Greens,Arugula,PLU-3096,bag,35,44,4.13,144.55,17
+2026-04-20__store_004__PLU-4562,2026-04-20,store_004,Round Rock Market,Round Rock,TX,Central,Suburban,Fresh Produce,Vegetables,Root Vegetables,Carrots,PLU-4562,bag,169,183,1.43,241.67,134
+2026-04-20__store_004__PLU-3082,2026-04-20,store_004,Round Rock Market,Round Rock,TX,Central,Suburban,Fresh Produce,Vegetables,Root Vegetables,Beets,PLU-3082,bunch,68,69,2.81,191.08,54
+2026-04-20__store_004__PLU-3163,2026-04-20,store_004,Round Rock Market,Round Rock,TX,Central,Suburban,Fresh Produce,Vegetables,Root Vegetables,Turnips,PLU-3163,bunch,43,56,1.99,85.57,27
+2026-04-20__store_004__PLU-3213,2026-04-20,store_004,Round Rock Market,Round Rock,TX,Central,Suburban,Fresh Produce,Vegetables,Root Vegetables,Parsnips,PLU-3213,bunch,22,25,2.38,52.36,11
+2026-04-20__store_004__PLU-4072,2026-04-20,store_004,Round Rock Market,Round Rock,TX,Central,Suburban,Fresh Produce,Vegetables,Root Vegetables,Sweet Potato,PLU-4072,lb,225,238,1.3,292.5,177
+2026-04-20__store_004__PLU-3083,2026-04-20,store_004,Round Rock Market,Round Rock,TX,Central,Suburban,Fresh Produce,Vegetables,Brassicas,Broccoli,PLU-3083,head,144,166,2.47,355.68,99
+2026-04-20__store_004__PLU-3149,2026-04-20,store_004,Round Rock Market,Round Rock,TX,Central,Suburban,Fresh Produce,Vegetables,Brassicas,Cauliflower,PLU-3149,head,133,136,3.37,448.21,61
+2026-04-20__store_004__PLU-3069,2026-04-20,store_004,Round Rock Market,Round Rock,TX,Central,Suburban,Fresh Produce,Vegetables,Brassicas,Cabbage,PLU-3069,head,52,70,1.79,93.08,39
+2026-04-20__store_004__PLU-3924,2026-04-20,store_004,Round Rock Market,Round Rock,TX,Central,Suburban,Fresh Produce,Vegetables,Brassicas,Brussels Sprouts,PLU-3924,bag,57,61,4.03,229.71,29
+2026-04-20__store_004__PLU-4565,2026-04-20,store_004,Round Rock Market,Round Rock,TX,Central,Suburban,Fresh Produce,Vegetables,Brassicas,Bok Choy,PLU-4565,head,39,44,2.16,84.24,22
+2026-04-20__store_004__PLU-3107,2026-04-20,store_004,Round Rock Market,Round Rock,TX,Central,Suburban,Fresh Produce,Fruit,Citrus,Navel Oranges,PLU-3107,each,154,210,1.24,190.96,116
+2026-04-20__store_004__PLU-4053,2026-04-20,store_004,Round Rock Market,Round Rock,TX,Central,Suburban,Fresh Produce,Fruit,Citrus,Lemons,PLU-4053,each,206,236,0.79,162.74,138
+2026-04-20__store_004__PLU-4286,2026-04-20,store_004,Round Rock Market,Round Rock,TX,Central,Suburban,Fresh Produce,Fruit,Citrus,Limes,PLU-4286,each,208,266,0.59,122.72,101
+2026-04-20__store_004__PLU-4279,2026-04-20,store_004,Round Rock Market,Round Rock,TX,Central,Suburban,Fresh Produce,Fruit,Citrus,Ruby Grapefruit,PLU-4279,each,120,120,1.51,181.2,69
+2026-04-20__store_004__PLU-3668,2026-04-20,store_004,Round Rock Market,Round Rock,TX,Central,Suburban,Fresh Produce,Fruit,Citrus,Clementines,PLU-3668,bag,54,63,4.76,257.04,36
+2026-04-20__store_004__PLU-4011,2026-04-20,store_004,Round Rock Market,Round Rock,TX,Central,Suburban,Fresh Produce,Fruit,Tropical,Bananas,PLU-4011,lb,317,426,0.51,161.67,136
+2026-04-20__store_004__PLU-3114,2026-04-20,store_004,Round Rock Market,Round Rock,TX,Central,Suburban,Fresh Produce,Fruit,Tropical,Mangoes,PLU-3114,each,130,144,1.51,196.3,92
+2026-04-20__store_004__PLU-4430,2026-04-20,store_004,Round Rock Market,Round Rock,TX,Central,Suburban,Fresh Produce,Fruit,Tropical,Pineapple,PLU-4430,each,73,84,2.98,217.54,41
+2026-04-20__store_004__PLU-4046,2026-04-20,store_004,Round Rock Market,Round Rock,TX,Central,Suburban,Fresh Produce,Fruit,Tropical,Avocado,PLU-4046,each,265,358,1.32,349.8,115
+2026-04-20__store_004__PLU-4394,2026-04-20,store_004,Round Rock Market,Round Rock,TX,Central,Suburban,Fresh Produce,Fruit,Tropical,Papaya,PLU-4394,each,63,80,2.52,158.76,49
+2026-04-20__store_004__PLU-3143,2026-04-20,store_004,Round Rock Market,Round Rock,TX,Central,Suburban,Fresh Produce,Fruit,Berries,Strawberries,PLU-3143,pint,136,175,3.98,541.28,77
+2026-04-20__store_004__PLU-3219,2026-04-20,store_004,Round Rock Market,Round Rock,TX,Central,Suburban,Fresh Produce,Fruit,Berries,Blueberries,PLU-3219,pint,83,104,4.46,370.18,55
+2026-04-20__store_004__PLU-3218,2026-04-20,store_004,Round Rock Market,Round Rock,TX,Central,Suburban,Fresh Produce,Fruit,Berries,Raspberries,PLU-3218,pint,63,86,4.98,313.74,48
+2026-04-20__store_004__PLU-3221,2026-04-20,store_004,Round Rock Market,Round Rock,TX,Central,Suburban,Fresh Produce,Fruit,Berries,Blackberries,PLU-3221,pint,42,49,5.1,214.2,19
+2026-04-20__store_004__PLU-O3090,2026-04-20,store_004,Round Rock Market,Round Rock,TX,Central,Suburban,Organic,Organic Vegetables,Organic Greens,Organic Spinach,PLU-O3090,bag,65,69,5.66,367.9,50
+2026-04-20__store_004__PLU-O3627,2026-04-20,store_004,Round Rock Market,Round Rock,TX,Central,Suburban,Organic,Organic Vegetables,Organic Greens,Organic Kale,PLU-O3627,bunch,49,61,4.62,226.38,28
+2026-04-20__store_004__PLU-O3096,2026-04-20,store_004,Round Rock Market,Round Rock,TX,Central,Suburban,Organic,Organic Vegetables,Organic Greens,Organic Arugula,PLU-O3096,bag,26,28,6.08,158.08,13
+2026-04-20__store_004__PLU-O3143,2026-04-20,store_004,Round Rock Market,Round Rock,TX,Central,Suburban,Organic,Organic Fruit,Organic Berries,Organic Strawberries,PLU-O3143,pint,43,45,6.53,280.79,28
+2026-04-20__store_004__PLU-O3219,2026-04-20,store_004,Round Rock Market,Round Rock,TX,Central,Suburban,Organic,Organic Fruit,Organic Berries,Organic Blueberries,PLU-O3219,pint,56,65,7.11,398.16,44
+2026-04-20__store_004__PLU-4899,2026-04-20,store_004,Round Rock Market,Round Rock,TX,Central,Suburban,Fresh Herbs,Culinary Herbs,Fresh Herbs,Basil,PLU-4899,bunch,98,134,2.45,240.1,68
+2026-04-20__store_004__PLU-4898,2026-04-20,store_004,Round Rock Market,Round Rock,TX,Central,Suburban,Fresh Herbs,Culinary Herbs,Fresh Herbs,Cilantro,PLU-4898,bunch,129,131,1.52,196.08,85
+2026-04-20__store_004__PLU-4901,2026-04-20,store_004,Round Rock Market,Round Rock,TX,Central,Suburban,Fresh Herbs,Culinary Herbs,Fresh Herbs,Parsley,PLU-4901,bunch,61,65,1.3,79.3,44
+2026-04-20__store_004__PLU-4902,2026-04-20,store_004,Round Rock Market,Round Rock,TX,Central,Suburban,Fresh Herbs,Culinary Herbs,Fresh Herbs,Mint,PLU-4902,bunch,65,88,1.96,127.4,26
+2026-04-20__store_004__PLU-4903,2026-04-20,store_004,Round Rock Market,Round Rock,TX,Central,Suburban,Fresh Herbs,Culinary Herbs,Fresh Herbs,Rosemary,PLU-4903,bunch,48,54,2.39,114.72,34
