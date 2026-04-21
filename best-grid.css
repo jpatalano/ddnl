@@ -1,0 +1,318 @@
+/* ─────────────────────────────────────────────────────────────────────────────
+   Best Grid Ever — Component Styles
+   All values reference --bg-* CSS custom properties set by the theme.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/* ── Root wrapper ─────────────────────────────────────────────────────────── */
+.bg-grid-root {
+  font-family: var(--bg-grid-font-family);
+  background: var(--bg-color-bg);
+}
+
+/* ── Card ─────────────────────────────────────────────────────────────────── */
+.bg-grid-card {
+  background: var(--bg-color-surface);
+  border: 1px solid var(--bg-color-border);
+  border-radius: var(--bg-radius-card);
+  box-shadow: var(--bg-shadow-card);
+  overflow: hidden;
+}
+
+/* ── Title bar ────────────────────────────────────────────────────────────── */
+.bg-title-bar {
+  padding: var(--bg-title-padding-v) var(--bg-title-padding-h);
+  border-bottom: 1px solid var(--bg-color-border);
+}
+
+.bg-title-text {
+  font-size: var(--bg-font-size-title);
+  font-weight: var(--bg-font-weight-title);
+  color: var(--bg-color-title-text);
+  line-height: 1.3;
+}
+
+.bg-title-count {
+  font-size: var(--bg-font-size-title);
+  font-weight: 400;
+  color: var(--bg-color-title-count);
+}
+
+/* ── Filter input ─────────────────────────────────────────────────────────── */
+.bg-filter-input {
+  background: var(--bg-color-filter-bg);
+  border: 1px solid var(--bg-color-border);
+  color: var(--bg-color-filter-text);
+  border-radius: var(--bg-radius-input);
+  transition: width var(--bg-transition-speed) var(--bg-transition-easing),
+              border-color var(--bg-transition-speed) var(--bg-transition-easing);
+}
+.bg-filter-input::placeholder {
+  color: var(--bg-color-filter-placeholder);
+}
+.bg-filter-input:focus {
+  border-color: var(--bg-color-filter-focus-border);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--bg-color-filter-focus-border) 20%, transparent);
+}
+
+/* ── Table scroll wrapper ─────────────────────────────────────────────────── */
+.bg-table-scroll {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+
+/* ── Table ────────────────────────────────────────────────────────────────── */
+.bg-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--bg-font-size-cell);
+  color: var(--bg-color-text);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+/* ── Header ───────────────────────────────────────────────────────────────── */
+.bg-thead {
+  border-bottom: 1px solid var(--bg-color-header-border);
+}
+
+.bg-th {
+  padding: var(--bg-header-padding-v) var(--bg-header-padding-h);
+  font-size: var(--bg-font-size-header);
+  font-weight: var(--bg-font-weight-header);
+  color: var(--bg-color-text-header);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+  background: var(--bg-color-surface);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.bg-th:hover {
+  color: var(--bg-color-text);
+}
+
+/* Sort icon colors */
+.bg-sort-active {
+  color: var(--bg-color-sort-active);
+}
+.bg-sort-inactive {
+  color: var(--bg-color-sort-inactive);
+}
+
+/* ── Rows ─────────────────────────────────────────────────────────────────── */
+.bg-tr {
+  background: var(--bg-color-row-bg);
+  border-bottom: 1px solid var(--bg-color-divider);
+  transition: background var(--bg-transition-speed) var(--bg-transition-easing),
+              box-shadow var(--bg-transition-speed) var(--bg-transition-easing);
+}
+
+.bg-tr:last-child {
+  border-bottom: none;
+}
+
+.bg-tr-hoverable:hover {
+  background: var(--bg-color-row-hover);
+  box-shadow: var(--bg-shadow-row);
+}
+
+.bg-tr-selected {
+  background: var(--bg-color-row-selected) !important;
+}
+
+.bg-tr-stripe {
+  background: var(--bg-color-row-stripe);
+}
+
+/* ── Cells ────────────────────────────────────────────────────────────────── */
+.bg-td {
+  padding: var(--bg-cell-padding-v) var(--bg-cell-padding-h);
+  min-height: var(--bg-row-min-height);
+  vertical-align: middle;
+  color: var(--bg-color-text);
+  font-weight: var(--bg-font-weight-cell);
+  font-size: var(--bg-font-size-cell);
+}
+
+.bg-td-empty {
+  padding: 4rem var(--bg-cell-padding-h);
+  color: var(--bg-color-text-muted);
+  font-size: var(--bg-font-size-cell);
+}
+
+.bg-td-actions {
+  white-space: nowrap;
+}
+
+/* ── Action buttons ───────────────────────────────────────────────────────── */
+.bg-action-btn {
+  font-size: var(--bg-font-size-action);
+  border-radius: var(--bg-radius-button);
+  transition: background var(--bg-transition-speed) var(--bg-transition-easing),
+              color var(--bg-transition-speed) var(--bg-transition-easing);
+  white-space: nowrap;
+}
+
+.bg-action-ghost {
+  color: var(--bg-color-text-action);
+  background: transparent;
+}
+.bg-action-ghost:hover {
+  color: var(--bg-color-text-action-hover);
+  background: var(--bg-color-row-hover);
+}
+
+.bg-action-danger {
+  color: var(--bg-color-danger, #dc2626);
+  background: transparent;
+}
+.bg-action-danger:hover {
+  background: var(--bg-color-danger-hover-bg, #fef2f2);
+}
+
+.bg-action-primary {
+  color: #fff;
+  background: var(--bg-color-badge-active-text);
+}
+.bg-action-primary:hover {
+  opacity: 0.9;
+}
+
+/* ── Status badges ────────────────────────────────────────────────────────── */
+.rounded-badge {
+  border-radius: var(--bg-radius-badge);
+}
+
+.bg-badge-active {
+  background-color: var(--bg-color-badge-active-bg);
+}
+.text-badge-active {
+  color: var(--bg-color-badge-active-text);
+}
+.bg-badge-inactive {
+  background-color: var(--bg-color-badge-inactive-bg);
+}
+.text-badge-inactive {
+  color: var(--bg-color-badge-inactive-text);
+}
+.bg-badge-pending {
+  background-color: var(--bg-color-badge-pending-bg);
+}
+.text-badge-pending {
+  color: var(--bg-color-badge-pending-text);
+}
+
+/* ── Pagination ───────────────────────────────────────────────────────────── */
+.bg-pagination {
+  border-top: 1px solid var(--bg-color-divider);
+  background: var(--bg-color-surface);
+  color: var(--bg-color-text-muted);
+  font-size: 0.8125rem;
+}
+
+.bg-pag-btn,
+.bg-pag-num {
+  background: var(--bg-color-pag-bg);
+  color: var(--bg-color-pag-text);
+  border: 1px solid var(--bg-color-pag-border);
+  border-radius: var(--bg-radius-button);
+  transition: background var(--bg-transition-speed) var(--bg-transition-easing),
+              color var(--bg-transition-speed) var(--bg-transition-easing);
+  cursor: pointer;
+}
+
+.bg-pag-btn:hover:not(:disabled),
+.bg-pag-num:hover {
+  background: var(--bg-color-pag-bg-hover);
+}
+
+.bg-pag-active {
+  background: var(--bg-color-pag-bg-active) !important;
+}
+.text-pag-active-text {
+  color: var(--bg-color-pag-text-active) !important;
+}
+.bg-pag-active.bg-pag-num {
+  border-color: var(--bg-color-pag-bg-active);
+}
+
+.bg-pag-select {
+  background: var(--bg-color-pag-bg);
+  color: var(--bg-color-pag-text);
+  border-color: var(--bg-color-pag-border);
+  border-radius: var(--bg-radius-input);
+  font-size: 0.75rem;
+}
+
+/* ── Column toggle ────────────────────────────────────────────────────────── */
+.bg-col-toggle-btn {
+  background: var(--bg-color-pag-bg);
+  color: var(--bg-color-text-action);
+  border: 1px solid var(--bg-color-border);
+  border-radius: var(--bg-radius-button);
+  transition: background var(--bg-transition-speed);
+  font-size: 0.8125rem;
+}
+.bg-col-toggle-btn:hover {
+  background: var(--bg-color-pag-bg-hover);
+}
+
+.bg-col-toggle-panel {
+  background: var(--bg-color-surface);
+  border-color: var(--bg-color-border);
+  border-radius: var(--bg-radius-card);
+  box-shadow: var(--bg-shadow-card);
+}
+
+.bg-col-toggle-item {
+  color: var(--bg-color-text);
+  background: transparent;
+}
+.bg-col-toggle-item:hover {
+  background: var(--bg-color-row-hover);
+}
+
+/* ── Cell text helpers ────────────────────────────────────────────────────── */
+.bg-cell-primary {
+  font-weight: var(--bg-font-weight-cell-primary);
+  font-size: var(--bg-font-size-cell);
+  color: var(--bg-color-text);
+  line-height: 1.3;
+}
+.bg-cell-meta {
+  font-size: var(--bg-font-size-meta);
+  font-weight: var(--bg-font-weight-meta);
+  color: var(--bg-color-text-muted);
+  margin-top: 0.125rem;
+}
+.bg-cell-muted {
+  color: var(--bg-color-text-muted);
+}
+
+/* ── Accessibility ────────────────────────────────────────────────────────── */
+.bg-th:focus-visible,
+.bg-action-btn:focus-visible,
+.bg-pag-btn:focus-visible,
+.bg-pag-num:focus-visible {
+  outline: 2px solid var(--bg-color-filter-focus-border);
+  outline-offset: 2px;
+  border-radius: var(--bg-radius-button);
+}
+
+/* ── Responsive — collapse on small screens ───────────────────────────────── */
+@media (max-width: 640px) {
+  .bg-th,
+  .bg-td {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+  .bg-title-bar {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+  .bg-filter-input,
+  .bg-filter-input:focus {
+    width: 100% !important;
+  }
+}
