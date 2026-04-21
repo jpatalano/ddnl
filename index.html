@@ -3288,9 +3288,11 @@ async function init() {
     }
   }).catch(() => {});
   renderSavedList();
-  // Land on first visible tab — skip dashboard if hidden by instance config
+  // Land on first visible tab — prefer home dashboard if pinned
   const dashBtn = document.getElementById('nav-dashboard');
-  const startView = (dashBtn && dashBtn.style.display === 'none') ? 'home' : 'dashboard';
+  const hasPinnedHome = (_dashConfig?.dashboards || []).some(d => d.show_on_home);
+  const startView = hasPinnedHome ? 'homeDash'
+    : (dashBtn && dashBtn.style.display === 'none') ? 'home' : 'dashboard';
   showView(startView);
   // Only init the legacy FCC dashboard if the tab is visible (not hidden by hideTabs)
   const myDashBtn = document.getElementById('nav-myDash');
@@ -6379,16 +6381,17 @@ function rbToggleFields() {
 
 /* ── View management ── */
 function showView(view) {
-  ['dashboard','home','builder','saved','myDash','designer'].forEach(v=>{
+  ['dashboard','home','builder','saved','myDash','designer','homeDash'].forEach(v=>{
     document.getElementById(`nav-${v}`)?.classList.toggle('active',v===view);
   });
   // Fullscreen builder overlays everything
   document.getElementById('rb-screen').classList.toggle('open', view==='builder');
-  document.getElementById('dashboard-screen').style.display = view==='dashboard' ? 'flex' : 'none';
-  document.getElementById('home-screen').style.display      = view==='home'      ? 'flex' : 'none';
-  document.getElementById('saved-screen').style.display     = view==='saved'     ? 'flex' : 'none';
-  document.getElementById('my-dash-screen').style.display   = view==='myDash'    ? 'flex' : 'none';
-  document.getElementById('designer-screen').style.display  = view==='designer'  ? 'flex' : 'none';
+  document.getElementById('dashboard-screen').style.display  = view==='dashboard' ? 'flex' : 'none';
+  document.getElementById('home-screen').style.display       = view==='home'      ? 'flex' : 'none';
+  document.getElementById('saved-screen').style.display      = view==='saved'     ? 'flex' : 'none';
+  document.getElementById('my-dash-screen').style.display    = view==='myDash'    ? 'flex' : 'none';
+  document.getElementById('designer-screen').style.display   = view==='designer'  ? 'flex' : 'none';
+  document.getElementById('homeDash-screen').style.display   = view==='homeDash'  ? 'flex' : 'none';
 
   if(view==='builder') {
     // If navigating to builder directly (not via loadReport), it's a new report
@@ -6403,9 +6406,52 @@ function showView(view) {
       if (list) list.innerHTML = '<div style="padding:40px;text-align:center;color:var(--red);font-size:13px">Error loading reports — ' + e.message + '</div>';
     });
   }
-  if(view==='home') dexInit();
-  if(view==='myDash') myDashInit();
+  if(view==='home')     dexInit();
+  if(view==='myDash')   myDashInit();
   if(view==='designer') dsgnInit();
+  if(view==='homeDash') homeDashRender();
+}
+
+/* ── Home Dashboard ──────────────────────────────────────────────────── */
+// Home simply routes to the pinned dashboard in view mode via the existing
+// myDash machinery — no duplicated state or render paths.
+function homeDashRender() {
+  // Wait until _dashConfig is loaded
+  if (!_dashConfig || !_dashConfig.dashboards) {
+    setTimeout(homeDashRender, 300);
+    return;
+  }
+
+  const dash = _dashConfig.dashboards.find(d => d.show_on_home);
+
+  if (!dash) {
+    // Show empty state inside the homeDash-screen
+    const screen = document.getElementById('homeDash-screen');
+    if (screen) {
+      screen.innerHTML = `
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;gap:16px;padding:60px;text-align:center">
+          <i data-lucide="home" style="width:48px;height:48px;stroke-width:1.2;color:var(--border)"></i>
+          <div style="font-size:18px;font-weight:700;color:var(--navy)">No home dashboard set</div>
+          <div style="font-size:13px;color:var(--text-muted);max-width:360px">Go to <strong>My Dashboards</strong>, then click the
+            <i data-lucide="home" style="width:12px;height:12px;vertical-align:-2px"></i>
+            icon on any dashboard to pin it as your home.
+          </div>
+          <button onclick="showView('myDash')" style="margin-top:4px;padding:9px 20px;border-radius:8px;border:1.5px solid var(--navy);background:var(--navy);color:#fff;font-size:13px;font-weight:600;cursor:pointer">Go to My Dashboards</button>
+        </div>`;
+      lucide.createIcons({ el: screen });
+    }
+    return;
+  }
+
+  // Route into the existing view mode — hides homeDash-screen, shows myDash-screen
+  // Update nav active state to reflect myDash
+  ['dashboard','home','builder','saved','myDash','designer','homeDash'].forEach(v => {
+    document.getElementById(`nav-${v}`)?.classList.toggle('active', v === 'homeDash');
+  });
+  // Keep homeDash-screen hidden; the view renders in my-dash-screen
+  document.getElementById('homeDash-screen').style.display  = 'none';
+  document.getElementById('my-dash-screen').style.display   = 'flex';
+  myDashOpenView(dash.id);
 }
 
 // Stubs kept for backward compat (called by legacy code paths)
@@ -7817,8 +7863,13 @@ function myDashRenderList(screen) {
         </div>` :
         dashes.map(d => `
           <div class="myd-dash-card" onclick="myDashOpenEdit('${d.id}')">
+            <div style="display:flex;align-items:center;gap:10px;flex-shrink:0">
+              <button class="myd-icon-btn${d.show_on_home ? ' active' : ''}" onclick="event.stopPropagation();myDashSetHome('${d.id}')" title="${d.show_on_home ? 'Pinned as Home — click to unpin' : 'Pin as Home dashboard'}" style="${d.show_on_home ? 'color:var(--teal);border-color:var(--teal);background:rgba(0,191,165,.08)' : ''}">
+                <i data-lucide="home" style="width:14px;height:14px"></i>
+              </button>
+            </div>
             <div class="myd-dash-card-info">
-              <div class="myd-dash-card-name">${escHtml(d.name)}</div>
+              <div class="myd-dash-card-name">${escHtml(d.name)}${d.show_on_home ? ' <span style="font-size:10px;font-weight:600;color:var(--teal);background:rgba(0,191,165,.1);border:1px solid rgba(0,191,165,.3);padding:1px 6px;border-radius:4px;vertical-align:middle">Home</span>' : ''}</div>
               <div class="myd-dash-card-meta">${d.pages.length} page${d.pages.length !== 1 ? 's' : ''} · ${d.pages.reduce((sum,p)=>sum+p.panels.length,0)} panel${d.pages.reduce((sum,p)=>sum+p.panels.length,0)!==1?'s':''}</div>
             </div>
             <div class="myd-dash-card-actions" onclick="event.stopPropagation()">
@@ -7836,6 +7887,19 @@ function myDashRenderList(screen) {
       }
     </div>
   `;
+}
+
+/* ── Home pin ── */
+function myDashSetHome(dashId) {
+  // Exclusive: clear all, then toggle the clicked one
+  const wasHome = _dashConfig.dashboards.find(d => d.id === dashId)?.show_on_home;
+  _dashConfig.dashboards.forEach(d => { d.show_on_home = false; });
+  if (!wasHome) {
+    const d = _dashConfig.dashboards.find(d => d.id === dashId);
+    if (d) d.show_on_home = true;
+  }
+  _saveDashConfig();
+  myDashRender(); // re-render list with updated pin state
 }
 
 function myDashNew() {
