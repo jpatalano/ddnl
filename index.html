@@ -1853,6 +1853,7 @@
   </div>
   <div class="brand-sep"></div>
   <div class="subnav">
+    <button onclick="showView('homeDash')" id="nav-homeDash" title="Home" style="display:flex;align-items:center;gap:5px"><i data-lucide="home" style="width:14px;height:14px"></i> Home</button>
     <button onclick="showView('dashboard')" id="nav-dashboard">Dashboard</button>
     <button onclick="showView('myDash')"    id="nav-myDash">My Dashboards</button>
     <button onclick="showView('home')"      id="nav-home">Data Explorer</button>
@@ -1861,7 +1862,7 @@
     <button onclick="showView('designer')"  id="nav-designer">Designer</button>
   </div>
   <div class="topbar-right">
-
+    <a href="/admin" style="display:flex;align-items:center;gap:5px;color:rgba(255,255,255,.6);font-size:12.5px;font-weight:500;text-decoration:none;padding:5px 10px;border-radius:6px;transition:background .12s" onmouseover="this.style.background='rgba(255,255,255,.1)'" onmouseout="this.style.background=''"><i data-lucide="settings" style="width:13px;height:13px"></i> Admin</a>
   </div>
 </div>
 
@@ -2870,6 +2871,11 @@
 
 
     <!-- ═══ MY DASHBOARDS ═══ -->
+    <!-- ═══ HOME DASHBOARD ═══ -->
+    <div id="homeDash-screen" style="display:none;flex:1;flex-direction:column;overflow-y:auto">
+      <!-- Content rendered by JS -->
+    </div>
+
     <div id="my-dash-screen">
       <!-- Content rendered by JS -->
     </div>
@@ -7979,6 +7985,7 @@ function myDashRenderTileItem(tile, pi, ti, pageIdx) {
       <div style="display:flex;gap:4px;align-items:center">
         ${ti > 0 ? `<button class="myd-icon-btn" style="width:24px;height:24px" onclick="myDashMoveTile(${pageIdx},${pi},${ti},'up')" title="Move up">↑</button>` : ''}
         ${ti < (_myDashActive.pages[pageIdx].panels[pi].tiles.length-1) ? `<button class="myd-icon-btn" style="width:24px;height:24px" onclick="myDashMoveTile(${pageIdx},${pi},${ti},'down')" title="Move down">↓</button>` : ''}
+        ${tile.type === 'chart' && tile.savedChartId ? `<button class="myd-icon-btn" style="width:24px;height:24px" onclick="myDashEditChartViz('${tile.savedChartId}','${_myDashActive.id}',${pageIdx})" title="Edit visualization in Data Explorer"><i data-lucide="pencil" style="width:11px;height:11px"></i></button>` : ''}
         <button class="myd-icon-btn" style="width:24px;height:24px" onclick="myDashEditTile(${pageIdx},${pi},${ti})" title="Edit tile config"><i data-lucide="settings" style="width:11px;height:11px"></i></button>
         <button class="myd-tile-remove" onclick="myDashRemoveTile(${pageIdx},${pi},${ti})" title="Remove">×</button>
       </div>
@@ -8005,6 +8012,19 @@ function myDashEditTile(pageIdx, pi, ti) {
       tpKpiDatasetChanged(_tpKpiSelectedDs);
     }, 100);
   }
+}
+
+/* ── Edit viz: jump from dashboard tile to Data Explorer chart editor ── */
+let _dexReturnToDash = null; // { dashId, pageIdx } — set when editing a chart from a dashboard tile
+
+async function myDashEditChartViz(chartId, dashId, pageIdx) {
+  // Remember where to return
+  _dexReturnToDash = { dashId, pageIdx };
+  // Switch to Data Explorer
+  showView('home');
+  // Small tick to let the view render before loading the chart
+  await new Promise(r => setTimeout(r, 50));
+  dexEditChart(chartId);
 }
 
 /* ── Edit mode helpers ── */
