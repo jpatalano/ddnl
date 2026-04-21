@@ -6,6 +6,7 @@ const { URL } = require('url');
 const { pool, initDb } = require('./db');
 const esClient = require('./esClient');
 const { router: ingestRouter } = require('./ingestRouter');
+const adminRouter = require('./adminRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -17,8 +18,20 @@ app.use(express.json());
 const BASIC_USER = process.env.BASIC_AUTH_USER || 'ddnl';
 const BASIC_PASS = process.env.BASIC_AUTH_PASS || 'ddnl!';
 
+function requireBasicAuth(req, res, next) {
+  if (req.path === '/healthz' || req.headers['user-agent']?.includes('Railway')) return next();
+  const auth = req.headers['authorization'];
+  if (auth && auth.startsWith('Basic ')) {
+    const [user, pass] = Buffer.from(auth.slice(6), 'base64').toString().split(':');
+    if (user === BASIC_USER && pass === BASIC_PASS) return next();
+  }
+  res.set('WWW-Authenticate', 'Basic realm="DDNL Analytics"');
+  res.status(401).send('Unauthorized');
+}
+
 // Mount ingest router BEFORE basic auth — it has its own X-Api-Key auth
 app.use('/api/ingest', ingestRouter);
+app.use('/api/admin',  requireBasicAuth, adminRouter);
 
 app.use((req, res, next) => {
   // Allow Railway health checks through without auth
@@ -1425,6 +1438,8 @@ app.get('/api/bi/fiscal/compare-range', async (req, res) => {
 
 // ─── Fallback ─────────────────────────────────────────────────────────────────
 app.get('/debug', (req, res) => res.sendFile(path.join(__dirname, 'debug.html')));
+app.get('/admin', requireBasicAuth, (req, res) => res.sendFile(path.join(__dirname, 'admin', 'index.html')));
+app.get('/admin/*', requireBasicAuth, (req, res) => res.sendFile(path.join(__dirname, 'admin', 'index.html')));
 app.get('*', (req, res) => {
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
   res.sendFile(path.join(__dirname, 'index.html'));

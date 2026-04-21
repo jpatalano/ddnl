@@ -1,0 +1,914 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DDNL · Admin · Ingest</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@1.8.0/dist/umd/lucide.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --navy:       #003366;
+      --navy-light: #0a4080;
+      --navy-dark:  #001f40;
+      --teal:       #00BFA5;
+      --teal-dim:   #009e88;
+      --bg:         #eaf0f6;
+      --surface:    #ffffff;
+      --surface2:   #f4f7fa;
+      --border:     #d3dce8;
+      --text:       #1a2633;
+      --text-muted: #5f7a96;
+      --green:      #22c55e;
+      --red:        #ef4444;
+      --amber:      #f59e0b;
+      --radius:     8px;
+      --shadow:     0 2px 12px rgba(0,51,102,.10);
+    }
+
+    html, body { height: 100%; font-family: 'Inter', system-ui, sans-serif; font-size: 14px; color: var(--text); background: var(--bg); }
+
+    /* ─── Top bar ─────────────────────────────────────────────────────── */
+    #topbar {
+      height: 52px; background: var(--navy); display: flex; align-items: center;
+      padding: 0 20px; gap: 16px; position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    }
+    .brand { display: flex; align-items: center; gap: 8px; color: #fff; font-weight: 700; font-size: 15px; text-decoration: none; }
+    .brand-sep { width: 1px; height: 22px; background: rgba(255,255,255,.2); }
+    .admin-badge { background: var(--teal); color: #fff; font-size: 10px; font-weight: 700;
+      letter-spacing: .06em; padding: 2px 7px; border-radius: 4px; text-transform: uppercase; }
+    .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+    .topbar-link { color: rgba(255,255,255,.7); font-size: 12.5px; text-decoration: none; }
+    .topbar-link:hover { color: #fff; }
+
+    /* ─── Layout ──────────────────────────────────────────────────────── */
+    #layout { display: flex; height: 100vh; padding-top: 52px; }
+
+    /* ─── Sidebar ─────────────────────────────────────────────────────── */
+    #sidebar {
+      width: 220px; min-width: 220px; background: var(--surface); border-right: 1px solid var(--border);
+      display: flex; flex-direction: column; padding: 16px 0;
+    }
+    .sidebar-section { padding: 8px 16px 4px; font-size: 10.5px; font-weight: 700;
+      letter-spacing: .08em; color: var(--text-muted); text-transform: uppercase; }
+    .sidebar-item {
+      display: flex; align-items: center; gap: 9px; padding: 8px 16px; cursor: pointer;
+      font-size: 13px; font-weight: 500; color: var(--text-muted); border: none; background: none;
+      width: 100%; text-align: left; transition: background .12s, color .12s;
+    }
+    .sidebar-item:hover { background: var(--surface2); color: var(--text); }
+    .sidebar-item.active { background: rgba(0,51,102,.07); color: var(--navy); border-right: 3px solid var(--teal); }
+    .sidebar-item svg { flex-shrink: 0; }
+    .sidebar-badge {
+      margin-left: auto; background: var(--red); color: #fff; font-size: 10px;
+      font-weight: 700; padding: 1px 6px; border-radius: 10px; min-width: 18px; text-align: center;
+    }
+    .sidebar-badge.amber { background: var(--amber); }
+
+    /* ─── Main content ────────────────────────────────────────────────── */
+    #main { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
+    .page { display: none; flex-direction: column; flex: 1; }
+    .page.active { display: flex; }
+
+    /* ─── Page header ─────────────────────────────────────────────────── */
+    .page-header {
+      padding: 24px 28px 0; display: flex; align-items: center; gap: 12px; flex-shrink: 0;
+    }
+    .page-title { font-size: 20px; font-weight: 700; color: var(--navy); }
+    .page-sub { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
+    .page-actions { margin-left: auto; display: flex; gap: 8px; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px;
+      border-radius: var(--radius); font-size: 13px; font-weight: 500; cursor: pointer;
+      border: 1px solid var(--border); background: var(--surface); color: var(--text);
+      transition: background .12s, border-color .12s;
+    }
+    .btn:hover { background: var(--surface2); border-color: var(--navy); }
+    .btn-primary { background: var(--navy); color: #fff; border-color: var(--navy); }
+    .btn-primary:hover { background: var(--navy-light); border-color: var(--navy-light); }
+    .btn svg { width: 14px; height: 14px; }
+
+    /* ─── Content padding ─────────────────────────────────────────────── */
+    .page-body { padding: 20px 28px 32px; display: flex; flex-direction: column; gap: 20px; flex: 1; }
+
+    /* ─── Stat cards ──────────────────────────────────────────────────── */
+    .stat-row { display: flex; gap: 14px; flex-wrap: wrap; }
+    .stat-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 16px 20px; flex: 1; min-width: 140px; box-shadow: var(--shadow);
+    }
+    .stat-label { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 6px; }
+    .stat-value { font-size: 26px; font-weight: 700; color: var(--navy); font-family: 'DM Mono', monospace; }
+    .stat-sub { font-size: 11.5px; color: var(--text-muted); margin-top: 3px; }
+
+    /* ─── Cards / panels ──────────────────────────────────────────────── */
+    .card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+      box-shadow: var(--shadow); overflow: hidden;
+    }
+    .card-header {
+      padding: 13px 18px; border-bottom: 1px solid var(--border); display: flex;
+      align-items: center; gap: 8px; background: var(--surface2);
+    }
+    .card-title { font-size: 12.5px; font-weight: 700; color: var(--navy); text-transform: uppercase; letter-spacing: .06em; flex: 1; }
+    .card-body { padding: 0; }
+
+    /* ─── Table ───────────────────────────────────────────────────────── */
+    .data-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    .data-table th {
+      text-align: left; padding: 9px 14px; font-size: 11px; font-weight: 700;
+      color: var(--text-muted); text-transform: uppercase; letter-spacing: .06em;
+      border-bottom: 1px solid var(--border); background: var(--surface2); white-space: nowrap;
+    }
+    .data-table th.right, .data-table td.right { text-align: right; }
+    .data-table td { padding: 9px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    .data-table tr:last-child td { border-bottom: none; }
+    .data-table tr:hover td { background: var(--surface2); }
+    .data-table .mono { font-family: 'DM Mono', monospace; font-size: 11.5px; }
+
+    /* ─── Pills / chips ───────────────────────────────────────────────── */
+    .chip {
+      display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px;
+      border-radius: 4px; font-size: 11px; font-weight: 600;
+    }
+    .chip-green  { background: #dcfce7; color: #166534; }
+    .chip-red    { background: #fee2e2; color: #991b1b; }
+    .chip-amber  { background: #fef3c7; color: #92400e; }
+    .chip-blue   { background: #dbeafe; color: #1e40af; }
+    .chip-gray   { background: var(--surface2); color: var(--text-muted); border: 1px solid var(--border); }
+    .chip-teal   { background: #ccfbf1; color: #0f766e; }
+    .chip-navy   { background: rgba(0,51,102,.1); color: var(--navy); }
+
+    /* ─── Loading / empty ─────────────────────────────────────────────── */
+    .empty { padding: 40px; text-align: center; color: var(--text-muted); font-size: 13px; }
+    .loading-spin {
+      display: inline-block; width: 18px; height: 18px;
+      border: 2px solid var(--border); border-top-color: var(--navy);
+      border-radius: 50%; animation: spin .7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ─── Drill drawer ────────────────────────────────────────────────── */
+    #drill-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 200; display: none; align-items: flex-start; justify-content: flex-end;
+    }
+    #drill-overlay.open { display: flex; }
+    #drill-pane {
+      width: 600px; max-width: 95vw; height: 100vh; background: var(--surface);
+      box-shadow: -4px 0 32px rgba(0,0,0,.18); display: flex; flex-direction: column; overflow: hidden;
+    }
+    #drill-header {
+      padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px;
+      background: var(--surface2);
+    }
+    #drill-title { font-size: 14px; font-weight: 700; color: var(--navy); flex: 1; }
+    #drill-close { background: none; border: none; cursor: pointer; color: var(--text-muted); padding: 4px; display: flex; }
+    #drill-close:hover { color: var(--text); }
+    #drill-body { flex: 1; overflow-y: auto; padding: 0; }
+
+    /* ─── Filters bar ─────────────────────────────────────────────────── */
+    .filter-bar { display: flex; gap: 8px; align-items: center; padding: 12px 18px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+    .filter-bar select, .filter-bar input {
+      padding: 5px 10px; border: 1px solid var(--border); border-radius: 6px;
+      font-size: 12.5px; background: var(--surface); color: var(--text); outline: none;
+    }
+    .filter-bar select:focus, .filter-bar input:focus { border-color: var(--navy); }
+    .filter-label { font-size: 11.5px; font-weight: 600; color: var(--text-muted); }
+
+    /* ─── Alert rows ──────────────────────────────────────────────────── */
+    .alert-row { display: flex; gap: 10px; padding: 10px 18px; border-bottom: 1px solid var(--border); align-items: flex-start; }
+    .alert-row:last-child { border-bottom: none; }
+    .alert-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-top: 5px; }
+    .alert-dot.error { background: var(--red); }
+    .alert-dot.warn  { background: var(--amber); }
+    .alert-meta { font-size: 11px; color: var(--text-muted); font-family: 'DM Mono', monospace; }
+    .alert-msg  { font-size: 12.5px; font-weight: 500; }
+
+    /* ─── Reason bars (quarantine) ────────────────────────────────────── */
+    .reason-bar-wrap { display: flex; align-items: center; gap: 8px; }
+    .reason-bar { height: 6px; border-radius: 3px; background: var(--red); min-width: 4px; }
+    .reason-count { font-size: 11px; font-weight: 700; color: var(--text-muted); font-family: 'DM Mono', monospace; min-width: 28px; text-align: right; }
+
+    /* ─── Two-column grid ─────────────────────────────────────────────── */
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    @media (max-width: 900px) { .two-col { grid-template-columns: 1fr; } }
+
+    /* ─── Inline store dot ────────────────────────────────────────────── */
+    .store-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
+
+    /* ─── Misc ────────────────────────────────────────────────────────── */
+    .ts { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+    .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 240px; }
+    .row-count { font-family: 'DM Mono', monospace; font-size: 12px; }
+  </style>
+</head>
+<body>
+
+<!-- ─── Top bar ─────────────────────────────────────────────────────────── -->
+<div id="topbar">
+  <a href="/" class="brand">
+    <i data-lucide="bar-chart-2" style="width:17px;height:17px;stroke-width:2.2"></i>
+    <span>DDNL</span>
+  </a>
+  <div class="brand-sep"></div>
+  <span class="admin-badge">Admin</span>
+  <div class="topbar-right">
+    <a href="/" class="topbar-link">← Back to Analytics</a>
+  </div>
+</div>
+
+<!-- ─── Layout ──────────────────────────────────────────────────────────── -->
+<div id="layout">
+
+  <!-- Sidebar -->
+  <nav id="sidebar">
+    <div class="sidebar-section">Ingest</div>
+    <button class="sidebar-item active" data-page="overview" onclick="showPage('overview')">
+      <i data-lucide="layout-dashboard" style="width:15px;height:15px"></i> Overview
+    </button>
+    <button class="sidebar-item" data-page="history" onclick="showPage('history')">
+      <i data-lucide="history" style="width:15px;height:15px"></i> Import History
+    </button>
+    <button class="sidebar-item" data-page="files" onclick="showPage('files')">
+      <i data-lucide="folder-open" style="width:15px;height:15px"></i> FTP Files
+    </button>
+    <button class="sidebar-item" data-page="quarantine" onclick="showPage('quarantine')">
+      <i data-lucide="shield-alert" style="width:15px;height:15px"></i> Quarantine
+      <span class="sidebar-badge" id="qbadge" style="display:none">0</span>
+    </button>
+    <button class="sidebar-item" data-page="generator" onclick="showPage('generator')">
+      <i data-lucide="cpu" style="width:15px;height:15px"></i> Generator History
+    </button>
+    <button class="sidebar-item" data-page="alerts" onclick="showPage('alerts')">
+      <i data-lucide="bell" style="width:15px;height:15px"></i> Alerts
+      <span class="sidebar-badge amber" id="abadge" style="display:none">0</span>
+    </button>
+  </nav>
+
+  <!-- Main -->
+  <main id="main">
+
+    <!-- ══ OVERVIEW ══════════════════════════════════════════════════════ -->
+    <div class="page active" id="page-overview">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Ingest Overview</div>
+          <div class="page-sub">Channels, datasets, and FTP pipeline summary</div>
+        </div>
+        <div class="page-actions">
+          <button class="btn" onclick="loadOverview()">
+            <i data-lucide="refresh-cw" style="width:13px;height:13px"></i> Refresh
+          </button>
+        </div>
+      </div>
+      <div class="page-body">
+        <div class="stat-row" id="ov-stats">
+          <div class="stat-card"><div class="stat-label">Datasets</div><div class="stat-value" id="ov-datasets">—</div></div>
+          <div class="stat-card"><div class="stat-label">Active Channels</div><div class="stat-value" id="ov-channels">—</div></div>
+          <div class="stat-card"><div class="stat-label">Files Processed</div><div class="stat-value" id="ov-files">—</div></div>
+          <div class="stat-card"><div class="stat-label">Rows Upserted</div><div class="stat-value" id="ov-upserted">—</div></div>
+          <div class="stat-card"><div class="stat-label">Rows Rejected</div><div class="stat-value" id="ov-rejected" style="color:var(--red)">—</div></div>
+        </div>
+
+        <div class="two-col">
+          <div class="card">
+            <div class="card-header"><span class="card-title">Ingest Channels</span></div>
+            <div class="card-body">
+              <table class="data-table">
+                <thead><tr>
+                  <th>Dataset</th><th>Channel</th><th>Method</th><th>ID Field</th><th>Status</th>
+                </tr></thead>
+                <tbody id="ov-channels-tbody"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header"><span class="card-title">FTP by Store</span></div>
+            <div class="card-body">
+              <table class="data-table">
+                <thead><tr>
+                  <th>Store</th><th class="right">Files</th><th class="right">Upserted</th><th class="right">Rejected</th>
+                </tr></thead>
+                <tbody id="ov-stores-tbody"><tr><td colspan="4" class="empty">Loading…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><span class="card-title">Last Ingest per Dataset</span></div>
+          <div class="card-body">
+            <table class="data-table">
+              <thead><tr>
+                <th>Dataset</th><th>Operation</th><th class="right">Docs</th><th class="right">Failed</th><th>Duration</th><th>Triggered By</th><th>When</th>
+              </tr></thead>
+              <tbody id="ov-lastlog-tbody"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ IMPORT HISTORY ════════════════════════════════════════════════ -->
+    <div class="page" id="page-history">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Import History</div>
+          <div class="page-sub">Per-run FTP poller results — click a run to drill in</div>
+        </div>
+        <div class="page-actions">
+          <button class="btn" onclick="loadHistory()">
+            <i data-lucide="refresh-cw" style="width:13px;height:13px"></i> Refresh
+          </button>
+        </div>
+      </div>
+      <div class="page-body">
+        <div class="card">
+          <div class="card-body" id="history-body">
+            <div class="empty">Loading…</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ FTP FILES ══════════════════════════════════════════════════════ -->
+    <div class="page" id="page-files">
+      <div class="page-header">
+        <div>
+          <div class="page-title">FTP Files</div>
+          <div class="page-sub" id="files-dropdir">Drop folder: ftp-drop/sales/</div>
+        </div>
+        <div class="page-actions">
+          <button class="btn" onclick="loadFiles()">
+            <i data-lucide="refresh-cw" style="width:13px;height:13px"></i> Refresh
+          </button>
+        </div>
+      </div>
+      <div class="page-body">
+        <div class="card">
+          <div class="filter-bar">
+            <span class="filter-label">Show:</span>
+            <select id="files-filter" onchange="renderFiles()">
+              <option value="all">All files</option>
+              <option value="pending">Pending (not processed)</option>
+              <option value="processed">Processed</option>
+            </select>
+            <span id="files-last-poll" style="margin-left:auto;font-size:11.5px;color:var(--text-muted)"></span>
+          </div>
+          <div class="card-body">
+            <table class="data-table" id="files-table">
+              <thead><tr>
+                <th>Filename</th><th>Store</th><th>Date</th><th class="right">Size</th>
+                <th class="right">Upserted</th><th class="right">Rejected</th><th>Processed At</th><th>Status</th>
+              </tr></thead>
+              <tbody id="files-tbody"><tr><td colspan="8" class="empty">Loading…</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ QUARANTINE ═════════════════════════════════════════════════════ -->
+    <div class="page" id="page-quarantine">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Quarantine</div>
+          <div class="page-sub">Rows rejected during ingest — validation failures, bad data</div>
+        </div>
+        <div class="page-actions">
+          <button class="btn" onclick="loadQuarantine()">
+            <i data-lucide="refresh-cw" style="width:13px;height:13px"></i> Refresh
+          </button>
+        </div>
+      </div>
+      <div class="page-body">
+        <div class="two-col">
+          <div class="card" id="q-reasons-card">
+            <div class="card-header"><span class="card-title">Rejection Reasons</span></div>
+            <div class="card-body" id="q-reasons-body"><div class="empty">Loading…</div></div>
+          </div>
+          <div class="card">
+            <div class="card-header"><span class="card-title">Filter</span></div>
+            <div class="card-body" style="padding:16px">
+              <div style="display:flex;flex-direction:column;gap:12px">
+                <label style="font-size:12px;font-weight:600;color:var(--text-muted)">Store</label>
+                <select id="q-store-filter" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+                  <option value="">All stores</option>
+                </select>
+                <label style="font-size:12px;font-weight:600;color:var(--text-muted)">Date</label>
+                <input type="date" id="q-date-filter" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px" />
+                <button class="btn btn-primary" onclick="loadQuarantine()">Apply</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Rejected Rows</span>
+            <span id="q-total" style="font-size:12px;color:var(--text-muted);font-family:'DM Mono',monospace"></span>
+          </div>
+          <div class="card-body">
+            <table class="data-table">
+              <thead><tr>
+                <th>Time</th><th>Store</th><th>Date</th><th>Filename</th><th>Reason</th><th>Raw Value (sample)</th>
+              </tr></thead>
+              <tbody id="q-tbody"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ GENERATOR HISTORY ══════════════════════════════════════════════ -->
+    <div class="page" id="page-generator">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Generator History</div>
+          <div class="page-sub">Nightly sales file generation runs — chaos stats per store</div>
+        </div>
+        <div class="page-actions">
+          <button class="btn" onclick="loadGenerator()">
+            <i data-lucide="refresh-cw" style="width:13px;height:13px"></i> Refresh
+          </button>
+        </div>
+      </div>
+      <div class="page-body" id="gen-body">
+        <div class="empty">Loading…</div>
+      </div>
+    </div>
+
+    <!-- ══ ALERTS ═════════════════════════════════════════════════════════ -->
+    <div class="page" id="page-alerts">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Alerts</div>
+          <div class="page-sub">Warnings and errors from poller and generator</div>
+        </div>
+        <div class="page-actions">
+          <button class="btn" onclick="loadAlerts()">
+            <i data-lucide="refresh-cw" style="width:13px;height:13px"></i> Refresh
+          </button>
+        </div>
+      </div>
+      <div class="page-body">
+        <div class="card">
+          <div class="card-body" id="alerts-body"><div class="empty">Loading…</div></div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ─── Drill drawer ─────────────────────────────────────────────────────── -->
+<div id="drill-overlay" onclick="closeDrill(event)">
+  <div id="drill-pane">
+    <div id="drill-header">
+      <span id="drill-title">Run Detail</span>
+      <button id="drill-close" onclick="closeDrill()">
+        <i data-lucide="x" style="width:16px;height:16px"></i>
+      </button>
+    </div>
+    <div id="drill-body"></div>
+  </div>
+</div>
+
+<script>
+// ─── Config ─────────────────────────────────────────────────────────────────
+const BASE = '/api/admin';
+
+// ─── Store colour palette ────────────────────────────────────────────────────
+const STORE_COLORS = {
+  store_001: '#6366f1', store_002: '#0ea5e9', store_003: '#10b981',
+  store_004: '#f59e0b', store_005: '#ef4444', store_006: '#8b5cf6',
+  store_007: '#ec4899'
+};
+function storeColor(id) { return STORE_COLORS[id] || '#94a3b8'; }
+
+// ─── Utilities ───────────────────────────────────────────────────────────────
+function fmtNum(n)  { return n == null ? '—' : Number(n).toLocaleString(); }
+function fmtBytes(b){ if (!b) return '—'; if (b < 1024) return b + ' B'; if (b < 1048576) return (b/1024).toFixed(1) + ' KB'; return (b/1048576).toFixed(1) + ' MB'; }
+function fmtTs(ts)  { if (!ts) return '—'; const d = new Date(ts); return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); }
+function fmtDur(ms) { if (!ms) return '—'; if (ms < 1000) return ms + 'ms'; return (ms/1000).toFixed(1) + 's'; }
+function esc(s)     { if (!s) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function chip(text, cls) { return `<span class="chip chip-${cls}">${esc(text)}</span>`; }
+function methodChip(m) {
+  const map = { api_push:'blue', csv:'teal', webhook:'navy', sftp:'gray', ftp:'gray' };
+  return chip(m, map[m] || 'gray');
+}
+
+async function apiFetch(path) {
+  const r = await fetch(path);
+  if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
+  return r.json();
+}
+
+// ─── Page navigation ─────────────────────────────────────────────────────────
+const PAGE_LOADERS = { overview: loadOverview, history: loadHistory, files: loadFiles, quarantine: loadQuarantine, generator: loadGenerator, alerts: loadAlerts };
+const _loaded = {};
+
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.sidebar-item').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + name)?.classList.add('active');
+  document.querySelector(`[data-page="${name}"]`)?.classList.add('active');
+  if (!_loaded[name]) { _loaded[name] = true; PAGE_LOADERS[name]?.(); }
+}
+
+// ─── OVERVIEW ────────────────────────────────────────────────────────────────
+let _ovData = null;
+
+async function loadOverview() {
+  try {
+    const d = await apiFetch(`${BASE}/ingest/overview`);
+    _ovData = d;
+
+    // Stats
+    const ftpStores = d.ftp_summary?.stores || {};
+    const totalUpserted = Object.values(ftpStores).reduce((s,v) => s + (v.upserted||0), 0);
+    const totalRejected = Object.values(ftpStores).reduce((s,v) => s + (v.rejected||0), 0);
+    document.getElementById('ov-datasets').textContent  = d.datasets?.length ?? '—';
+    document.getElementById('ov-channels').textContent  = (d.channels||[]).filter(c=>c.is_active).length;
+    document.getElementById('ov-files').textContent     = fmtNum(d.ftp_summary?.files_processed);
+    document.getElementById('ov-upserted').textContent  = fmtNum(totalUpserted);
+    document.getElementById('ov-rejected').textContent  = fmtNum(totalRejected);
+
+    // Channels table
+    const ctb = document.getElementById('ov-channels-tbody');
+    if (!d.channels?.length) { ctb.innerHTML = '<tr><td colspan="5" class="empty">No channels configured</td></tr>'; }
+    else ctb.innerHTML = d.channels.map(c => `
+      <tr>
+        <td><strong>${esc(c.dataset_label || c.dataset_name)}</strong></td>
+        <td>${esc(c.channel_name)}</td>
+        <td>${methodChip(c.method)}</td>
+        <td class="mono">${c.id_field ? esc(c.id_field) : '<span style="color:var(--text-muted)">—</span>'}</td>
+        <td>${c.is_active ? chip('Active','green') : chip('Inactive','gray')}</td>
+      </tr>`).join('');
+
+    // Stores table
+    const stb = document.getElementById('ov-stores-tbody');
+    const storeEntries = Object.entries(ftpStores).sort((a,b)=>a[0]>b[0]?1:-1);
+    if (!storeEntries.length) { stb.innerHTML = '<tr><td colspan="4" class="empty">No FTP data yet</td></tr>'; }
+    else stb.innerHTML = storeEntries.map(([sid, info]) => `
+      <tr>
+        <td><span class="store-dot" style="background:${storeColor(sid)}"></span>${esc(sid)}</td>
+        <td class="right row-count">${fmtNum(info.files)}</td>
+        <td class="right row-count">${fmtNum(info.upserted)}</td>
+        <td class="right row-count" style="color:${info.rejected>0?'var(--red)':'var(--text-muted)'}">${fmtNum(info.rejected)}</td>
+      </tr>`).join('');
+
+    // Last ingest log
+    const ltb = document.getElementById('ov-lastlog-tbody');
+    if (!d.last_ingest?.length) { ltb.innerHTML = '<tr><td colspan="7" class="empty">No ingest log entries yet</td></tr>'; }
+    else ltb.innerHTML = d.last_ingest.map(r => `
+      <tr>
+        <td><strong>${esc(r.dataset_name)}</strong></td>
+        <td>${chip(r.operation,'blue')}</td>
+        <td class="right row-count">${fmtNum(r.doc_count)}</td>
+        <td class="right row-count" style="color:${r.failed_count>0?'var(--red)':'inherit'}">${fmtNum(r.failed_count)}</td>
+        <td class="mono">${fmtDur(r.duration_ms)}</td>
+        <td>${esc(r.triggered_by||'—')}</td>
+        <td class="ts">${fmtTs(r.created_at)}</td>
+      </tr>`).join('');
+
+    lucide.createIcons();
+  } catch(e) {
+    console.error(e);
+    document.getElementById('ov-channels-tbody').innerHTML = `<tr><td colspan="5" class="empty" style="color:var(--red)">${esc(e.message)}</td></tr>`;
+  }
+}
+
+// ─── IMPORT HISTORY ──────────────────────────────────────────────────────────
+let _historyData = null;
+
+async function loadHistory() {
+  const body = document.getElementById('history-body');
+  body.innerHTML = '<div class="empty"><span class="loading-spin"></span></div>';
+  try {
+    const d = await apiFetch(`${BASE}/ingest/history`);
+    _historyData = d;
+    renderHistory(d.runs || []);
+    lucide.createIcons();
+  } catch(e) {
+    body.innerHTML = `<div class="empty" style="color:var(--red)">${esc(e.message)}</div>`;
+  }
+}
+
+function renderHistory(runs) {
+  const body = document.getElementById('history-body');
+  if (!runs.length) { body.innerHTML = '<div class="empty">No poller runs recorded yet</div>'; return; }
+
+  body.innerHTML = `
+    <table class="data-table">
+      <thead><tr>
+        <th>Poll ID</th><th>Started</th><th class="right">Files</th>
+        <th class="right">Upserted</th><th class="right">Rejected</th><th>Alerts</th><th></th>
+      </tr></thead>
+      <tbody>
+        ${runs.map(r => `
+          <tr style="cursor:pointer" onclick="drillRun('${esc(r.poll_id)}')">
+            <td class="mono">${esc(r.poll_id)}</td>
+            <td class="ts">${fmtTs(r.started_at)}</td>
+            <td class="right row-count">${r.files_processed || 0}</td>
+            <td class="right row-count">${fmtNum(r.total_upserted)}</td>
+            <td class="right row-count" style="color:${r.total_rejected>0?'var(--red)':'inherit'}">${fmtNum(r.total_rejected)}</td>
+            <td>${r.alerts?.length ? `<span class="chip chip-amber">${r.alerts.length} alert${r.alerts.length>1?'s':''}</span>` : '<span style="color:var(--text-muted);font-size:12px">—</span>'}</td>
+            <td style="color:var(--text-muted)"><i data-lucide="chevron-right" style="width:14px;height:14px"></i></td>
+          </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
+function drillRun(pollId) {
+  const run = _historyData?.runs?.find(r => r.poll_id === pollId);
+  if (!run) return;
+
+  document.getElementById('drill-title').textContent = 'Run · ' + pollId;
+
+  const body = document.getElementById('drill-body');
+  body.innerHTML = `
+    <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;gap:20px;flex-wrap:wrap">
+      <div><div style="font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.06em">Started</div><div class="ts" style="font-size:12.5px;color:var(--text)">${fmtTs(run.started_at)}</div></div>
+      <div><div style="font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.06em">Files</div><div class="row-count">${run.files_processed || 0}</div></div>
+      <div><div style="font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.06em">Upserted</div><div class="row-count">${fmtNum(run.total_upserted)}</div></div>
+      <div><div style="font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.06em">Rejected</div><div class="row-count" style="color:${run.total_rejected>0?'var(--red)':'inherit'}">${fmtNum(run.total_rejected)}</div></div>
+    </div>
+
+    ${run.alerts?.length ? `
+      <div style="padding:12px 20px;background:#fef3c7;border-bottom:1px solid #fde68a">
+        <div style="font-size:11px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Alerts</div>
+        ${run.alerts.map(a => `<div style="font-size:12px;color:#78350f;margin-bottom:3px">
+          <span class="ts">${fmtTs(a.ts)}</span> &nbsp;
+          <strong>${esc(a.event)}</strong>${a.data ? ' — ' + esc(JSON.stringify(a.data)) : ''}
+        </div>`).join('')}
+      </div>` : ''}
+
+    <table class="data-table">
+      <thead><tr>
+        <th>Filename</th><th>Store</th><th class="right">Total</th><th class="right">Valid</th>
+        <th class="right">Rejected</th><th class="right">Upserted</th><th>Duration</th><th>Status</th>
+      </tr></thead>
+      <tbody>
+        ${(run.files||[]).map(f => `
+          <tr>
+            <td class="truncate mono" title="${esc(f.filename)}">${esc(f.filename)}</td>
+            <td><span class="store-dot" style="background:${storeColor(f.store_id)}"></span>${esc(f.store_id||'—')}</td>
+            <td class="right row-count">${fmtNum(f.rows_total)}</td>
+            <td class="right row-count">${fmtNum(f.rows_valid)}</td>
+            <td class="right row-count" style="color:${f.rows_rejected>0?'var(--red)':'inherit'}">${fmtNum(f.rows_rejected)}</td>
+            <td class="right row-count">${fmtNum(f.upserted)}</td>
+            <td class="mono">${fmtDur(f.duration_ms)}</td>
+            <td>${f.event==='file_complete' ? chip('OK','green') : chip('Error','red')}</td>
+          </tr>`).join('')}
+      </tbody>
+    </table>`;
+
+  openDrill();
+  lucide.createIcons();
+}
+
+// ─── FTP FILES ───────────────────────────────────────────────────────────────
+let _filesData = null;
+
+async function loadFiles() {
+  document.getElementById('files-tbody').innerHTML = '<tr><td colspan="8" class="empty"><span class="loading-spin"></span></td></tr>';
+  try {
+    const d = await apiFetch(`${BASE}/ingest/files`);
+    _filesData = d;
+    document.getElementById('files-dropdir').textContent = 'Drop folder: ' + (d.drop_dir || 'ftp-drop/sales/');
+    if (d.last_poll) document.getElementById('files-last-poll').textContent = 'Last poll: ' + fmtTs(d.last_poll);
+    renderFiles();
+    lucide.createIcons();
+  } catch(e) {
+    document.getElementById('files-tbody').innerHTML = `<tr><td colspan="8" class="empty" style="color:var(--red)">${esc(e.message)}</td></tr>`;
+  }
+}
+
+function renderFiles() {
+  if (!_filesData) return;
+  const filter = document.getElementById('files-filter').value;
+  let files = _filesData.files || [];
+  if (filter === 'pending')   files = files.filter(f => !f.processed);
+  if (filter === 'processed') files = files.filter(f => f.processed);
+
+  const tbody = document.getElementById('files-tbody');
+  if (!files.length) { tbody.innerHTML = '<tr><td colspan="8" class="empty">No files found</td></tr>'; return; }
+
+  tbody.innerHTML = files.map(f => `
+    <tr>
+      <td class="mono" style="font-size:12px">${esc(f.filename)}${f.removed ? ' <span style="color:var(--text-muted);font-size:10px">(removed)</span>' : ''}</td>
+      <td>${f.store_id ? `<span class="store-dot" style="background:${storeColor(f.store_id)}"></span>${esc(f.store_id)}` : '<span style="color:var(--text-muted)">—</span>'}</td>
+      <td>${f.date || '<span style="color:var(--text-muted)">—</span>'}</td>
+      <td class="right mono">${fmtBytes(f.size_bytes)}</td>
+      <td class="right row-count">${f.upserted != null ? fmtNum(f.upserted) : '<span style="color:var(--text-muted)">—</span>'}</td>
+      <td class="right row-count" style="color:${f.rows_rejected>0?'var(--red)':'inherit'}">${f.rows_rejected != null ? fmtNum(f.rows_rejected) : '<span style="color:var(--text-muted)">—</span>'}</td>
+      <td class="ts">${fmtTs(f.processed_at)}</td>
+      <td>${f.processed ? chip('Processed','green') : chip('Pending','amber')}</td>
+    </tr>`).join('');
+}
+
+// ─── QUARANTINE ──────────────────────────────────────────────────────────────
+let _quarData = null;
+
+async function loadQuarantine() {
+  document.getElementById('q-tbody').innerHTML = '<tr><td colspan="6" class="empty"><span class="loading-spin"></span></td></tr>';
+  document.getElementById('q-reasons-body').innerHTML = '<div class="empty"><span class="loading-spin"></span></div>';
+  try {
+    const store = document.getElementById('q-store-filter').value;
+    const date  = document.getElementById('q-date-filter').value;
+    let url = `${BASE}/ingest/quarantine?limit=500`;
+    if (store) url += '&store=' + encodeURIComponent(store);
+    if (date)  url += '&date='  + encodeURIComponent(date);
+
+    const d = await apiFetch(url);
+    _quarData = d;
+
+    document.getElementById('q-total').textContent = fmtNum(d.total) + ' rows';
+
+    // Update badge
+    const qb = document.getElementById('qbadge');
+    if (d.total > 0) { qb.textContent = d.total > 99 ? '99+' : d.total; qb.style.display = ''; }
+    else qb.style.display = 'none';
+
+    // Reasons chart
+    const reasons = Object.entries(d.reason_summary || {}).sort((a,b) => b[1]-a[1]);
+    const maxCount = reasons[0]?.[1] || 1;
+    const rbody = document.getElementById('q-reasons-body');
+    if (!reasons.length) { rbody.innerHTML = '<div class="empty">No rejected rows</div>'; }
+    else rbody.innerHTML = `<table class="data-table">
+      <thead><tr><th>Reason</th><th class="right">Count</th><th style="width:140px"></th></tr></thead>
+      <tbody>${reasons.map(([r,c]) => `
+        <tr>
+          <td style="font-size:12px">${esc(r)}</td>
+          <td class="right reason-count">${c}</td>
+          <td><div class="reason-bar-wrap"><div class="reason-bar" style="width:${Math.max(4,Math.round(120*c/maxCount))}px"></div></div></td>
+        </tr>`).join('')}
+      </tbody></table>`;
+
+    // Populate store filter
+    const storeFilter = document.getElementById('q-store-filter');
+    const stores = [...new Set((d.rows||[]).map(r => r.store_id || r.row?.store_id).filter(Boolean))].sort();
+    const curVal = storeFilter.value;
+    storeFilter.innerHTML = '<option value="">All stores</option>' + stores.map(s => `<option value="${esc(s)}" ${s===curVal?'selected':''}>${esc(s)}</option>`).join('');
+
+    // Rows table
+    const tbody = document.getElementById('q-tbody');
+    if (!d.rows?.length) { tbody.innerHTML = '<tr><td colspan="6" class="empty">No rejected rows</td></tr>'; return; }
+
+    tbody.innerHTML = d.rows.map(r => {
+      const row    = r.row || r;
+      const errors = row._errors || [r.reason || ''];
+      const store  = r.store_id || row.store_id || '—';
+      const date2  = r.date || row.date || '—';
+      const fname  = r.filename || '—';
+      // Sample raw value — pick the first suspicious field
+      const sample = (row.unit_price != null ? 'unit_price=' + row.unit_price : '') ||
+                     (row.revenue    != null ? 'revenue='    + row.revenue    : '') ||
+                     (row.store_id   != null ? 'store_id='   + row.store_id   : '');
+      return `<tr>
+        <td class="ts">${fmtTs(r.ts)}</td>
+        <td><span class="store-dot" style="background:${storeColor(store)}"></span>${esc(store)}</td>
+        <td>${esc(date2)}</td>
+        <td class="truncate mono" title="${esc(fname)}" style="max-width:160px">${esc(fname)}</td>
+        <td>${errors.map(e => `<span class="chip chip-red" style="margin-right:3px;font-size:10px">${esc(e)}</span>`).join('')}</td>
+        <td class="mono" style="font-size:11px;color:var(--text-muted)">${esc(sample||'—')}</td>
+      </tr>`;
+    }).join('');
+
+    lucide.createIcons();
+  } catch(e) {
+    document.getElementById('q-tbody').innerHTML = `<tr><td colspan="6" class="empty" style="color:var(--red)">${esc(e.message)}</td></tr>`;
+    document.getElementById('q-reasons-body').innerHTML = `<div class="empty" style="color:var(--red)">${esc(e.message)}</div>`;
+  }
+}
+
+// ─── GENERATOR HISTORY ───────────────────────────────────────────────────────
+async function loadGenerator() {
+  const body = document.getElementById('gen-body');
+  body.innerHTML = '<div class="empty"><span class="loading-spin"></span></div>';
+  try {
+    const d = await apiFetch(`${BASE}/ingest/generator`);
+    renderGenerator(d.runs || []);
+    lucide.createIcons();
+  } catch(e) {
+    body.innerHTML = `<div class="empty" style="color:var(--red)">${esc(e.message)}</div>`;
+  }
+}
+
+function renderGenerator(runs) {
+  const body = document.getElementById('gen-body');
+  if (!runs.length) { body.innerHTML = '<div class="empty">No generator runs recorded yet</div>'; return; }
+
+  body.innerHTML = runs.map(run => {
+    const stores = Object.entries(run.stores || {});
+    const date = run.date || '—';
+    const ok = run.ok ?? '—';
+    const skipped = run.skipped ?? 0;
+
+    return `
+      <div class="card">
+        <div class="card-header" style="cursor:pointer" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none'">
+          <span class="card-title">${esc(date)}</span>
+          <span style="font-size:12px;color:var(--text-muted);font-weight:400;margin-left:8px">${fmtTs(run.ts)}</span>
+          <div style="display:flex;gap:6px;margin-left:auto;align-items:center">
+            ${chip(ok + ' ok', 'green')}
+            ${skipped ? chip(skipped + ' skipped', 'amber') : ''}
+            ${run.failed ? chip(run.failed + ' failed', 'red') : ''}
+            <i data-lucide="chevron-down" style="width:14px;height:14px;color:var(--text-muted)"></i>
+          </div>
+        </div>
+        <div class="card-body">
+          <table class="data-table">
+            <thead><tr>
+              <th>Store</th><th>Status</th><th class="right">Rows</th><th class="right">Defects</th>
+              <th class="right">Dupes</th><th>Reason / Notes</th>
+            </tr></thead>
+            <tbody>
+              ${stores.map(([sid, info]) => `
+                <tr>
+                  <td><span class="store-dot" style="background:${storeColor(sid)}"></span>${esc(sid)}</td>
+                  <td>${info.status === 'ok' ? chip('OK','green') : info.status === 'skipped' ? chip('Skipped','amber') : chip('Failed','red')}</td>
+                  <td class="right row-count">${info.rows != null ? fmtNum(info.rows) : '—'}</td>
+                  <td class="right row-count" style="color:${info.defects>0?'var(--amber)':'inherit'}">${info.defects != null ? fmtNum(info.defects) : '—'}</td>
+                  <td class="right row-count" style="color:${info.dupes>0?'var(--amber)':'inherit'}">${info.dupes != null ? fmtNum(info.dupes) : '—'}</td>
+                  <td style="font-size:12px;color:var(--text-muted)">${esc(info.reason || info.error || info.filename || '—')}</td>
+                </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// ─── ALERTS ──────────────────────────────────────────────────────────────────
+async function loadAlerts() {
+  const body = document.getElementById('alerts-body');
+  body.innerHTML = '<div class="empty"><span class="loading-spin"></span></div>';
+  try {
+    const d = await apiFetch(`${BASE}/ingest/alerts`);
+    const alerts = d.alerts || [];
+
+    // Update badge
+    const ab = document.getElementById('abadge');
+    if (alerts.length > 0) { ab.textContent = alerts.length > 99 ? '99+' : alerts.length; ab.style.display = ''; }
+    else ab.style.display = 'none';
+
+    if (!alerts.length) { body.innerHTML = '<div class="empty">No alerts</div>'; return; }
+
+    body.innerHTML = alerts.map(a => `
+      <div class="alert-row">
+        <div class="alert-dot ${a.level}"></div>
+        <div style="flex:1">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px">
+            <span class="alert-msg">${esc(a.event || a.message || '—')}</span>
+            ${a.source ? chip(a.source, 'gray') : ''}
+            ${a.level === 'error' ? chip('error','red') : chip('warn','amber')}
+          </div>
+          <div class="alert-meta">${fmtTs(a.ts)}${a.data ? ' · ' + JSON.stringify(a.data).slice(0,120) : ''}</div>
+        </div>
+      </div>`).join('');
+
+    lucide.createIcons();
+  } catch(e) {
+    body.innerHTML = `<div class="empty" style="color:var(--red)">${esc(e.message)}</div>`;
+  }
+}
+
+// ─── Drill drawer ─────────────────────────────────────────────────────────────
+function openDrill() {
+  document.getElementById('drill-overlay').classList.add('open');
+}
+function closeDrill(e) {
+  if (e && e.target !== document.getElementById('drill-overlay') && !e.target.closest('#drill-close')) return;
+  document.getElementById('drill-overlay').classList.remove('open');
+}
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  lucide.createIcons();
+  loadOverview();
+  // Pre-load badges
+  apiFetch(`${BASE}/ingest/quarantine?limit=1`).then(d => {
+    if (d.total > 0) {
+      const qb = document.getElementById('qbadge');
+      qb.textContent = d.total > 99 ? '99+' : d.total;
+      qb.style.display = '';
+    }
+  }).catch(()=>{});
+  apiFetch(`${BASE}/ingest/alerts`).then(d => {
+    if (d.alerts?.length > 0) {
+      const ab = document.getElementById('abadge');
+      ab.textContent = d.alerts.length > 99 ? '99+' : d.alerts.length;
+      ab.style.display = '';
+    }
+  }).catch(()=>{});
+});
+</script>
+</body>
+</html>

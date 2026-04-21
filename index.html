@@ -1581,8 +1581,13 @@
     .myd-page-tab-add { background: none; border: none; padding: 8px 10px; font-size: 13px; color: var(--teal); cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 4px; }
     .myd-page-tab-add:hover { opacity: .75; }
     .myd-panels { display: flex; flex-direction: column; gap: 18px; margin-top: 18px; }
-    .myd-panel-card { background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius); padding: 16px 20px; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+    .myd-panel-card { background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius); padding: 16px 20px; box-shadow: 0 1px 3px rgba(0,0,0,.06); transition: opacity .15s, box-shadow .15s; }
+    .myd-panel-card.dragging { opacity: .35; box-shadow: none; }
+    .myd-panel-card.drag-over { border-color: var(--teal); box-shadow: 0 0 0 2px rgba(0,191,165,.25), 0 4px 16px rgba(0,0,0,.08); }
     .myd-panel-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+    .myd-drag-handle { display: flex; align-items: center; color: var(--border); cursor: grab; padding: 2px 1px; border-radius: 4px; flex-shrink: 0; transition: color .12s; }
+    .myd-drag-handle:hover { color: var(--text-muted); }
+    .myd-drag-handle:active { cursor: grabbing; }
     .myd-panel-title-input { flex: 1; font-size: 14px; font-weight: 700; color: var(--navy); border: none; background: transparent; outline: none; padding: 2px 6px; border-radius: 5px; }
     .myd-panel-title-input:hover, .myd-panel-title-input:focus { background: var(--surface2); }
     .myd-layout-pills { display: flex; gap: 4px; }
@@ -7910,10 +7915,21 @@ function myDashRenderEdit(screen) {
 function myDashRenderPanelCard(panel, pi, pageIdx) {
   const cols = panel.layout === '3col' ? 3 : panel.layout === '2col' ? 2 : 1;
   return `
-    <div class="myd-panel-card" id="myd-panel-${pi}">
+    <div class="myd-panel-card" id="myd-panel-${pi}"
+         draggable="true"
+         data-pi="${pi}"
+         ondragstart="myDashPanelDragStart(event,${pageIdx},${pi})"
+         ondragover="myDashPanelDragOver(event,${pageIdx},${pi})"
+         ondragleave="myDashPanelDragLeave(event)"
+         ondrop="myDashPanelDrop(event,${pageIdx},${pi})"
+         ondragend="myDashPanelDragEnd(event)">
       <div class="myd-panel-header">
+        <span class="myd-drag-handle" title="Drag to reorder">
+          <i data-lucide="grip-vertical" style="width:15px;height:15px"></i>
+        </span>
         <input class="myd-panel-title-input" type="text" value="${escHtml(panel.title)}"
-          onchange="myDashRenamePanel(${pageIdx},${pi},this.value)" title="Click to rename">
+          onchange="myDashRenamePanel(${pageIdx},${pi},this.value)" title="Click to rename"
+          draggable="false" ondragstart="event.stopPropagation()">
         <div class="myd-layout-pills">
           <button class="myd-layout-pill${panel.layout==='1col'?' active':''}" onclick="myDashSetLayout(${pageIdx},${pi},'1col')">1 col</button>
           <button class="myd-layout-pill${panel.layout==='2col'?' active':''}" onclick="myDashSetLayout(${pageIdx},${pi},'2col')">2 col</button>
@@ -8088,6 +8104,50 @@ function myDashMoveTile(pageIdx, pi, ti, dir) {
   [tiles[ti], tiles[newIdx]] = [tiles[newIdx], tiles[ti]];
   _saveDashConfig();
   myDashRender();
+}
+
+/* ── Panel drag-and-drop ── */
+let _panelDragSrcIdx = null;
+
+function myDashPanelDragStart(e, pageIdx, pi) {
+  _panelDragSrcIdx = pi;
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', pi);
+  // Slight delay so the ghost image renders before we dim the card
+  setTimeout(() => e.currentTarget.classList.add('dragging'), 0);
+}
+
+function myDashPanelDragOver(e, pageIdx, pi) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  if (pi === _panelDragSrcIdx) return;
+  document.querySelectorAll('.myd-panel-card').forEach(c => c.classList.remove('drag-over'));
+  e.currentTarget.classList.add('drag-over');
+}
+
+function myDashPanelDragLeave(e) {
+  // Only clear if we're leaving the card entirely (not crossing into a child)
+  if (!e.currentTarget.contains(e.relatedTarget)) {
+    e.currentTarget.classList.remove('drag-over');
+  }
+}
+
+function myDashPanelDrop(e, pageIdx, destPi) {
+  e.preventDefault();
+  document.querySelectorAll('.myd-panel-card').forEach(c => c.classList.remove('drag-over', 'dragging'));
+  if (_panelDragSrcIdx === null || _panelDragSrcIdx === destPi) return;
+  if (!_myDashActive) return;
+  const panels = _myDashActive.pages[pageIdx].panels;
+  const [moved] = panels.splice(_panelDragSrcIdx, 1);
+  panels.splice(destPi, 0, moved);
+  _panelDragSrcIdx = null;
+  _saveDashConfig();
+  myDashRender();
+}
+
+function myDashPanelDragEnd(e) {
+  document.querySelectorAll('.myd-panel-card').forEach(c => c.classList.remove('drag-over', 'dragging'));
+  _panelDragSrcIdx = null;
 }
 
 /* ── Tile Picker ── */
