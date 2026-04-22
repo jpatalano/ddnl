@@ -2,3 +2,16 @@ node_modules/
 .env
 *.log
 .DS_Store
+
+# Runtime state files — not source code
+logs/
+ftp-streak-state.json
+ftp-poller-state.json
+
+# FTP drop folder — generated data, not source
+ftp-drop/
+
+# TLS certs — never commit private keys
+*.key
+*.crt
+*.pem

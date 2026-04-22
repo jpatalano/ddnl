@@ -377,6 +377,78 @@ const MIGRATIONS = [
   )`,
   `CREATE INDEX IF NOT EXISTS idx_ingest_channels_dataset ON ingest_channels(dataset_id)`,
   `CREATE INDEX IF NOT EXISTS idx_ingest_channels_webhook ON ingest_channels(webhook_token) WHERE webhook_token IS NOT NULL`,
+
+  // 012 — upsert primary key fields + event types on dataset_definitions
+  `ALTER TABLE dataset_definitions
+    ADD COLUMN IF NOT EXISTS primary_key_fields JSONB DEFAULT '[]'`,
+  `ALTER TABLE dataset_definitions
+    ADD COLUMN IF NOT EXISTS event_types JSONB DEFAULT '[]'`,
+
+  // 013 — webhook subscriptions (one row per webhook per dataset)
+  `CREATE TABLE IF NOT EXISTS dataset_webhooks (
+    id              SERIAL PRIMARY KEY,
+    client_id       VARCHAR(255) NOT NULL REFERENCES clients(client_id) ON DELETE CASCADE,
+    dataset_id      INTEGER NOT NULL REFERENCES dataset_definitions(id) ON DELETE CASCADE,
+    name            VARCHAR(255) NOT NULL,
+    endpoint_url    TEXT NOT NULL,
+    event_triggers  JSONB NOT NULL DEFAULT '{}',   -- { "created": true, "updated": true, ... }
+    field_map       JSONB NOT NULL DEFAULT '{}',   -- { "source_field": "dest_field" }
+    auth_header     TEXT,                          -- value for Authorization header (inbound verify)
+    hmac_secret     TEXT,                          -- HMAC SHA-256 shared secret
+    custom_headers  JSONB NOT NULL DEFAULT '[]',   -- [{ key, value }]
+    enabled         BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ DEFAULT NOW()
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_dataset_webhooks_client  ON dataset_webhooks(client_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_dataset_webhooks_dataset ON dataset_webhooks(dataset_id)`,
+
+  // 014 — webhook delivery log
+  `CREATE TABLE IF NOT EXISTS webhook_delivery_log (
+    id               SERIAL PRIMARY KEY,
+    webhook_id       INTEGER NOT NULL REFERENCES dataset_webhooks(id) ON DELETE CASCADE,
+    client_id        VARCHAR(255) NOT NULL,
+    received_at      TIMESTAMPTZ DEFAULT NOW(),
+    status           VARCHAR(32) NOT NULL,   -- 'processed' | 'rejected' | 'failed' | 'skipped'
+    event_type       VARCHAR(128),
+    records_in       INTEGER DEFAULT 0,
+    records_upserted INTEGER DEFAULT 0,
+    records_failed   INTEGER DEFAULT 0,
+    error_message    TEXT,
+    duration_ms      INTEGER,
+    payload_preview  JSONB
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_webhook_log_webhook   ON webhook_delivery_log(webhook_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_webhook_log_client    ON webhook_delivery_log(client_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_webhook_log_status    ON webhook_delivery_log(status)`,
+  `CREATE INDEX IF NOT EXISTS idx_webhook_log_received  ON webhook_delivery_log(received_at DESC)`,
+
+  // 015 — _status system field support
+  // Stores which source column maps to _status during file import.
+  `ALTER TABLE dataset_definitions
+    ADD COLUMN IF NOT EXISTS status_source_field VARCHAR(255) DEFAULT NULL`,
+
+  // dataset_versions table for file-import define flow
+  `CREATE TABLE IF NOT EXISTS dataset_versions (
+    id              SERIAL PRIMARY KEY,
+    client_id       VARCHAR(255) NOT NULL,
+    name            VARCHAR(255) NOT NULL,
+    label           VARCHAR(255),
+    version         INTEGER NOT NULL DEFAULT 1,
+    fields          JSONB NOT NULL DEFAULT '[]',
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_dataset_versions_client_name ON dataset_versions(client_id, name)`,
+
+  // 016 — dataset_type column on dataset_definitions
+  // 'client' = user-created, 'provided' = system-provided (weather, fiscal, etc.)
+  `ALTER TABLE dataset_definitions
+    ADD COLUMN IF NOT EXISTS dataset_type VARCHAR(32) NOT NULL DEFAULT 'client'
+    CHECK (dataset_type IN ('client','provided'))`,
+
+  // 017 — show_on_explorer flag: controls whether dataset appears in the Explorer
+  `ALTER TABLE dataset_definitions
+    ADD COLUMN IF NOT EXISTS show_on_explorer BOOLEAN NOT NULL DEFAULT true`,
 ];
 
 async function initDb() {

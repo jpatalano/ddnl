@@ -1,0 +1,5 @@
+[phases.setup]
+nixPkgs = ["nodejs_22", "python3", "python312Packages.pip"]
+
+[phases.install]
+cmds = ["npm ci", "pip install --break-system-packages -r requirements.txt"]

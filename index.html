@@ -7,6 +7,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/ag-grid-community@31.3.2/dist/ag-grid-community.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
   <script src="https://unpkg.com/lucide@1.8.0/dist/umd/lucide.min.js"></script>
@@ -286,8 +288,13 @@
       border-bottom: 2px solid var(--border); display: flex; align-items: center;
       gap: 12px; padding: 0 18px; flex-shrink: 0;
     }
+    #rb-ds-bar {
+      display: flex; align-items: center; gap: 12px;
+      padding: 8px 18px; background: var(--surface); border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
     #rb-ds-select {
-      flex: 0 0 240px; padding: 7px 10px; border: 1.5px solid var(--border);
+      flex: 0 0 280px; padding: 7px 10px; border: 1.5px solid var(--border);
       border-radius: 7px; font-size: 13px; background: var(--surface2); color: var(--text);
       appearance: none; cursor: pointer;
       background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='11' viewBox='0 0 24 24' fill='none' stroke='%235f7a96' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
@@ -985,9 +992,403 @@
     }
 
     /* ════════════════════════════════════════════════════════════════
-       HOME SCREEN — DATASET EXPLORER
+       HOME SCREEN — EXPLORER
     ════════════════════════════════════════════════════════════════ */
-    #home-screen { flex: 1; display: none; overflow: hidden; }
+    #home-screen { flex: 1; display: none; overflow: hidden; flex-direction: column; min-height: 0; }
+
+    /* Explorer sub-nav */
+    .expl-subnav { display: flex; gap: 2px; padding: 8px 16px 0; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+    .expl-tab { display: flex; align-items: center; gap: 6px; padding: 7px 16px; font-size: 12px; font-weight: 600; border: none; background: transparent; color: var(--text-muted); cursor: pointer; border-radius: 6px 6px 0 0; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color .15s, border-color .15s; white-space: nowrap; }
+    .expl-tab:hover { color: var(--navy); }
+    .expl-tab.active { color: var(--navy); border-bottom-color: var(--teal); background: var(--surface); }
+
+    /* Explorer panels */
+    .expl-panel { display: none; }
+    .expl-panel.active { display: flex; }
+
+    /* Shared toolbar */
+    .expl-grid-toolbar { display: flex; align-items: center; gap: 12px; padding: 10px 16px; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; flex-wrap: wrap; }
+    .expl-grid-search-wrap { display: flex; align-items: center; gap: 7px; background: var(--surface2); border: 1.5px solid var(--border); border-radius: 8px; padding: 6px 10px; flex: 1; min-width: 200px; max-width: 360px; }
+    .expl-grid-search { border: none; background: transparent; outline: none; font-size: 12.5px; color: var(--text); width: 100%; }
+    .expl-grid-search::placeholder { color: var(--text-muted); }
+    .expl-filter-select { border: 1.5px solid var(--border); border-radius: 6px; padding: 6px 10px; font-size: 12px; background: var(--surface); color: var(--text); cursor: pointer; outline: none; }
+    .expl-filter-select:focus { border-color: var(--teal); }
+    .expl-filter-date { border: 1.5px solid var(--border); border-radius: 6px; padding: 6px 8px; font-size: 12px; background: var(--surface); color: var(--text); outline: none; }
+    .expl-filter-date:focus { border-color: var(--teal); }
+    .expl-count-badge { margin-left: auto; font-size: 11px; font-weight: 700; color: var(--text-muted); white-space: nowrap; padding: 3px 10px; background: var(--surface2); border: 1px solid var(--border); border-radius: 20px; }
+    .expl-view-toggle { width: 32px; height: 32px; border: 1.5px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all .15s; flex-shrink: 0; }
+    .expl-view-toggle:hover, .expl-view-toggle.active { border-color: var(--teal); color: var(--teal); background: rgba(0,191,165,.06); }
+
+    /* BestGrid scroll wrapper */
+    .expl-grid-scroll { flex: 1; overflow-y: auto; padding: 12px 16px 0; background: var(--bg-color-bg, #f0f4f8); }
+
+    /* Map */
+    .expl-map-legend { position: absolute; top: 12px; right: 12px; background: rgba(255,255,255,.95); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; font-size: 11px; box-shadow: 0 2px 8px rgba(0,0,0,.08); max-width: 180px; }
+    .expl-map-legend-item { display: flex; align-items: center; gap: 7px; padding: 3px 0; }
+    .expl-map-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+    /* BestGrid inline sort icons */
+    .bg-th-inner { display: flex; align-items: center; gap: 5px; cursor: pointer; user-select: none; }
+    .bg-sort-icon { flex-shrink: 0; }
+
+    /* Customer tags */
+    /* Tag pills — single letter, colored dot-style */
+    .cust-tag { display: inline-flex; align-items: center; justify-content: center;
+      width: 18px; height: 18px; border-radius: 9999px; font-size: 9px; font-weight: 800;
+      background: var(--blue-pill); color: var(--navy); margin: 1px; flex-shrink: 0;
+      cursor: default; position: relative; }
+    .cust-tag.high_value  { background: #d1fae5; color: #065f46; }
+    .cust-tag.at_risk     { background: #fee2e2; color: #991b1b; }
+    .cust-tag.lapsed      { background: #fef3c7; color: #92400e; }
+    .cust-tag.loyal       { background: #e0e7ff; color: #3730a3; }
+    .cust-tag.new_customer{ background: #d1f0ed; color: #0d7a6e; }
+    .cust-tag.no_contact  { background: #f1f5f9; color: #64748b; }
+    .cust-tag.one_time    { background: #fdf4ff; color: #7e22ce; }
+    .cust-tag.low_spend   { background: #fff7ed; color: #c2410c; }
+    /* Tooltip on hover */
+    .cust-tag[title]:hover::after { content: attr(title);
+      position: absolute; bottom: calc(100% + 4px); left: 50%; transform: translateX(-50%);
+      background: rgba(15,25,40,.85); color: #fff; font-size: 9px; font-weight: 600;
+      white-space: nowrap; border-radius: 4px; padding: 2px 6px; pointer-events: none;
+      letter-spacing: .03em; z-index: 10; }
+    /* Multi-store pill filter */
+    .cust-store-pills { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
+    .cust-store-pill { display: inline-flex; align-items: center; gap: 4px;
+      padding: 3px 9px; border-radius: 9999px; font-size: 11px; font-weight: 600;
+      border: 1.5px solid var(--border); background: var(--surface2); color: var(--text-muted);
+      cursor: pointer; transition: all .12s; user-select: none; white-space: nowrap; }
+    .cust-store-pill:hover { border-color: var(--navy); color: var(--navy); background: var(--surface); }
+    .cust-store-pill.active { background: var(--navy); color: #fff; border-color: var(--navy); }
+    .cust-store-pill .sp-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+    /* Msgpref pill */
+    .cust-pref-pill { display: inline-flex; align-items: center; justify-content: center;
+      width: 18px; height: 18px; border-radius: 9999px; font-size: 9px; font-weight: 800;
+      background: #e0f2fe; color: #0369a1; flex-shrink: 0; }
+
+    /* Leaflet overrides */
+    .leaflet-container { font-family: inherit; }
+    .leaflet-popup-content { font-size: 12px; line-height: 1.6; }
+    .leaflet-popup-content strong { color: var(--navy); }
+
+    /* ── BestGrid Ever — component styles ── */
+    /* ─────────────────────────────────────────────────────────────────────────────
+       Best Grid Ever — Component Styles
+       All values reference --bg-* CSS custom properties set by the theme.
+       ───────────────────────────────────────────────────────────────────────────── */
+
+    /* ── Root wrapper ─────────────────────────────────────────────────────────── */
+    .bg-grid-root {
+      font-family: var(--bg-grid-font-family);
+      background: var(--bg-color-bg);
+    }
+
+    /* ── Card ─────────────────────────────────────────────────────────────────── */
+    .bg-grid-card {
+      background: var(--bg-color-surface);
+      border: 1px solid var(--bg-color-border);
+      border-radius: var(--bg-radius-card);
+      box-shadow: var(--bg-shadow-card);
+      overflow: hidden;
+    }
+
+    /* ── Title bar ────────────────────────────────────────────────────────────── */
+    .bg-title-bar {
+      padding: var(--bg-title-padding-v) var(--bg-title-padding-h);
+      border-bottom: 1px solid var(--bg-color-border);
+    }
+
+    .bg-title-text {
+      font-size: var(--bg-font-size-title);
+      font-weight: var(--bg-font-weight-title);
+      color: var(--bg-color-title-text);
+      line-height: 1.3;
+    }
+
+    .bg-title-count {
+      font-size: var(--bg-font-size-title);
+      font-weight: 400;
+      color: var(--bg-color-title-count);
+    }
+
+    /* ── Filter input ─────────────────────────────────────────────────────────── */
+    .bg-filter-input {
+      background: var(--bg-color-filter-bg);
+      border: 1px solid var(--bg-color-border);
+      color: var(--bg-color-filter-text);
+      border-radius: var(--bg-radius-input);
+      transition: width var(--bg-transition-speed) var(--bg-transition-easing),
+                  border-color var(--bg-transition-speed) var(--bg-transition-easing);
+    }
+    .bg-filter-input::placeholder {
+      color: var(--bg-color-filter-placeholder);
+    }
+    .bg-filter-input:focus {
+      border-color: var(--bg-color-filter-focus-border);
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--bg-color-filter-focus-border) 20%, transparent);
+    }
+
+    /* ── Table scroll wrapper ─────────────────────────────────────────────────── */
+    .bg-table-scroll {
+      overflow-x: auto;
+      overscroll-behavior-x: contain;
+    }
+
+    /* ── Table ────────────────────────────────────────────────────────────────── */
+    .bg-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: var(--bg-font-size-cell);
+      color: var(--bg-color-text);
+      font-variant-numeric: tabular-nums lining-nums;
+    }
+
+    /* ── Header ───────────────────────────────────────────────────────────────── */
+    .bg-thead {
+      border-bottom: 1px solid var(--bg-color-header-border);
+    }
+
+    .bg-th {
+      padding: var(--bg-header-padding-v) var(--bg-header-padding-h);
+      font-size: var(--bg-font-size-header);
+      font-weight: var(--bg-font-weight-header);
+      color: var(--bg-color-text-header);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      white-space: nowrap;
+      background: var(--bg-color-surface);
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+
+    .bg-th:hover {
+      color: var(--bg-color-text);
+    }
+
+    /* Sort icon colors */
+    .bg-sort-active {
+      color: var(--bg-color-sort-active);
+    }
+    .bg-sort-inactive {
+      color: var(--bg-color-sort-inactive);
+    }
+
+    /* ── Rows ─────────────────────────────────────────────────────────────────── */
+    .bg-tr {
+      background: var(--bg-color-row-bg);
+      border-bottom: 1px solid var(--bg-color-divider);
+      transition: background var(--bg-transition-speed) var(--bg-transition-easing),
+                  box-shadow var(--bg-transition-speed) var(--bg-transition-easing);
+    }
+
+    .bg-tr:last-child {
+      border-bottom: none;
+    }
+
+    .bg-tr-hoverable:hover {
+      background: var(--bg-color-row-hover);
+      box-shadow: var(--bg-shadow-row);
+    }
+
+    .bg-tr-selected {
+      background: var(--bg-color-row-selected) !important;
+    }
+
+    .bg-tr-stripe {
+      background: var(--bg-color-row-stripe);
+    }
+
+    /* ── Cells ────────────────────────────────────────────────────────────────── */
+    .bg-td {
+      padding: var(--bg-cell-padding-v) var(--bg-cell-padding-h);
+      min-height: var(--bg-row-min-height);
+      vertical-align: middle;
+      color: var(--bg-color-text);
+      font-weight: var(--bg-font-weight-cell);
+      font-size: var(--bg-font-size-cell);
+    }
+
+    .bg-td-empty {
+      padding: 4rem var(--bg-cell-padding-h);
+      color: var(--bg-color-text-muted);
+      font-size: var(--bg-font-size-cell);
+    }
+
+    .bg-td-actions {
+      white-space: nowrap;
+    }
+
+    /* ── Action buttons ───────────────────────────────────────────────────────── */
+    .bg-action-btn {
+      font-size: var(--bg-font-size-action);
+      border-radius: var(--bg-radius-button);
+      transition: background var(--bg-transition-speed) var(--bg-transition-easing),
+                  color var(--bg-transition-speed) var(--bg-transition-easing);
+      white-space: nowrap;
+    }
+
+    .bg-action-ghost {
+      color: var(--bg-color-text-action);
+      background: transparent;
+    }
+    .bg-action-ghost:hover {
+      color: var(--bg-color-text-action-hover);
+      background: var(--bg-color-row-hover);
+    }
+
+    .bg-action-danger {
+      color: var(--bg-color-danger, #dc2626);
+      background: transparent;
+    }
+    .bg-action-danger:hover {
+      background: var(--bg-color-danger-hover-bg, #fef2f2);
+    }
+
+    .bg-action-primary {
+      color: #fff;
+      background: var(--bg-color-badge-active-text);
+    }
+    .bg-action-primary:hover {
+      opacity: 0.9;
+    }
+
+    /* ── Status badges ────────────────────────────────────────────────────────── */
+    .rounded-badge {
+      border-radius: var(--bg-radius-badge);
+    }
+
+    .bg-badge-active {
+      background-color: var(--bg-color-badge-active-bg);
+    }
+    .text-badge-active {
+      color: var(--bg-color-badge-active-text);
+    }
+    .bg-badge-inactive {
+      background-color: var(--bg-color-badge-inactive-bg);
+    }
+    .text-badge-inactive {
+      color: var(--bg-color-badge-inactive-text);
+    }
+    .bg-badge-pending {
+      background-color: var(--bg-color-badge-pending-bg);
+    }
+    .text-badge-pending {
+      color: var(--bg-color-badge-pending-text);
+    }
+
+    /* ── Pagination ───────────────────────────────────────────────────────────── */
+    .bg-pagination {
+      border-top: 1px solid var(--bg-color-divider);
+      background: var(--bg-color-surface);
+      color: var(--bg-color-text-muted);
+      font-size: 0.8125rem;
+    }
+
+    .bg-pag-btn,
+    .bg-pag-num {
+      background: var(--bg-color-pag-bg);
+      color: var(--bg-color-pag-text);
+      border: 1px solid var(--bg-color-pag-border);
+      border-radius: var(--bg-radius-button);
+      transition: background var(--bg-transition-speed) var(--bg-transition-easing),
+                  color var(--bg-transition-speed) var(--bg-transition-easing);
+      cursor: pointer;
+    }
+
+    .bg-pag-btn:hover:not(:disabled),
+    .bg-pag-num:hover {
+      background: var(--bg-color-pag-bg-hover);
+    }
+
+    .bg-pag-active {
+      background: var(--bg-color-pag-bg-active) !important;
+    }
+    .text-pag-active-text {
+      color: var(--bg-color-pag-text-active) !important;
+    }
+    .bg-pag-active.bg-pag-num {
+      border-color: var(--bg-color-pag-bg-active);
+    }
+
+    .bg-pag-select {
+      background: var(--bg-color-pag-bg);
+      color: var(--bg-color-pag-text);
+      border-color: var(--bg-color-pag-border);
+      border-radius: var(--bg-radius-input);
+      font-size: 0.75rem;
+    }
+
+    /* ── Column toggle ────────────────────────────────────────────────────────── */
+    .bg-col-toggle-btn {
+      background: var(--bg-color-pag-bg);
+      color: var(--bg-color-text-action);
+      border: 1px solid var(--bg-color-border);
+      border-radius: var(--bg-radius-button);
+      transition: background var(--bg-transition-speed);
+      font-size: 0.8125rem;
+    }
+    .bg-col-toggle-btn:hover {
+      background: var(--bg-color-pag-bg-hover);
+    }
+
+    .bg-col-toggle-panel {
+      background: var(--bg-color-surface);
+      border-color: var(--bg-color-border);
+      border-radius: var(--bg-radius-card);
+      box-shadow: var(--bg-shadow-card);
+    }
+
+    .bg-col-toggle-item {
+      color: var(--bg-color-text);
+      background: transparent;
+    }
+    .bg-col-toggle-item:hover {
+      background: var(--bg-color-row-hover);
+    }
+
+    /* ── Cell text helpers ────────────────────────────────────────────────────── */
+    .bg-cell-primary {
+      font-weight: var(--bg-font-weight-cell-primary);
+      font-size: var(--bg-font-size-cell);
+      color: var(--bg-color-text);
+      line-height: 1.3;
+    }
+    .bg-cell-meta {
+      font-size: var(--bg-font-size-meta);
+      font-weight: var(--bg-font-weight-meta);
+      color: var(--bg-color-text-muted);
+      margin-top: 0.125rem;
+    }
+    .bg-cell-muted {
+      color: var(--bg-color-text-muted);
+    }
+
+    /* ── Accessibility ────────────────────────────────────────────────────────── */
+    .bg-th:focus-visible,
+    .bg-action-btn:focus-visible,
+    .bg-pag-btn:focus-visible,
+    .bg-pag-num:focus-visible {
+      outline: 2px solid var(--bg-color-filter-focus-border);
+      outline-offset: 2px;
+      border-radius: var(--bg-radius-button);
+    }
+
+    /* ── Responsive — collapse on small screens ───────────────────────────────── */
+    @media (max-width: 640px) {
+      .bg-th,
+      .bg-td {
+        padding-left: 0.75rem;
+        padding-right: 0.75rem;
+      }
+      .bg-title-bar {
+        padding-left: 0.75rem;
+        padding-right: 0.75rem;
+      }
+      .bg-filter-input,
+      .bg-filter-input:focus {
+        width: 100% !important;
+      }
+    }
     .dex-layout { display: grid; grid-template-columns: 280px 1fr; height: 100%; overflow: hidden; transition: grid-template-columns .2s ease; }
     .dex-layout.collapsed { grid-template-columns: 0px 1fr; }
 
@@ -1023,6 +1424,16 @@
     /* Explorer panel when dataset selected */
     .dex-panel { display: none; flex-direction: column; overflow: hidden; height: 100%; }
     .dex-panel.visible { display: flex; }
+
+    /* Mode tabs */
+    .dex-mode-tabs { display: flex; gap: 2px; background: var(--surface2); border: 1.5px solid var(--border); border-radius: 8px; padding: 2px; flex-shrink: 0; }
+    .dex-mode-tab { padding: 4px 14px; border: none; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; background: transparent; color: var(--text-muted); transition: all .15s; }
+    .dex-mode-tab.active { background: var(--navy); color: #fff; }
+    .dex-mode-tab:not(.active):hover { color: var(--text); }
+
+    /* Grid mode — hide query builder chrome */
+    .dex-panel.mode-grid .dex-field-panel,
+    .dex-panel.mode-grid .dex-qbuilder { display: none; }
     .dex-panel-header { padding: 14px 20px; border-bottom: 1px solid var(--border); background: var(--surface); display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
     .dex-panel-header h2 { font-size: 15px; font-weight: 700; color: var(--navy); margin: 0; }
     .dex-panel-header p  { font-size: 12px; color: var(--text-muted); margin: 0; flex: 1; }
@@ -1031,14 +1442,25 @@
     .dex-body { display: grid; grid-template-rows: auto 1fr; overflow: hidden; flex: 1; }
 
     /* Schema row */
-    .dex-schema { display: grid; grid-template-columns: 1fr 1fr; gap: 0; border-bottom: 1px solid var(--border); max-height: 200px; overflow: hidden; flex-shrink: 0; }
-    .dex-schema-col { overflow-y: auto; padding: 12px 16px; }
-    .dex-schema-col + .dex-schema-col { border-left: 1px solid var(--border); }
-    .dex-schema-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--text-muted); margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
-    .dex-field-tag { display: inline-flex; align-items: center; gap: 4px; background: var(--surface2); border: 1px solid var(--border); border-radius: 14px; padding: 2px 9px; font-size: 11px; color: var(--text); margin: 2px; cursor: pointer; transition: all .12s; }
-    .dex-field-tag:hover { border-color: var(--teal); color: var(--teal); }
-    .dex-field-tag.selected { background: var(--teal); border-color: var(--teal); color: #fff; }
-    .dex-field-tag .tag-type { font-size: 9px; opacity: .6; }
+    /* ── Field panel (unified list) ── */
+    .dex-field-panel { border-bottom: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; max-height: 220px; }
+    .dex-field-panel-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+    .dex-field-panel-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--text-muted); display: flex; align-items: center; gap: 6px; }
+    .dex-field-search { padding: 3px 8px; border: 1.5px solid var(--border); border-radius: 6px; font-size: 11px; background: var(--surface); color: var(--text); outline: none; width: 160px; }
+    .dex-field-search:focus { border-color: var(--teal); }
+    .dex-field-list { display: flex; flex-wrap: wrap; gap: 4px; padding: 10px 16px; overflow-y: auto; align-content: flex-start; }
+    .dex-field-pill { display: inline-flex; align-items: center; gap: 5px; background: var(--surface2); border: 1.5px solid var(--border); border-radius: 14px; padding: 3px 10px; font-size: 11.5px; font-weight: 500; color: var(--text); cursor: pointer; transition: all .12s; user-select: none; }
+    .dex-field-pill:hover { border-color: var(--teal); color: var(--teal); }
+    .dex-field-pill.in-query { background: var(--navy); border-color: var(--navy); color: #fff; }
+    .dex-field-pill .fp-type { font-size: 9px; opacity: .5; font-family: var(--font-mono, monospace); }
+    /* ── Query builder (chips) ── */
+    .dex-qbuilder { border-bottom: 1px solid var(--border); padding: 10px 16px; background: var(--surface2); flex-shrink: 0; display: flex; align-items: flex-start; gap: 8px; flex-wrap: wrap; min-height: 48px; }
+    .dex-qchip { display: inline-flex; align-items: center; gap: 0; border-radius: 14px; font-size: 11.5px; font-weight: 600; border: 1.5px solid var(--border); background: var(--surface); color: var(--text); overflow: hidden; }
+    .dex-qchip .qc-name { padding: 3px 8px; white-space: nowrap; }
+    .dex-qchip select { border: none; border-left: 1.5px solid var(--border); background: transparent; font-size: 11px; font-weight: 700; color: var(--teal); cursor: pointer; padding: 3px 5px; outline: none; }
+    .dex-qchip .qc-remove { border: none; border-left: 1.5px solid var(--border); background: transparent; cursor: pointer; padding: 3px 7px; color: var(--text-muted); font-size: 13px; line-height: 1; }
+    .dex-qchip .qc-remove:hover { color: var(--red); background: rgba(239,68,68,.08); }
+    .dex-qbuilder-hint { font-size: 11px; color: var(--text-muted); align-self: center; }
 
     /* Query builder */
     .dex-qbuilder { border-bottom: 1px solid var(--border); padding: 12px 16px; background: #f8fafb; flex-shrink: 0; }
@@ -1064,7 +1486,7 @@
     .dex-visual.viz-tall { height:520px; resize:vertical; }
     .dex-visual.viz-full { position:fixed!important; inset:0; z-index:9999; border-radius:0; border:none; height:100%!important; resize:none; box-shadow:0 0 0 9999px rgba(0,0,0,.45); }
     .dex-visual-header { display:flex; align-items:center; justify-content:space-between; padding:10px 16px; border-bottom:1px solid var(--border); }
-    .dex-visual-title { font-size:12px; font-weight:700; color:var(--navy); display:flex; align-items:center; gap:7px; }
+    .dex-visual-title { font-size:12px; font-weight:700; color:var(--text); display:flex; align-items:center; gap:7px; }
     .dex-visual-controls { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
     .dex-chart-type-btn { display:inline-flex; align-items:center; gap:5px; padding:5px 11px; border:1.5px solid var(--border); border-radius:20px; font-size:11px; font-weight:600; cursor:pointer; background:var(--surface); color:var(--text-muted); transition:all .15s; white-space:nowrap; }
     .dex-chart-type-btn:hover { border-color:var(--teal); color:var(--teal); }
@@ -1080,7 +1502,7 @@
     .dex-slice-pill.active { background:var(--navy); color:#fff; border-color:var(--navy); }
     .dex-slice-pill.inactive { background:transparent; color:var(--text-muted); border-color:var(--border); }
     .dex-slice-pill.active:hover { opacity:.82; }
-    .dex-slice-pill.inactive:hover { border-color:var(--navy); color:var(--navy); }
+    .dex-slice-pill.inactive:hover { border-color:var(--navy); color:var(--text); }
     .dex-slice-pills { display:flex; gap:5px; flex-wrap:wrap; align-items:center; flex:1; }
     .dex-chart-wrap { padding:16px; flex:1; display:flex; flex-direction:column; min-height:0; }
     .dex-chart-canvas-wrap { position:relative; flex:1; min-height:80px; }
@@ -1105,7 +1527,7 @@
     .dex-tbl-cfg-header {
       display:flex; align-items:center; justify-content:space-between;
       padding:10px 14px; border-bottom:1px solid var(--border);
-      font-size:12px; font-weight:700; color:var(--navy); flex-shrink:0;
+      font-size:12px; font-weight:700; color:var(--text); flex-shrink:0;
     }
     .dex-tbl-cfg-close {
       background:none; border:none; cursor:pointer; color:var(--text-muted);
@@ -1212,7 +1634,7 @@
     .dex-viz-table.comfortable td { padding:10px 14px; }
     /* Totals row */
     .dex-viz-table tfoot td {
-      padding:7px 12px; font-weight:700; color:var(--navy);
+      padding:7px 12px; font-weight:700; color:var(--text);
       border-top:2px solid var(--navy); border-bottom:none;
       background:var(--surface2);
       position:sticky; bottom:0;
@@ -1333,7 +1755,7 @@
     .dd-records-bar { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; border-bottom:1px solid var(--border); padding-bottom:4px; }
     .dd-records-bar h4 { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--text-muted); margin:0; }
     .dd-records-count { font-size:11px; color:var(--text-muted); }
-    .dd-records-csv { background:none; border:1px solid var(--border); color:var(--navy); border-radius:5px; padding:2px 8px; font-size:11px; cursor:pointer; display:flex; align-items:center; gap:4px; }
+    .dd-records-csv { background:none; border:1px solid var(--border); color:var(--text); border-radius:5px; padding:2px 8px; font-size:11px; cursor:pointer; display:flex; align-items:center; gap:4px; }
     .dd-records-csv:hover { background:var(--surface2); }
     .dd-rec-table-wrap { overflow-x:auto; border:1px solid var(--border); border-radius:7px; max-height:340px; overflow-y:auto; }
     .dd-rec-table { width:100%; border-collapse:collapse; font-size:11.5px; }
@@ -1726,7 +2148,7 @@
     /* Compare-to bar */
     .ct-bar { display:flex; align-items:center; gap:6px; padding:7px 12px; background:var(--surface2); border-top:1px solid var(--border); border-radius:0 0 8px 8px; flex-wrap:wrap; }
     .ct-bar-label { font-size:11px; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:.05em; margin-right:2px; white-space:nowrap; }
-    .ct-pill { font-size:12px; padding:3px 11px; border-radius:20px; border:1.5px solid var(--border); background:#fff; color:var(--navy); cursor:pointer; transition:all .15s; white-space:nowrap; }
+    .ct-pill { font-size:12px; padding:3px 11px; border-radius:20px; border:1.5px solid var(--border); background:var(--surface); color:var(--text); cursor:pointer; transition:all .15s; white-space:nowrap; }
     .ct-pill:hover { border-color:var(--teal); color:var(--teal); }
     .ct-pill.active { background:var(--teal); border-color:var(--teal); color:#fff; font-weight:600; }
     .ct-pill.loading { opacity:.6; pointer-events:none; }
@@ -1767,15 +2189,22 @@
     #designer-screen { flex:1; display:none; flex-direction:column; overflow:hidden; background:var(--surface); }
     .dsgn-layout   { display:flex; flex:1; overflow:hidden; }
     .dsgn-sidebar  { width:220px; flex-shrink:0; border-right:1px solid var(--border);
-                     background:#fff; overflow-y:auto; padding:16px 0; }
+                     background:var(--surface); overflow-y:auto; padding:16px 0; }
     .dsgn-sidebar-title { font-size:10px; font-weight:800; letter-spacing:.1em;
                           color:var(--text-muted); padding:0 16px 8px; text-transform:uppercase; }
+    /* Webhook toggle */
+    .wh-label { font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:5px }
+    .wh-toggle { width:44px;height:24px;border-radius:9999px;background:#cbd5e1;position:relative;cursor:pointer;transition:background .15s;flex-shrink:0 }
+    .wh-toggle.on { background:#22c55e }
+    .wh-toggle-knob { width:18px;height:18px;border-radius:50%;background:#fff;position:absolute;top:3px;left:3px;transition:left .15s;box-shadow:0 1px 3px rgba(0,0,0,.2) }
+    .wh-toggle.on .wh-toggle-knob { left:23px }
+    .wh-toggle-wrap { display:flex;align-items:center;gap:8px }
     .dsgn-nav-item { display:flex; align-items:center; gap:9px; padding:9px 16px;
                      cursor:pointer; font-size:13px; font-weight:500; color:var(--text);
                      border-left:3px solid transparent; transition:background .1s; }
     .dsgn-nav-item:hover  { background:var(--surface2); }
     .dsgn-nav-item.active { background:rgba(0,51,102,.06); border-left-color:var(--teal);
-                             color:var(--navy); font-weight:700; }
+                             color:var(--text); font-weight:700; }
     .dsgn-nav-item .dsgn-badge { margin-left:auto; background:var(--surface2);
                                   border:1px solid var(--border); border-radius:10px;
                                   padding:1px 7px; font-size:10px; font-weight:600;
@@ -1786,15 +2215,15 @@
                            padding:6px 16px 4px; margin-top:8px; }
 
     /* Dataset list */
-    .dsgn-ds-card  { background:#fff; border:1.5px solid var(--border); border-radius:10px;
+    .dsgn-ds-card  { background:var(--surface); border:1.5px solid var(--border); border-radius:10px;
                      padding:14px 18px; margin-bottom:10px; cursor:pointer; transition:border-color .15s, box-shadow .15s; }
     .dsgn-ds-card:hover { border-color:var(--teal); box-shadow:0 2px 8px rgba(0,191,165,.12); }
     .dsgn-ds-card.active { border-color:var(--navy); box-shadow:0 2px 12px rgba(0,51,102,.1); }
-    .dsgn-ds-name  { font-size:14px; font-weight:700; color:var(--navy); }
+    .dsgn-ds-name  { font-size:14px; font-weight:700; color:var(--text); }
     .dsgn-ds-meta  { font-size:12px; color:var(--text-muted); margin-top:3px; }
     .dsgn-pill     { display:inline-block; border-radius:10px; padding:2px 9px;
                      font-size:11px; font-weight:600; margin-right:4px; }
-    .dsgn-pill.seg { background:var(--blue-pill); color:var(--navy); }
+    .dsgn-pill.seg { background:var(--blue-pill); color:var(--text); }
     .dsgn-pill.met { background:#e6f7f5; color:#007a6c; }
     .dsgn-pill.lkp { background:#fef3e2; color:#8a5c00; }
 
@@ -1808,17 +2237,33 @@
     .dsgn-field-table tr:hover td { background:rgba(0,191,165,.04); }
     .dsgn-field-row.has-lookup td:first-child { border-left:3px solid #f59e0b; }
     .dsgn-finput   { border:1px solid var(--border); border-radius:6px; padding:4px 8px;
-                     font-size:12px; width:100%; background:#fff; color:var(--text); }
+                     font-size:12px; width:100%; background:var(--surface); color:var(--text); }
     .dsgn-finput:focus { outline:none; border-color:var(--teal); }
     .dsgn-fselect  { border:1px solid var(--border); border-radius:6px; padding:4px 6px;
-                     font-size:12px; background:#fff; color:var(--text); }
+                     font-size:12px; background:var(--surface); color:var(--text); }
     .dsgn-save-row { display:flex; align-items:center; justify-content:flex-end; gap:10px;
                      margin-top:20px; padding-top:16px; border-top:1px solid var(--border); }
     .dsgn-save-btn { background:var(--navy); color:#fff; border:none; border-radius:8px;
                      padding:9px 22px; font-size:13px; font-weight:700; cursor:pointer; }
     .dsgn-save-btn:hover { background:var(--navy-light); }
-    .dsgn-cancel-btn { background:#fff; color:var(--text); border:1.5px solid var(--border);
+    .dsgn-cancel-btn { background:var(--surface); color:var(--text); border:1.5px solid var(--border);
                         border-radius:8px; padding:8px 18px; font-size:13px; cursor:pointer; }
+
+    /* NDS table — theme-aware BestGrid overrides */
+    .nds-bg-grid {
+      --bg-color-surface:    var(--surface);
+      --bg-color-row-bg:     var(--surface);
+      --bg-color-row-stripe: var(--surface2);
+      --bg-color-row-hover:  var(--surface2);
+      --bg-color-text:       var(--text);
+      --bg-color-text-muted: var(--text-muted);
+      --bg-color-text-header:var(--text-muted);
+      --bg-color-border:     var(--border);
+      --bg-color-divider:    var(--border);
+      --bg-color-header-border: var(--border);
+    }
+    .bg-row      { background: var(--bg-color-row-bg,     var(--surface)); }
+    .bg-row-stripe { background: var(--bg-color-row-stripe, var(--surface2)); }
 
     /* Lookup table */
     .dsgn-lookup-table { width:100%; border-collapse:collapse; font-size:13px; }
@@ -1831,20 +2276,20 @@
     .dsgn-auto-badge { display:inline-block; font-size:10px; font-weight:700; padding:1px 6px;
                         border-radius:8px; background:#e8f5e9; color:#2e7d32; }
     .dsgn-manual-badge { display:inline-block; font-size:10px; font-weight:700; padding:1px 6px;
-                          border-radius:8px; background:#fff3e0; color:#e65100; }
+                          border-radius:8px; background:var(--surface2); color:#e65100; }
 
     /* Fiscal calendar */
     .dsgn-fiscal-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-top:16px; }
-    .dsgn-fiscal-quarter { background:#fff; border:1.5px solid var(--border); border-radius:10px; overflow:hidden; }
+    .dsgn-fiscal-quarter { background:var(--surface); border:1.5px solid var(--border); border-radius:10px; overflow:hidden; }
     .dsgn-fiscal-q-header { background:var(--navy); color:#fff; padding:8px 14px;
                               font-size:12px; font-weight:700; }
     .dsgn-fiscal-month { padding:8px 14px; border-bottom:1px solid var(--border); }
     .dsgn-fiscal-month:last-child { border-bottom:none; }
-    .dsgn-fiscal-month-name { font-size:12px; font-weight:600; color:var(--navy); }
+    .dsgn-fiscal-month-name { font-size:12px; font-weight:600; color:var(--text); }
     .dsgn-fiscal-month-range { font-size:11px; color:var(--text-muted); margin-top:2px; }
-    .dsgn-config-card { background:#fff; border:1.5px solid var(--border); border-radius:10px;
+    .dsgn-config-card { background:var(--surface); border:1.5px solid var(--border); border-radius:10px;
                          padding:20px 24px; margin-bottom:16px; }
-    .dsgn-config-card h4 { font-size:13px; font-weight:700; color:var(--navy); margin:0 0 12px; }
+    .dsgn-config-card h4 { font-size:13px; font-weight:700; color:var(--text); margin:0 0 12px; }
     .dsgn-config-row { display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
     .dsgn-config-item { display:flex; flex-direction:column; gap:4px; }
     .dsgn-config-label { font-size:11px; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:.05em; }
@@ -1864,9 +2309,8 @@
   <div class="brand-sep"></div>
   <div class="subnav">
     <button onclick="showView('homeDash')" id="nav-homeDash" title="Home" style="display:flex;align-items:center;gap:5px"><i data-lucide="home" style="width:14px;height:14px"></i> Home</button>
-    <button onclick="showView('dashboard')" id="nav-dashboard">Dashboard</button>
     <button onclick="showView('myDash')"    id="nav-myDash">My Dashboards</button>
-    <button onclick="showView('home')"      id="nav-home">Data Explorer</button>
+    <button onclick="showView('home')"      id="nav-home">Explorer</button>
     <button onclick="showView('builder')"   id="nav-builder">Report Builder</button>
     <button onclick="showView('saved')"     id="nav-saved">Saved Reports</button>
     <button onclick="showView('designer')"  id="nav-designer">Designer</button>
@@ -1885,10 +2329,6 @@
       <i data-lucide="panel-left" style="width:15px;height:15px"></i>
     </button>
     <div class="rb-topbar-sep"></div>
-    <select id="rb-ds-select" onchange="rbOnDatasetChange(this.value)">
-      <option value="">Choose a dataset…</option>
-    </select>
-    <div class="rb-topbar-sep"></div>
     <button id="rb-run-btn" onclick="rbRunQuery()" disabled>
       <i data-lucide="play" style="width:13px;height:13px"></i> Run
     </button>
@@ -1900,9 +2340,17 @@
       <i data-lucide="panel-right" style="width:15px;height:15px"></i> Results
     </button>
     <div class="rb-topbar-sep"></div>
-    <button id="rb-close-btn" onclick="showView('dashboard')">
+    <button id="rb-close-btn" onclick="_rbClose()">
       <i data-lucide="x" style="width:14px;height:14px"></i> Close
     </button>
+  </div>
+
+  <!-- Dataset picker bar — sits between topbar and field library, consistent with Explorer sub-nav -->
+  <div id="rb-ds-bar">
+    <label style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;white-space:nowrap">Dataset</label>
+    <select id="rb-ds-select" onchange="rbOnDatasetChange(this.value)">
+      <option value="">Choose a dataset…</option>
+    </select>
   </div>
 
   <!-- Body: top row (fields + canvas) + bottom results -->
@@ -2675,6 +3123,41 @@
 
     <!-- ═══ HOME ═══ -->
     <div id="home-screen">
+
+      <!-- ── Sub-nav: pinned dataset tabs + Advanced ── -->
+      <div class="expl-subnav" id="expl-subnav">
+        <!-- Pinned dataset tabs injected here by dexRenderSubnav() -->
+        <div id="expl-ds-tabs" style="display:contents"></div>
+        <!-- Advanced tab always last -->
+        <button class="expl-tab" id="expl-tab-advanced" onclick="dexShowAdvanced()">
+          <i data-lucide="sliders-horizontal" style="width:12px;height:12px"></i> Advanced
+        </button>
+      </div>
+
+      <!-- ── Grid panel ── -->
+      <div id="expl-panel-grid" style="display:none;flex:1;overflow:hidden;flex-direction:column">
+        <!-- Toolbar -->
+        <div class="dex-results-toolbar" style="flex-shrink:0;gap:8px">
+          <input type="text" id="expl-grid-search" placeholder="Search..." oninput="explGridSearch(this.value)"
+            style="padding:4px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;background:var(--surface);color:var(--text);outline:none;width:200px">
+          <span class="dex-results-meta" id="expl-grid-meta" style="flex:1">Loading...</span>
+          <!-- Column picker -->
+          <div style="position:relative">
+            <button id="expl-col-btn" onclick="explGridToggleColPicker()" style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;background:var(--surface);color:var(--text-muted)">
+              <i data-lucide="columns-3" style="width:13px;height:13px"></i> Columns
+            </button>
+            <div id="expl-col-picker" style="display:none;position:absolute;right:0;top:calc(100% + 4px);background:var(--surface);border:1.5px solid var(--border);border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.15);z-index:200;min-width:200px;max-height:340px;overflow-y:auto;padding:6px 0">
+            </div>
+          </div>
+          <button class="dex-export-btn" onclick="explGridExportCsv()" id="expl-grid-export" style="display:none">
+            <i data-lucide="download" style="width:12px;height:12px"></i> CSV
+          </button>
+        </div>
+        <div id="expl-grid-wrap" class="dex-table-wrap" style="flex:1;overflow:auto"></div>
+      </div>
+
+      <!-- ── Advanced panel ── -->
+      <div id="expl-panel-advanced" style="display:none;flex:1;overflow:hidden">
       <div class="dex-layout" id="dex-layout">
         <!-- Collapsed strip (shown when sidebar is collapsed) -->
         <div class="dex-expand-strip">
@@ -2701,71 +3184,53 @@
           <!-- Empty state -->
           <div class="dex-empty" id="dex-empty">
             <i data-lucide="database" style="width:48px;height:48px;stroke-width:1.2"></i>
-            <p>Select a dataset to explore its schema and run queries</p>
+            <p>Select a dataset to browse its fields and run queries</p>
           </div>
 
           <!-- Active explorer panel -->
           <div class="dex-panel" id="dex-panel">
             <!-- Header -->
             <div class="dex-panel-header">
-              <div>
+              <div style="flex:1;min-width:0">
                 <h2 id="dex-panel-name">&mdash;</h2>
                 <p id="dex-panel-desc"></p>
               </div>
-              <span id="dex-seg-badge" class="dex-badge" style="background:var(--navy)">0 segments</span>
-              <span id="dex-met-badge" class="dex-badge" style="background:#6b21a8">0 metrics</span>
-            </div>
-
-            <!-- Schema: segments + known metrics -->
-            <div class="dex-schema">
-              <div class="dex-schema-col">
-                <div class="dex-schema-title">
-                  <i data-lucide="tag" style="width:11px;height:11px"></i> Segments (Group By / Filter)
-                </div>
-                <div id="dex-seg-tags"></div>
-              </div>
-              <div class="dex-schema-col">
-                <div class="dex-schema-title">
-                  <i data-lucide="bar-chart-2" style="width:11px;height:11px"></i> Metrics (click to select)
-                </div>
-                <div id="dex-met-tags"></div>
+              <!-- Mode tabs -->
+              <div class="dex-mode-tabs">
+                <button class="dex-mode-tab active" id="dex-tab-grid" onclick="dexSetMode('grid')">Grid</button>
+                <button class="dex-mode-tab" id="dex-tab-advanced" onclick="dexSetMode('advanced')">Advanced</button>
               </div>
             </div>
 
-            <!-- Query builder -->
-            <div class="dex-qbuilder">
-              <div class="dex-qbuilder-row" style="margin-bottom:8px">
-                <span class="dex-qb-label">Group By</span>
-                <div id="dex-qb-groupby" style="display:flex;gap:6px;flex-wrap:wrap;flex:1;align-items:center">
-                  <span id="dex-qb-groupby-hint" style="font-size:11px;color:var(--text-muted)">Click segments above to group</span>
+            <!-- Field panel — unified list, all fields -->
+            <div class="dex-field-panel" id="dex-field-panel">
+              <div class="dex-field-panel-header">
+                <div class="dex-field-panel-title">
+                  <i data-lucide="layout-grid" style="width:11px;height:11px"></i>
+                  <span id="dex-field-count">0 fields</span>
                 </div>
+                <input type="text" class="dex-field-search" id="dex-field-search" placeholder="Filter fields..." oninput="dexFilterFields(this.value)">
               </div>
-              <div class="dex-qbuilder-row" style="margin-bottom:8px">
-                <span class="dex-qb-label">Metrics</span>
-                <div id="dex-qb-metrics" style="display:flex;gap:6px;flex-wrap:wrap;flex:1;align-items:center">
-                  <span id="dex-qb-metrics-hint" style="font-size:11px;color:var(--text-muted)">Click metrics above to aggregate</span>
-                </div>
-              </div>
-              <div class="dex-qbuilder-row">
-                <span class="dex-qb-label">Dates</span>
-                <input type="date" class="dex-qb-input" id="dex-date-from">
-                <span style="font-size:11px;color:var(--text-muted)">to</span>
-                <input type="date" class="dex-qb-input" id="dex-date-to">
-                <span class="dex-qb-label" style="margin-left:8px">Date field</span>
-                <select class="dex-qb-input dex-limit-select" id="dex-date-seg" style="max-width:160px">
-                  <option value="">(no date filter)</option>
+              <div class="dex-field-list" id="dex-field-list"></div>
+            </div>
+
+            <!-- Query builder — chips with action dropdowns -->
+            <div class="dex-qbuilder" id="dex-qbuilder">
+              <span class="dex-qbuilder-hint" id="dex-qbuilder-hint">Click fields above to add them to your query</span>
+              <!-- chips injected here by dexRenderChips() -->
+              <div style="margin-left:auto;display:flex;align-items:center;gap:8px;flex-shrink:0">
+                <!-- Hidden date inputs — kept for date filter logic -->
+                <input type="date" id="dex-date-from" style="display:none">
+                <input type="date" id="dex-date-to" style="display:none">
+                <select id="dex-date-seg" style="display:none"><option value="">(no date filter)</option></select>
+                <select class="dex-limit-select" id="dex-limit" title="Row limit">
+                  <option value="25">25 rows</option>
+                  <option value="100" selected>100 rows</option>
+                  <option value="500">500 rows</option>
+                  <option value="1000">1000 rows</option>
                 </select>
-                <span class="dex-qb-label" style="margin-left:8px">Yard</span>
-                <select class="dex-qb-input dex-limit-select" id="dex-yard-filter" style="max-width:160px"></select>
-                <span class="dex-qb-label" style="margin-left:8px">Limit</span>
-                <select class="dex-limit-select" id="dex-limit">
-                  <option value="25">25</option>
-                  <option value="100" selected>100</option>
-                  <option value="500">500</option>
-                  <option value="1000">1000</option>
-                </select>
-                <button class="dex-run-btn" id="dex-run-btn" onclick="dexRunQuery()">
-                  <i data-lucide="play" style="width:13px;height:13px"></i> Run Query
+                <button class="dex-run-btn" id="dex-run-btn" onclick="dexRunQuery()" disabled>
+                  <i data-lucide="play" style="width:13px;height:13px"></i> Run
                 </button>
               </div>
             </div>
@@ -2878,7 +3343,10 @@
             </div>
           </div>
         </div>
-      </div>
+      </div><!-- /dex-layout -->
+      </div><!-- /expl-panel-advanced -->
+    </div><!-- /home-screen -->
+    <!-- home-screen end -->
 
 
     <!-- ═══ MY DASHBOARDS ═══ -->
@@ -2919,7 +3387,7 @@
         <!-- Version history drawer -->
         <div id="sr-history-drawer" style="display:none;border-bottom:1px solid var(--border);background:var(--surface2);padding:0">
           <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px 6px">
-            <span style="font-size:12px;font-weight:700;color:var(--navy);letter-spacing:.03em">VERSION HISTORY</span>
+            <span style="font-size:12px;font-weight:700;color:var(--text);letter-spacing:.03em">VERSION HISTORY</span>
             <button onclick="srToggleHistory()" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:16px;line-height:1">&times;</button>
           </div>
           <div id="sr-history-list" style="max-height:220px;overflow-y:auto;padding:0 16px 12px;display:flex;flex-direction:column;gap:6px">
@@ -2942,7 +3410,7 @@
           <!-- Row detail drawer -->
           <div id="sr-detail-drawer" style="display:none;width:340px;min-width:280px;max-width:480px;flex-shrink:0;border-left:2px solid var(--border);background:var(--surface);flex-direction:column;overflow:hidden;">
             <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--border);background:var(--surface2);flex-shrink:0">
-              <span style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--navy)">Row Details</span>
+              <span style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--text)">Row Details</span>
               <button onclick="srCloseDetail()" style="background:none;border:none;cursor:pointer;color:var(--text-muted);border-radius:5px;padding:3px;display:flex;align-items:center" title="Close">
                 <i data-lucide="x" style="width:14px;height:14px"></i>
               </button>
@@ -2974,6 +3442,11 @@
             <i data-lucide="calendar" style="width:15px;height:15px;flex-shrink:0"></i>
             Fiscal Calendar
           </div>
+          <div class="dsgn-nav-item" onclick="dsgnTab('webhooks')" id="dsgn-nav-webhooks">
+            <i data-lucide="webhook" style="width:15px;height:15px;flex-shrink:0"></i>
+            Webhooks
+            <span class="dsgn-badge" id="dsgn-badge-webhooks">—</span>
+          </div>
         </div>
         <!-- Main content -->
         <div class="dsgn-main" id="dsgn-main">
@@ -3000,7 +3473,7 @@
     <div class="state-box" id="builder-empty" style="display:none">
       <div class="state-icon"><i data-lucide="bar-chart-2" style="width:40px;height:40px;stroke-width:1.4"></i></div>
       <h3>Configure your report</h3>
-      <p>Choose segments to group by, select metrics, add filters — then hit Run.</p>
+      <p>Choose fields to group by, select measures to aggregate, then hit Run.</p>
     </div>
     <div class="state-box" id="loading-state" style="display:none">
       <div class="spinner"></div>
@@ -3014,7 +3487,7 @@
 <!-- Dashboard loading overlay -->
 <div id="dash-loading">
   <div class="spinner"></div>
-  <span style="color:var(--navy);font-weight:600;font-size:14px">Loading dashboard...</span>
+  <span style="color:var(--text);font-weight:600;font-size:14px">Loading dashboard...</span>
 </div>
 
 <!-- Drilldown Drawer -->
@@ -3123,14 +3596,59 @@ const ICONS = {
 // — updates nav brand text
 // — sets BASE api url
 // — stores as _activeInstance
-function _toggleTheme() {
+/**
+ * Wire instance-specific light/dark tokens into base CSS vars.
+ * Called on boot and on every mode toggle.
+ */
+function _applyInstanceModeTokens(inst, mode) {
+  if (!inst?.theme) return;
+  const t = inst.theme;
   const root = document.documentElement;
-  const base = root.dataset.themeBase || 'produce';
-  const current = root.getAttribute('data-theme') || base;
-  const isDark = current.endsWith('-dark');
-  const next = isDark ? base : base + '-dark';
-  root.setAttribute('data-theme', next);
-  try { localStorage.setItem('ddnl-theme-' + base, next); } catch(_) {}
+  const isDark = mode === 'dark';
+
+  const bg      = isDark ? (t['--inst-bg-dark']         || t['--inst-bg']        ) : (t['--inst-bg-light']         || t['--inst-bg']        );
+  const surface = isDark ? (t['--inst-surface-dark']    || t['--inst-surface']   ) : (t['--inst-surface-light']    || t['--inst-surface']   );
+  const border  = isDark ? (t['--inst-border-dark']     || t['--inst-border']    ) : (t['--inst-border-light-lm']  || t['--inst-border']    );
+  const text    = isDark ? (t['--inst-text-dark']       || t['--inst-text']      ) : (t['--inst-text-light']       || t['--inst-text']      );
+  const muted   = isDark ? (t['--inst-text-muted-dark'] || t['--inst-text-muted']) : (t['--inst-text-muted-light'] || t['--inst-text-muted']);
+  const accent  = isDark ? (t['--inst-accent-dark-dm']  || t['--inst-accent']   ) : (t['--inst-accent-light']     || t['--inst-accent']    );
+  const navBg   = t['--inst-nav-bg'];
+
+  if (bg)      root.style.setProperty('--bg',         bg);
+  if (surface) { root.style.setProperty('--surface',  surface); root.style.setProperty('--surface2', surface); }
+  if (border)  root.style.setProperty('--border',     border);
+  if (text)    root.style.setProperty('--text',       text);
+  if (muted)   root.style.setProperty('--text-muted', muted);
+  if (accent)  { root.style.setProperty('--teal', accent); root.style.setProperty('--teal-dim', accent); }
+  if (navBg)   root.style.setProperty('--navy', navBg);
+}
+
+const SUN_SVG  = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>';
+const MOON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+
+function _syncThemeToggleIcon() {
+  const btn = document.getElementById('theme-toggle-btn');
+  if (!btn) return;
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  // In dark mode show sun (click to go light); in light mode show moon (click to go dark)
+  btn.innerHTML = isDark ? SUN_SVG : MOON_SVG;
+  btn.title = isDark ? 'Switch to light mode' : 'Switch to dark mode';
+}
+
+function _toggleTheme() {
+  const root   = document.documentElement;
+  const isDark = root.getAttribute('data-theme') === 'dark';
+  const next   = isDark ? 'light' : 'dark';
+
+  if (!isDark) root.setAttribute('data-theme', 'dark');
+  else         root.removeAttribute('data-theme');
+
+  if (_activeInstance) _applyInstanceModeTokens(_activeInstance, next);
+
+  const instId = _activeInstance?.id;
+  if (instId) try { localStorage.setItem('ddnl-theme-mode-' + instId, next); } catch(_) {}
+
+  _syncThemeToggleIcon();
 }
 
 function applyInstance(inst) {
@@ -3165,34 +3683,37 @@ function applyInstance(inst) {
 
   // 5. Apply theme mode
   const themeId = inst.themeId || (inst.defaultThemeMode === 'dark' ? 'dark' : null);
-  if (themeId) {
-    document.documentElement.setAttribute('data-theme', themeId);
+  const savedMode = localStorage.getItem('ddnl-theme-mode-' + inst.id);
+  const activeMode = savedMode || (inst.defaultThemeMode === 'dark' ? 'dark' : 'light');
+
+  if (activeMode === 'dark') {
+    document.documentElement.setAttribute('data-theme', 'dark');
   } else {
     document.documentElement.removeAttribute('data-theme');
   }
-  // Persist the base themeId so toggle knows which skin family to use
-  document.documentElement.dataset.themeBase = inst.themeId || '';
-  // Restore user's last toggle preference (light <-> dark) if saved
-  if (inst.themeId) {
-    const saved = localStorage.getItem('ddnl-theme-' + inst.themeId);
-    if (saved) document.documentElement.setAttribute('data-theme', saved);
-  }
 
-  // 5b. Inject theme toggle button if this instance supports it
-  if (inst.themeToggle) {
+  // Wire instance-specific mode vars into base tokens
+  _applyInstanceModeTokens(inst, activeMode);
+
+  // Persist for toggle
+  document.documentElement.dataset.themeBase = inst.themeId || '';
+  document.documentElement.dataset.instanceId = inst.id || '';
+
+  // 5b. Theme toggle — always visible, shows sun (light mode) or moon (dark mode)
+  {
     const existing = document.getElementById('theme-toggle-btn');
     if (!existing) {
       const btn = document.createElement('button');
       btn.id = 'theme-toggle-btn';
       btn.title = 'Toggle light / dark';
-      btn.style.cssText = 'background:transparent;border:1.5px solid rgba(255,255,255,.25);color:rgba(255,255,255,.8);border-radius:6px;padding:4px 8px;cursor:pointer;font-size:12px;display:flex;align-items:center;gap:5px;transition:all .15s';
-      btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>';
+      btn.style.cssText = 'background:transparent;border:1.5px solid rgba(255,255,255,.25);color:rgba(255,255,255,.8);border-radius:6px;padding:5px 9px;cursor:pointer;font-size:12px;display:flex;align-items:center;gap:5px;transition:all .15s';
       btn.onclick = _toggleTheme;
       btn.onmouseover = () => { btn.style.borderColor='var(--teal)'; btn.style.color='var(--teal)'; };
       btn.onmouseout  = () => { btn.style.borderColor='rgba(255,255,255,.25)'; btn.style.color='rgba(255,255,255,.8)'; };
       const right = document.querySelector('.topbar-right');
       if (right) right.prepend(btn);
     }
+    _syncThemeToggleIcon();
   }
 
   // 6. Hide nav tabs not relevant to this instance
@@ -3255,20 +3776,24 @@ window._ipSelect = function(idx) {
 // Main boot: resolve instance then start the app
 (async function bootstrapInstance() {
   let inst;
-  try {
-    const j = await apiFetch('/api/instance').then(r => r.json());
-    if (j.instance) {
-      // Host matched — auto-select, no picker
-      inst = j.instance;
-    } else if (j.instances?.length === 1) {
-      // Only one instance configured — skip picker
-      inst = j.instances[0];
-    } else if (j.instances?.length > 1) {
-      // Multiple instances — show picker
-      inst = await showInstancePicker(j.instances);
+
+  // Fast path: server injects window.__INSTANCE_CONFIG__ synchronously so
+  // applyInstance() runs before the first paint — no FOUC, no async round-trip.
+  if (window.__INSTANCE_CONFIG__) {
+    inst = window.__INSTANCE_CONFIG__;
+  } else {
+    try {
+      const j = await apiFetch('/api/instance').then(r => r.json());
+      if (j.instance) {
+        inst = j.instance;
+      } else if (j.instances?.length === 1) {
+        inst = j.instances[0];
+      } else if (j.instances?.length > 1) {
+        inst = await showInstancePicker(j.instances);
+      }
+    } catch(e) {
+      console.warn('Could not resolve instance from server, using instance defaults:', e);
     }
-  } catch(e) {
-    console.warn('Could not resolve instance from server, using instance defaults:', e);
   }
 
   // Apply instance theme vars from INSTANCE_CONFIG
@@ -3301,13 +3826,14 @@ async function init() {
   renderSavedList();
   // Land on first visible tab — prefer home dashboard if pinned
   const dashBtn = document.getElementById('nav-dashboard');
+  const dashHidden = !dashBtn || dashBtn.style.display === 'none';
   const hasPinnedHome = (_dashConfig?.dashboards || []).some(d => d.show_on_home);
-  const startView = hasPinnedHome ? 'homeDash'
-    : (dashBtn && dashBtn.style.display === 'none') ? 'home' : 'dashboard';
+  let startView;
+  if (hasPinnedHome)  startView = 'homeDash';
+  else if (dashHidden) startView = 'myDash';   // dashboard tab hidden → go to My Dashboards
+  else                 startView = 'dashboard';
   showView(startView);
   // Only init the legacy FCC dashboard if the tab is visible (not hidden by hideTabs)
-  const myDashBtn = document.getElementById('nav-myDash');
-  const dashHidden = dashBtn && dashBtn.style.display === 'none';
   if (!dashHidden) initDashboard();
   lucide.createIcons();
 }
@@ -3989,7 +4515,7 @@ function renderGrid(rows, mets, targetId = 'myGrid', ctx = null) {
                 <span style="display:inline-block;width:${indentPx}px"></span>
                 <button class="tree-toggle" onclick="treeToggle('${escapedPath}')" style="margin-right:4px">${collapsed ? '▶' : '▼'}</button>
                 <span style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;font-weight:500">${depthLabel}:</span>
-                <strong style="color:var(--navy);margin-left:4px">${node._key}</strong>
+                <strong style="color:var(--text);margin-left:4px">${node._key}</strong>
               </td>`;
             }
             if (metNames.has(col)) {
@@ -5500,7 +6026,7 @@ async function srLoadHistory(reportId) {
       return `
         <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:7px;background:var(--surface);border:1.5px solid ${isLatest?'var(--teal)':'var(--border)'}">
           <div style="flex:1;min-width:0">
-            <div style="font-size:12px;font-weight:700;color:var(--navy)">v${v.version_number} · ${v.name}</div>
+            <div style="font-size:12px;font-weight:700;color:var(--text)">v${v.version_number} · ${v.name}</div>
             <div style="font-size:11px;color:var(--text-muted);margin-top:1px">${when}${v.saved_by ? ' · ' + v.saved_by : ''}</div>
           </div>
           ${isLatest
@@ -6426,7 +6952,7 @@ function showView(view) {
   // Fullscreen builder overlays everything
   document.getElementById('rb-screen').classList.toggle('open', view==='builder');
   document.getElementById('dashboard-screen').style.display  = view==='dashboard' ? 'flex' : 'none';
-  document.getElementById('home-screen').style.display       = view==='home'      ? 'flex' : 'none';
+  document.getElementById('home-screen').style.cssText = view==='home' ? 'display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0' : 'display:none';
   document.getElementById('saved-screen').style.display      = view==='saved'     ? 'flex' : 'none';
   document.getElementById('my-dash-screen').style.display    = view==='myDash'    ? 'flex' : 'none';
   document.getElementById('designer-screen').style.display   = view==='designer'  ? 'flex' : 'none';
@@ -6445,10 +6971,24 @@ function showView(view) {
       if (list) list.innerHTML = '<div style="padding:40px;text-align:center;color:var(--red);font-size:13px">Error loading reports — ' + e.message + '</div>';
     });
   }
-  if(view==='home')     dexInit();
+  if(view==='home') {
+    dexInit();
+  }
   if(view==='myDash')   myDashInit();
   if(view==='designer') dsgnInit();
   if(view==='homeDash') homeDashRender();
+}
+
+// Report builder close — return to the best available view rather than hardcoding 'dashboard'
+function _rbClose() {
+  const dashBtn = document.getElementById('nav-dashboard');
+  const dashHidden = !dashBtn || dashBtn.style.display === 'none';
+  if (dashHidden) {
+    const hasPinnedHome = (_dashConfig?.dashboards || []).some(d => d.show_on_home);
+    showView(hasPinnedHome ? 'homeDash' : 'myDash');
+  } else {
+    showView('dashboard');
+  }
 }
 
 /* ── Home Dashboard ──────────────────────────────────────────────────── */
@@ -6470,7 +7010,7 @@ function homeDashRender() {
       screen.innerHTML = `
         <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;gap:16px;padding:60px;text-align:center">
           <i data-lucide="home" style="width:48px;height:48px;stroke-width:1.2;color:var(--border)"></i>
-          <div style="font-size:18px;font-weight:700;color:var(--navy)">No home dashboard set</div>
+          <div style="font-size:18px;font-weight:700;color:var(--text)">No home dashboard set</div>
           <div style="font-size:13px;color:var(--text-muted);max-width:360px">Go to <strong>My Dashboards</strong>, then click the
             <i data-lucide="home" style="width:12px;height:12px;vertical-align:-2px"></i>
             icon on any dashboard to pin it as your home.
@@ -6512,9 +7052,7 @@ function _updatePanelToggleBtn(isCollapsed) {
 function showBuilderEmpty() {}
 function toggleSection(id) { const el=document.getElementById(id); el.style.display=el.style.display==='none'?'':'none'; }
 
-/* ══════════════════════════════════════════════════════════════════
-   DATASET EXPLORER
-══════════════════════════════════════════════════════════════════ */
+
 
 let _dexDatasets = [];       // full list from /bi/datasets
 let _dexActive   = null;     // currently selected dataset detail
@@ -6523,34 +7061,296 @@ let _dexSelMets  = [];       // selected metrics
 let _dexResults  = [];       // last query results
 let _dexInited   = false;
 
-// Known metrics per dataset (from API exploration)
-const DEX_METRICS = {
-  jobs_profit_loss:        ['JobRevenue','Profit','TotalExpenses','LaborHours','LaborExpenses','MaterialsExpenses','LaborBurden','LaborWC','LaborUnion','MaterialsBurden','JobCount'],
-  jobs_profit_by_invoice:  ['Revenue','LaborActual','MaterialActual','LaborHours','PartsCost','Overhead','LaborBurden','Net','JobCount','InvoiceCount','MaterialBurden'],
-  Job_Revenue_Forecast:    ['EstimatedRevenue','ActualRevenue','Variance','EstimatedHours','ActualHours','HoursVariance','EstimatedProfit','ActualProfit','ProfitVariance','JobCount','VariancePct'],
-  Jobs_By_Status:          ['TotalJobs','TotalEstimatedValue','AvgEstimatedValue'],
-  Quotes_By_Status:        ['TotalQuotes','TotalValue','AvgValue','ConversionRate'],
-  Quote_Revenue_Forecast:  ['EstimatedRevenue','ActualRevenue','EstimatedHours','ActualHours'],
-  quote_profit_forecast:   ['EstimatedRevenue','ActualRevenue','EstimatedCost','ActualCost','EstimatedProfit','ActualProfit','EstimatedHours','ActualHours','Variance','VariancePct'],
-  Equipment_Profit_Loss:   ['TotalRevenue','TotalExpenses','TotalProfit','LaborCost','MaterialCost','AvgMargin','UnitCount','JobCount'],
-  Equipment_Utilization:   ['TotalTargetHours','TotalAvailableHours','TotalDowntimeHours','AvgUtilization','UnitCount','ScheduledCount'],
-  WO_Dashboard:            ['TotalWorkOrders','TotalLaborCost','TotalMaterialCost','TotalWOCost','AvgWOCost','OpenCount','ClosedCount','AvgDaysOpen','UnitCount'],
-  Preventive_Maintenance:  ['TotalActivities','PastDueCount','ComingDueCount','UnitCount'],
-};
-
 async function dexInit() {
   if (_dexInited) return;
   _dexInited = true;
   try {
     const r = await apiFetch(`${BASE}/bi/datasets`);
     const j = await r.json();
-    _dexDatasets = j.data?.datasets || [];
-    dexRenderList(_dexDatasets);
-    // Pre-populate yard filter from segment-values
-    dexLoadYardOptions();
+    _dexDatasets = (j.data?.datasets || []).filter(ds => ds.showOnExplorer !== false);
+    dexRenderSubnav(_dexDatasets);
+    dexRenderList(_dexDatasets); // still populates advanced sidebar
+    // Auto-select first pinned dataset tab
+    const first = _dexDatasets[0];
+    if (first) dexShowTab(first.name);
+    else dexShowAdvanced();
   } catch(e) {
+    document.getElementById('expl-ds-tabs').innerHTML = '';
     document.getElementById('dex-ds-list').innerHTML = '<div style="padding:20px;color:var(--red);font-size:12px">Failed to load datasets</div>';
   }
+}
+
+let _explActiveTab = null; // dataset name or 'advanced'
+
+function dexRenderSubnav(datasets) {
+  const container = document.getElementById('expl-ds-tabs');
+  container.innerHTML = datasets.map(ds =>
+    `<button class="expl-tab" id="expl-tab-${ds.name}" onclick="dexShowTab('${ds.name}')">${ds.label || ds.name}</button>`
+  ).join('');
+  lucide.createIcons({ el: document.getElementById('expl-subnav') });
+}
+
+function dexShowTab(dsName) {
+  _explActiveTab = dsName;
+  // Update tab active states
+  document.querySelectorAll('.expl-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById(`expl-tab-${dsName}`)?.classList.add('active');
+  // Show grid panel, hide advanced
+  document.getElementById('expl-panel-grid').style.display = 'flex';
+  document.getElementById('expl-panel-advanced').style.display = 'none';
+  // Load the grid
+  explGridLoad(dsName);
+}
+
+function dexShowAdvanced() {
+  _explActiveTab = 'advanced';
+  document.querySelectorAll('.expl-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('expl-tab-advanced').classList.add('active');
+  document.getElementById('expl-panel-grid').style.display = 'none';
+  document.getElementById('expl-panel-advanced').style.display = 'flex';
+}
+
+// ── Grid panel ──
+let _explGridResults  = [];   // full result set from API
+let _explGridFiltered = [];   // after search filter
+let _explGridSortCol  = null;
+let _explGridSortDir  = 'asc';
+let _explGridAllCols  = [];   // all columns from data
+let _explGridHidden   = {};   // { dsName: Set<col> } — persisted to localStorage
+let _explGridWidths   = {};   // { dsName: { col: px } } — persisted to localStorage
+let _explGridSearch   = '';
+let _explGridDs       = null; // active dataset name
+
+function _explLoadPrefs(dsName) {
+  try {
+    const h = localStorage.getItem(`expl_hidden_${dsName}`);
+    _explGridHidden[dsName] = h ? new Set(JSON.parse(h)) : new Set();
+    const w = localStorage.getItem(`expl_widths_${dsName}`);
+    _explGridWidths[dsName] = w ? JSON.parse(w) : {};
+  } catch { _explGridHidden[dsName] = new Set(); _explGridWidths[dsName] = {}; }
+}
+
+function _explSaveHidden(dsName) {
+  localStorage.setItem(`expl_hidden_${dsName}`, JSON.stringify([..._explGridHidden[dsName]]));
+}
+function _explSaveWidths(dsName) {
+  localStorage.setItem(`expl_widths_${dsName}`, JSON.stringify(_explGridWidths[dsName]));
+}
+
+async function explGridLoad(dsName) {
+  _explGridDs      = dsName;
+  _explGridSearch  = '';
+  _explGridSortCol = null;
+  _explGridSortDir = 'asc';
+  const search = document.getElementById('expl-grid-search');
+  if (search) search.value = '';
+  _explLoadPrefs(dsName);
+
+  const meta = document.getElementById('expl-grid-meta');
+  const wrap = document.getElementById('expl-grid-wrap');
+  const exp  = document.getElementById('expl-grid-export');
+  meta.textContent = 'Loading...';
+  wrap.innerHTML = '<div class="dex-spinner-wrap"><div class="spinner"></div><p>Loading...</p></div>';
+  exp.style.display = 'none';
+
+  try {
+    const t0 = Date.now();
+    const r = await apiFetch(`${BASE}/bi/datasets/${encodeURIComponent(dsName)}/search?size=500`);
+    const j = await r.json();
+
+    if (j.success === false) {
+      if (j.error === 'not_published') {
+        wrap.innerHTML = `
+          <div class="dex-no-data" style="display:flex;flex-direction:column;align-items:center;gap:12px;padding:60px 20px">
+            <i data-lucide="file-x" style="width:36px;height:36px;color:var(--text-muted);opacity:.4"></i>
+            <div style="font-weight:600;color:var(--text);font-size:14px">Dataset not published yet</div>
+            <div style="color:var(--text-muted);font-size:13px;text-align:center;max-width:340px">This dataset has been imported but the schema hasn't been published. Open it in Designer to define fields and publish.</div>
+            <button class="dsgn-save-btn" style="margin-top:4px" onclick="showView('designer')">Open in Designer</button>
+          </div>`;
+        meta.textContent = 'Not published';
+        exp.style.display = 'none';
+        lucide.createIcons({ el: document.getElementById('expl-panel-grid') });
+        return;
+      }
+      throw new Error(j.message || j.error || 'Query failed');
+    }
+
+    _explGridResults  = j.data?.records || [];
+    _explGridFiltered = _explGridResults;
+    _explGridAllCols  = _explGridResults.length ? Object.keys(_explGridResults[0]) : [];
+    const total = j.data?.total ?? _explGridResults.length;
+    meta.textContent = `${_explGridResults.length} of ${total} rows · ${Date.now() - t0}ms`;
+    explGridRenderColPicker(dsName);
+    explGridRenderTable();
+    exp.style.display = _explGridResults.length ? '' : 'none';
+    lucide.createIcons({ el: document.getElementById('expl-panel-grid') });
+  } catch(e) {
+    wrap.innerHTML = `<div class="dex-no-data" style="color:var(--red)">Error: ${e.message}</div>`;
+    meta.textContent = 'Error';
+  }
+}
+
+function explGridSearch(q) {
+  _explGridSearch  = q.toLowerCase();
+  if (!_explGridSearch) {
+    _explGridFiltered = _explGridResults;
+  } else {
+    _explGridFiltered = _explGridResults.filter(row =>
+      Object.values(row).some(v => v != null && String(v).toLowerCase().includes(_explGridSearch))
+    );
+  }
+  document.getElementById('expl-grid-meta').textContent =
+    `${_explGridFiltered.length} of ${_explGridResults.length} rows`;
+  explGridRenderTable();
+}
+
+function explGridRenderColPicker(dsName) {
+  const picker = document.getElementById('expl-col-picker');
+  const hidden = _explGridHidden[dsName] || new Set();
+  picker.innerHTML = [
+    `<div style="padding:6px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);border-bottom:1px solid var(--border);margin-bottom:4px">Columns</div>`,
+    ..._explGridAllCols.map(c => {
+      const vis = !hidden.has(c);
+      return `<label style="display:flex;align-items:center;gap:8px;padding:5px 12px;cursor:pointer;font-size:12px;color:var(--text);user-select:none" onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''">
+        <input type="checkbox" ${vis?'checked':''} onchange="explGridToggleCol('${c}',this.checked)" style="accent-color:var(--teal);cursor:pointer">
+        ${c}
+      </label>`;
+    })
+  ].join('');
+}
+
+function explGridToggleColPicker() {
+  const p = document.getElementById('expl-col-picker');
+  p.style.display = p.style.display === 'none' ? '' : 'none';
+  // Close on outside click
+  if (p.style.display !== 'none') {
+    setTimeout(() => document.addEventListener('click', function close(e) {
+      if (!p.contains(e.target) && e.target.id !== 'expl-col-btn') {
+        p.style.display = 'none';
+        document.removeEventListener('click', close);
+      }
+    }), 0);
+  }
+}
+
+function explGridToggleCol(col, visible) {
+  const dsName = _explGridDs;
+  if (!_explGridHidden[dsName]) _explGridHidden[dsName] = new Set();
+  if (visible) _explGridHidden[dsName].delete(col);
+  else         _explGridHidden[dsName].add(col);
+  _explSaveHidden(dsName);
+  explGridRenderTable();
+}
+
+function explGridRenderTable() {
+  const dsName = _explGridDs;
+  const rows   = _explGridFiltered;
+  const wrap   = document.getElementById('expl-grid-wrap');
+  if (!rows.length) {
+    wrap.innerHTML = `<div class="dex-no-data">${_explGridSearch ? 'No matches.' : 'No records found.'}</div>`;
+    return;
+  }
+
+  const hidden  = _explGridHidden[dsName] || new Set();
+  const widths  = _explGridWidths[dsName] || {};
+  const cols    = _explGridAllCols.filter(c => !hidden.has(c));
+  const isNum   = col => rows.every(r => r[col] === null || r[col] === '' || (!isNaN(parseFloat(r[col])) && !/[a-zA-Z]/.test(String(r[col]))));
+  const numCols = new Set(cols.filter(isNum));
+
+  const fmtDate = v => { if (!v) return '—'; const d = new Date(v); return isNaN(d.getTime()) ? v : d.toLocaleDateString('en-US',{month:'2-digit',day:'2-digit',year:'numeric'}); };
+  const fmtCell = (c, v) => {
+    if (/date/i.test(c)) return { html: fmtDate(v), cls: '' };
+    if (!numCols.has(c)) return { html: v ?? '—', cls: '' };
+    const n = parseFloat(v);
+    return { html: isNaN(n) ? (v??'—') : (Math.abs(n)>=1000 ? n.toLocaleString(undefined,{maximumFractionDigits:2}) : n), cls:'num' };
+  };
+
+  // Sort
+  let sorted = [...rows];
+  if (_explGridSortCol && cols.includes(_explGridSortCol)) {
+    const num = numCols.has(_explGridSortCol);
+    sorted.sort((a,b) => {
+      const av = num ? parseFloat(a[_explGridSortCol]??0) : String(a[_explGridSortCol]??'').toLowerCase();
+      const bv = num ? parseFloat(b[_explGridSortCol]??0) : String(b[_explGridSortCol]??'').toLowerCase();
+      return _explGridSortDir==='asc' ? (av>bv?1:av<bv?-1:0) : (av<bv?1:av>bv?-1:0);
+    });
+  }
+
+  const table  = document.createElement('table');
+  table.className = 'dex-table';
+  const thead  = document.createElement('thead');
+  const hrow   = document.createElement('tr');
+
+  cols.forEach((c, i) => {
+    const th  = document.createElement('th');
+    const w   = widths[c] || 150;
+    th.style.width = w + 'px';
+    const sc  = _explGridSortCol === c ? (_explGridSortDir==='asc' ? ' sort-asc' : ' sort-desc') : '';
+    th.className = sc.trim();
+    th.innerHTML = `<span class="th-label">${c}<span class="sort-icon"></span></span><div class="col-resize"></div>`;
+    th.addEventListener('click', e => {
+      if (e.target.classList.contains('col-resize')) return;
+      if (_explGridSortCol === c) {
+        _explGridSortDir = _explGridSortDir === 'asc' ? 'desc' : 'asc';
+      } else {
+        _explGridSortCol = c;
+        _explGridSortDir = numCols.has(c) ? 'desc' : 'asc';
+      }
+      explGridRenderTable();
+    });
+    // Resize handle
+    const handle = th.querySelector('.col-resize');
+    handle.addEventListener('mousedown', e => {
+      e.preventDefault(); e.stopPropagation();
+      const startX = e.pageX, startW = th.offsetWidth;
+      const onMove = ev => {
+        const nw = Math.max(50, startW + ev.pageX - startX);
+        th.style.width = nw + 'px';
+        if (!_explGridWidths[dsName]) _explGridWidths[dsName] = {};
+        _explGridWidths[dsName][c] = nw;
+      };
+      const onUp = () => {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        _explSaveWidths(dsName);
+      };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+    hrow.appendChild(th);
+  });
+  thead.appendChild(hrow);
+  table.appendChild(thead);
+
+  const tbody = document.createElement('tbody');
+  sorted.forEach(row => {
+    const tr = document.createElement('tr');
+    cols.forEach(c => {
+      const td = document.createElement('td');
+      const {html, cls} = fmtCell(c, row[c]);
+      if (cls) td.className = cls;
+      td.textContent = html;
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  wrap.innerHTML = '';
+  wrap.appendChild(table);
+}
+
+function explGridExportCsv() {
+  const dsName = _explGridDs;
+  const rows   = _explGridFiltered.length ? _explGridFiltered : _explGridResults;
+  if (!rows.length) return;
+  const hidden = _explGridHidden[dsName] || new Set();
+  const cols   = _explGridAllCols.filter(c => !hidden.has(c));
+  const esc    = v => { const s = String(v??''); return s.includes(',')||s.includes('"')||s.includes('\n') ? `"${s.replace(/"/g,'""')}"` : s; };
+  const csv    = [cols.join(','), ...rows.map(r => cols.map(c => esc(r[c])).join(','))].join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download = `${dsName || 'export'}.csv`;
+  a.click();
 }
 
 function dexRenderList(datasets) {
@@ -6582,7 +7382,7 @@ function dexRenderSavedChartsList() {
     ${_savedCharts.map(c => `
       <div class="dex-ds-item" style="padding:8px 12px;gap:4px" title="${escHtml(c.name)}">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
-          <div style="font-size:12px;font-weight:600;color:var(--navy);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${escHtml(c.name)}</div>
+          <div style="font-size:12px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${escHtml(c.name)}</div>
           <div style="display:flex;gap:4px;flex-shrink:0">
             <button onclick="dexEditChart('${c.id}')" title="Edit" style="background:none;border:1px solid var(--border);border-radius:5px;padding:2px 6px;font-size:10px;cursor:pointer;color:var(--text-muted)">Edit</button>
             <button onclick="dexDeleteChart('${c.id}')" title="Delete" style="background:none;border:1px solid var(--border);border-radius:5px;padding:2px 6px;font-size:10px;cursor:pointer;color:var(--red)">×</button>
@@ -6648,6 +7448,27 @@ function dexToggleSidebar() {
   lucide.createIcons({ el: layout });
 }
 
+let _dexMode = 'grid'; // 'grid' | 'advanced'
+
+function dexSetMode(mode) {
+  _dexMode = mode;
+  const panel = document.getElementById('dex-panel');
+  panel.classList.toggle('mode-grid', mode === 'grid');
+  document.getElementById('dex-tab-grid').classList.toggle('active', mode === 'grid');
+  document.getElementById('dex-tab-advanced').classList.toggle('active', mode === 'advanced');
+  // In grid mode: run a clean raw scan (all fields, display only)
+  // In advanced mode: just show whatever is already in chips
+  if (mode === 'grid' && _dexActive) {
+    // Reset all chips to display and run
+    _dexQuery = new Map();
+    for (const f of (_dexActive.segments || [])) {
+      _dexQuery.set(f.name, { field: f, action: 'display' });
+    }
+    dexRenderChips();
+    dexRunQuery();
+  }
+}
+
 function dexFilterList(q) {
   const filtered = q ? _dexDatasets.filter(ds =>
     ds.name.toLowerCase().includes(q.toLowerCase()) ||
@@ -6665,7 +7486,8 @@ async function dexSelectDataset(name) {
   document.querySelectorAll('.dex-ds-item').forEach(el => el.classList.remove('active'));
   document.getElementById(`dex-item-${name}`)?.classList.add('active');
 
-  // Reset selections
+  // Reset query state
+  _dexQuery   = new Map();
   _dexSelSegs = [];
   _dexSelMets = [];
   _dexResults = [];
@@ -6673,171 +7495,207 @@ async function dexSelectDataset(name) {
   _dexSliceCol = ''; _dexSliceVals = new Map();
   _dexChartTypeUserSet = false;
 
+  // Always open in Grid mode
+  _dexMode = 'grid';
+  document.getElementById('dex-panel').classList.add('mode-grid');
+  document.getElementById('dex-tab-grid').classList.add('active');
+  document.getElementById('dex-tab-advanced').classList.remove('active');
+
   // Show loading state
   document.getElementById('dex-empty').style.display = 'none';
   document.getElementById('dex-panel').classList.add('visible');
   document.getElementById('dex-panel-name').textContent = name;
-  document.getElementById('dex-panel-desc').textContent = 'Loading schema...';
-  document.getElementById('dex-seg-tags').innerHTML = '<span style="font-size:11px;color:var(--text-muted)">Loading...</span>';
-  document.getElementById('dex-met-tags').innerHTML = '';
+  document.getElementById('dex-panel-desc').textContent = 'Loading...';
+  document.getElementById('dex-field-list').innerHTML = '<span style="font-size:11px;color:var(--text-muted);padding:4px">Loading fields...</span>';
   document.getElementById('dex-table-wrap').innerHTML = '';
-  document.getElementById('dex-results-meta').textContent = 'Run a query to see results';
+  document.getElementById('dex-results-meta').textContent = 'Add fields and run a query';
   document.getElementById('dex-export-btn').style.display = 'none';
   document.getElementById('dex-query-preview').style.display = 'none';
   document.getElementById('dex-visual').classList.remove('visible');
-  _dexChartTypeUserSet = false; _dexChartType = 'bar';
+  _dexChartType = 'bar';
   if (_dexChart) { _dexChart.destroy(); _dexChart = null; }
+  dexRenderChips(); // clear chips + disable Run
 
   try {
     const r = await apiFetch(`${BASE}/bi/datasets/${name}`);
     const j = await r.json();
-    const ds      = j.data?.dataset;
-    const apiMets = j.data?.metrics || [];   // metrics live at j.data.metrics, not j.data.dataset
-    _dexActive = { name, detail: ds };
+    const ds        = j.data?.dataset;           // publish-flow: has datasetSegments
+    const rawFields = j.data?.fields || [];      // file-import-flow: flat fields array
+    const apiMets   = j.data?.metrics || [];
+    const isFileImport = !ds && rawFields.length > 0;
+    _dexActive = { name, detail: ds, isFileImport };
 
     // Header
     const summary = _dexDatasets.find(x => x.name === name);
     document.getElementById('dex-panel-desc').textContent = j.data?.description || summary?.description || '';
-    document.getElementById('dex-seg-badge').textContent = `${ds.datasetSegments?.length || 0} segments`;
-    document.getElementById('dex-met-badge').textContent = `${summary?.metricCount || 0} metrics`;
 
-    // Segments
-    const segs = (ds.datasetSegments || []).map(s => ({
-      name: s.segment?.segmentName || s.columnName,
-      col:  s.columnName,
-      type: s.segment?.segmentType || 'string',
-      cat:  s.segment?.category || '',
-    }));
+    let segs, mets;
+
+    if (isFileImport) {
+      // File-import datasets: every field is a browsable dimension
+      // Numeric fields get a SUM metric automatically; others are string segments
+      segs = rawFields.map(f => ({
+        name: f.name,
+        col:  f.name,
+        type: f.type === 'date' ? 'date' : (f.type === 'number' ? 'number' : 'string'),
+        cat:  '',
+        label: f.label || f.name,
+      }));
+      mets = rawFields
+        .filter(f => f.type === 'number')
+        .map(f => ({ name: f.name, agg: 'SUM', label: f.label || f.name }));
+      // Fallback: if no numeric fields at all, expose COUNT as the only metric
+      if (!mets.length) mets = [{ name: '_count', agg: 'COUNT', label: 'Count' }];
+      document.getElementById('dex-seg-badge').textContent = `${segs.length} fields`;
+      document.getElementById('dex-met-badge').textContent = `${mets.length} measures`;
+    } else {
+      // Publish-flow dataset
+      segs = (ds?.datasetSegments || []).map(s => ({
+        name: s.segment?.segmentName || s.columnName,
+        col:  s.columnName,
+        type: s.segment?.segmentType || 'string',
+        cat:  s.segment?.category || '',
+      }));
+      mets = apiMets
+        .filter(m => m.isActive !== false)
+        .map(m => ({ name: m.metricName, agg: m.aggregationType || 'SUM' }));
+      // No hardcoded metric fallback — metrics come from schema only
+      document.getElementById('dex-seg-badge').textContent = `${segs.length} fields`;
+      document.getElementById('dex-met-badge').textContent = `${mets.length} measures`;
+    }
+
+    // Merge segs + mets into one unified field list
+    // mets that aren't already in segs get added with type=number
+    const segNames = new Set(segs.map(s => s.name));
+    for (const m of mets) {
+      if (!segNames.has(m.name)) {
+        segs.push({ name: m.name, col: m.name, type: 'number', cat: '', label: m.label || m.name });
+      }
+    }
+
     _dexActive.segments = segs;
+    _dexActive.metrics  = mets;
 
-    // Metrics — use schema aggregation types (COUNT/SUM/AVG)
-    const mets = apiMets
-      .filter(m => m.isActive !== false)
-      .map(m => ({ name: m.metricName, agg: m.aggregationType || 'SUM' }));
-    // Fallback to DEX_METRICS if schema returns nothing
-    if (!mets.length) {
-      (DEX_METRICS[name] || []).forEach(n => mets.push({ name: n, agg: 'SUM' }));
-    }
-    _dexActive.metrics = mets;
-
-    // Default: nothing pre-selected — user picks both dimensions and metrics
-    _dexSelSegs = [];
-    _dexSelMets = [];
-
-    // Render segment tags — none pre-selected, user picks groupBy dimension
-    const SEG_TYPE_ICON = { date:'📅', Entity:'👤', Location:'📍' };
-    document.getElementById('dex-seg-tags').innerHTML = segs.map(s =>
-      `<span class="dex-field-tag" id="dex-seg-${s.name}" onclick="dexToggleSeg('${s.name}')" title="${s.type}">
-        ${s.name}<span class="tag-type">${SEG_TYPE_ICON[s.type] || SEG_TYPE_ICON[s.cat] || ''}</span>
-      </span>`).join('');
-
-    // Render metric tags — all pre-selected
-    document.getElementById('dex-met-tags').innerHTML = mets.length
-      ? mets.map(m =>
-        `<span class="dex-field-tag${_dexSelMets.includes(m.name) ? ' selected' : ''}" id="dex-met-${m.name}" onclick="dexToggleMet('${m.name}')" title="${m.agg}">
-          ${m.name}<span class="tag-type" style="font-size:9px;opacity:.6">${m.agg}</span>
-        </span>`
-        ).join('')
-      : '<span style="font-size:11px;color:var(--text-muted)">No known metrics for this dataset</span>';
-
-    // Populate date segment dropdown
-    const dateSegs = segs.filter(s => s.type === 'date');
-    const dateSel  = document.getElementById('dex-date-seg');
-    dateSel.innerHTML = '<option value="">(no date filter)</option>' +
-      dateSegs.map(s => `<option value="${s.name}">${s.name}</option>`).join('');
-    // Auto-select a sensible default
-    const preferredDate = ['JobStartDate','QuoteDate','InvoiceDate','ForecastDate','CreatedDate'];
-    for (const p of preferredDate) {
-      if (dateSegs.find(s => s.name === p)) { dateSel.value = p; break; }
+    // Default all fields to Display in _dexQuery
+    _dexQuery = new Map();
+    for (const f of segs) {
+      _dexQuery.set(f.name, { field: f, action: 'display' });
     }
 
-    // Sync dates from dashboard filter state
-    if (typeof _fcState !== 'undefined' && _fcState.values?.dateRange) {
-      const dr = _fcState.values.dateRange;
-      if (dr.dateFrom) document.getElementById('dex-date-from').value = dr.dateFrom;
-      if (dr.dateTo)   document.getElementById('dex-date-to').value   = dr.dateTo;
-    }
+    // Render unified field list
+    document.getElementById('dex-field-count').textContent = `${segs.length} field${segs.length !== 1 ? 's' : ''}`;
+    dexRenderFieldList(segs, '');
+    dexRenderChips();
 
-    // Sync yard from dashboard
-    dexSyncYardFilter(name, segs);
-
-    // Update query builder display
-    dexUpdateQBuilder();
-
-    dexUpdateQBuilder();
     lucide.createIcons({ el: document.getElementById('dex-panel') });
+
+    // Auto-run on dataset open — user clicks a dataset, they see the data
+    dexRunQuery();
   } catch(e) {
     document.getElementById('dex-panel-desc').textContent = 'Error loading schema: ' + e.message;
   }
 }
 
-async function dexLoadYardOptions() {
-  try {
-    const r = await apiFetch(`${BASE}/bi/segment-values?datasetName=jobs_profit_loss&segmentName=Yard&limit=100`);
-    const j = await r.json();
-    const vals = (j.data?.values || []).map(v => v.value || v);
-    const sel = document.getElementById('dex-yard-filter');
-    sel.innerHTML = '<option value="">All Yards</option>' +
-      vals.map(v => `<option value="${v}">${v}</option>`).join('');
-    // Pre-select yards from dashboard
-    const dashYards = typeof getSelectedYards === 'function' ? getSelectedYards() : [];
-    if (dashYards.length === 1) sel.value = dashYards[0];
-  } catch(e) {}
+// ── Explorer field model ─────────────────────────────────────────────────────
+// _dexQuery: Map<fieldName, { field, action }>
+// action: 'display' | 'group' | 'sum' | 'avg' | 'count' | 'min' | 'max'
+let _dexQuery = new Map();
+
+const DEX_ACTIONS_STRING = ['display','group','count'];
+const DEX_ACTIONS_NUMBER = ['display','group','sum','avg','count','min','max'];
+const DEX_ACTIONS_DATE   = ['display','group','count'];
+
+function dexDefaultAction(field) {
+  // Everything defaults to display — user changes as needed
+  return 'display';
 }
 
-function dexSyncYardFilter(dsName, segs) {
-  // Check if this dataset has a Yard segment
-  const hasYard = segs.some(s => s.name === 'Yard' || s.name === 'YardName');
-  const yardRow = document.getElementById('dex-yard-filter').closest('span, select')?.parentElement;
-  // Just leave the control visible always — it'll be ignored if Yard segment doesn't exist
+function dexActionsForField(field) {
+  if (field.type === 'number') return DEX_ACTIONS_NUMBER;
+  if (field.type === 'date')   return DEX_ACTIONS_DATE;
+  return DEX_ACTIONS_STRING;
 }
 
-function dexToggleSeg(name) {
-  const idx = _dexSelSegs.indexOf(name);
-  if (idx >= 0) { _dexSelSegs.splice(idx, 1); }
-  else           { _dexSelSegs.push(name); }
-  document.getElementById(`dex-seg-${name}`)?.classList.toggle('selected', _dexSelSegs.includes(name));
-  dexUpdateQBuilder();
+function dexTypeIcon(type) {
+  if (type === 'number') return '#';
+  if (type === 'date')   return '~';
+  return 'T';
 }
 
-function dexToggleMet(name) {
-  const idx = _dexSelMets.indexOf(name);
-  if (idx >= 0) { _dexSelMets.splice(idx, 1); }
-  else           { _dexSelMets.push(name); }
-  document.getElementById(`dex-met-${name}`)?.classList.toggle('selected', _dexSelMets.includes(name));
-  dexUpdateQBuilder();
+function dexRenderFieldList(fields, filterQ) {
+  const list = document.getElementById('dex-field-list');
+  const count = document.getElementById('dex-field-count');
+  if (!list) return;
+  const q = (filterQ || '').toLowerCase();
+  const visible = q ? fields.filter(f => f.name.toLowerCase().includes(q) || (f.label||'').toLowerCase().includes(q)) : fields;
+  count.textContent = `${fields.length} field${fields.length !== 1 ? 's' : ''}`;
+  list.innerHTML = visible.map(f => {
+    const inQ = _dexQuery.has(f.name);
+    return `<span class="dex-field-pill${inQ ? ' in-query' : ''}" id="dfp-${f.name}" onclick="dexToggleField('${f.name}')">
+      <span class="fp-type">${dexTypeIcon(f.type)}</span>${f.label || f.name}
+    </span>`;
+  }).join('');
 }
 
-function dexUpdateQBuilder() {
-  const gbWrap = document.getElementById('dex-qb-groupby');
-  const gbHint = document.getElementById('dex-qb-groupby-hint');
-  const mWrap  = document.getElementById('dex-qb-metrics');
-  const mHint  = document.getElementById('dex-qb-metrics-hint');
+function dexFilterFields(q) {
+  if (!_dexActive) return;
+  const allFields = [...(_dexActive.segments || [])];
+  dexRenderFieldList(allFields, q);
+}
 
-  // Group By chips
-  if (gbHint) gbHint.style.display = _dexSelSegs.length ? 'none' : '';
-  gbWrap.querySelectorAll('.dex-qb-chip').forEach(el => el.remove());
-  _dexSelSegs.forEach(s => {
+function dexToggleField(name) {
+  const field = (_dexActive?.segments || []).find(f => f.name === name);
+  if (!field) return;
+  if (_dexQuery.has(name)) {
+    _dexQuery.delete(name);
+  } else {
+    _dexQuery.set(name, { field, action: dexDefaultAction(field) });
+  }
+  dexRenderFieldList(_dexActive.segments || [], document.getElementById('dex-field-search')?.value || '');
+  dexRenderChips();
+}
+
+function dexChangeAction(name, action) {
+  const entry = _dexQuery.get(name);
+  if (entry) { entry.action = action; }
+}
+
+function dexRemoveChip(name) {
+  _dexQuery.delete(name);
+  dexRenderFieldList(_dexActive?.segments || [], document.getElementById('dex-field-search')?.value || '');
+  dexRenderChips();
+}
+
+function dexRenderChips() {
+  const builder = document.getElementById('dex-qbuilder');
+  const hint    = document.getElementById('dex-qbuilder-hint');
+  const btn     = document.getElementById('dex-run-btn');
+
+  // Remove existing chips (keep hint + controls div)
+  builder.querySelectorAll('.dex-qchip').forEach(el => el.remove());
+
+  const hasChips = _dexQuery.size > 0;
+  if (hint) hint.style.display = hasChips ? 'none' : '';
+  if (btn)  btn.disabled = !hasChips;
+
+  // Insert chips before the controls div (last child)
+  const controlsDiv = builder.lastElementChild;
+  for (const [name, entry] of _dexQuery) {
+    const actions = dexActionsForField(entry.field);
+    const opts = actions.map(a => `<option value="${a}"${a === entry.action ? ' selected' : ''}>${a.charAt(0).toUpperCase()+a.slice(1)}</option>`).join('');
     const chip = document.createElement('span');
-    chip.className = 'dex-qb-chip';
-    chip.style.cssText = 'display:inline-flex;align-items:center;gap:4px;background:rgba(0,51,102,.12);border-radius:12px;padding:2px 10px;font-size:11px;font-weight:600;color:var(--navy)';
-    chip.innerHTML = `${s} <span onclick="dexToggleSeg('${s}')" style="cursor:pointer;opacity:.5;font-size:11px;line-height:1;margin-left:2px">×</span>`;
-    gbWrap.appendChild(chip);
-  });
-
-  // Metric chips with SUM label
-  if (mHint) mHint.style.display = _dexSelMets.length ? 'none' : '';
-  mWrap.querySelectorAll('.dex-qb-chip').forEach(el => el.remove());
-  _dexSelMets.forEach(m => {
-    const chip = document.createElement('span');
-    chip.className = 'dex-qb-chip';
-    chip.style.cssText = 'display:inline-flex;align-items:center;gap:4px;background:rgba(0,191,165,.12);border-radius:12px;padding:2px 10px;font-size:11px;font-weight:600;color:var(--teal)';
-    const metObj = (_dexActive?.metrics || []).find(x => x.name === m);
-    const aggLabel = metObj?.agg || 'SUM';
-    chip.innerHTML = `${m} <span style="opacity:.45;font-size:10px;font-weight:400">${aggLabel}</span> <span onclick="dexToggleMet('${m}')" style="cursor:pointer;opacity:.5;font-size:11px;line-height:1;margin-left:2px">×</span>`;
-    mWrap.appendChild(chip);
-  });
+    chip.className = 'dex-qchip';
+    chip.dataset.field = name;
+    chip.innerHTML = `<span class="qc-name">${entry.field.label || name}</span><select onchange="dexChangeAction('${name}',this.value)" title="Action">${opts}</select><button class="qc-remove" onclick="dexRemoveChip('${name}')" title="Remove">×</button>`;
+    builder.insertBefore(chip, controlsDiv);
+  }
+  lucide.createIcons({ el: builder });
 }
+
+// Legacy compat stubs — kept so any old refs don't crash
+function dexToggleSeg(name) { dexToggleField(name); }
+function dexToggleMet(name) { dexToggleField(name); }
+function dexUpdateQBuilder() { dexRenderChips(); }
 
 function dexToggleQueryPreview() {
   const wrap = document.getElementById('dex-qp-body-wrap');
@@ -6881,7 +7739,7 @@ function dexShowQuery(endpoint, body) {
 }
 
 async function dexRunQuery() {
-  if (!_dexActive) return;
+  if (!_dexActive || _dexQuery.size === 0) return;
   const dsName = _dexActive.name;
   const btn = document.getElementById('dex-run-btn');
   btn.disabled = true;
@@ -6896,80 +7754,76 @@ async function dexRunQuery() {
     const dateFrom = document.getElementById('dex-date-from').value;
     const dateTo   = document.getElementById('dex-date-to').value;
     const dateSeg  = document.getElementById('dex-date-seg').value;
-    const yard     = document.getElementById('dex-yard-filter').value;
     const limit    = parseInt(document.getElementById('dex-limit').value) || 100;
 
     const filters = [];
     if (dateSeg) {
-      // >= start midnight, < day-after-end midnight
       filters.push(..._dateRangeFilters(dateSeg, dateFrom || null, dateTo || null));
     }
-    // Yard filter — detect correct segment name
-    if (yard) {
-      const segs = _dexActive.segments || [];
-      const yardSeg = segs.find(s => s.name === 'Yard') ? 'Yard'
-                    : segs.find(s => s.name === 'YardName') ? 'YardName' : null;
-      if (yardSeg) filters.push({ segmentName: yardSeg, operator: 'eq', value: yard });
+
+    // ── Classify chips by action ──
+    const displayFields = [];
+    const groupFields   = [];
+    const aggMetrics    = [];
+
+    for (const [name, entry] of _dexQuery) {
+      const action = entry.action;
+      if (action === 'display') {
+        displayFields.push(name);
+      } else if (action === 'group') {
+        groupFields.push(name);
+      } else {
+        // sum / avg / count / min / max
+        aggMetrics.push({ metricName: name, aggregation: action.toUpperCase(), alias: name });
+      }
     }
 
+    const hasGroup = groupFields.length > 0;
+    const hasAgg   = aggMetrics.length > 0;
+
     let data, meta;
-    // Guard: metrics need at least one groupBy segment
-    if (_dexSelMets.length > 0 && _dexSelSegs.length === 0) {
-      document.getElementById('dex-table-wrap').innerHTML =
-        '<div class="dex-no-data" style="color:var(--amber)">Pick at least one segment to group by — e.g. Yard, SalesPerson, or Status.</div>';
-      document.getElementById('dex-results-meta').textContent = 'Select a Group By dimension';
-      btn.disabled = false;
-      btn.innerHTML = '<i data-lucide="play" style="width:13px;height:13px"></i> Run Query';
-      lucide.createIcons({ el: btn });
-      return;
-    }
-    if (_dexSelMets.length === 0 && _dexSelSegs.length === 0) {
-      // Raw browse — use /bi/query with no groupBy or metrics to get sample rows
-      // Build body with all known metrics and first few segs as groupBy
-      const defaultSegs = (_dexActive.segments || []).slice(0,4).map(s => s.name);
-      const defaultMets = (DEX_METRICS[dsName] || []).slice(0,5);
+
+    if (!hasGroup && !hasAgg) {
+      // ── Pure display → raw scan ──
       const body = {
         datasetName: dsName,
-        groupBySegments: defaultSegs,
-        metrics: defaultMets.map(m => {
-          const mo = (_dexActive?.metrics||[]).find(x=>x.name===m);
-          return { metricName: m, aggregation: mo?.agg||'SUM', alias: m };
-        }),
-        filters, limit
-      };
-      dexShowQuery(`${BASE_URL}/bi/query`, body);
-      const r = await apiFetch(`${BASE}/bi/query`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
-      const j = await r.json();
-      data = j.data?.data || [];
-      meta = j.data?.metadata;
-    } else if (_dexSelMets.length === 0) {
-      // Segment-only: segment values
-      const body = {
-        datasetName: dsName,
-        groupBySegments: _dexSelSegs,
+        groupBySegments: [],
         metrics: [],
         filters, limit
       };
       dexShowQuery(`${BASE_URL}/bi/query`, body);
       const r = await apiFetch(`${BASE}/bi/query`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
       const j = await r.json();
-      data = j.data?.data || [];
+      // Trim columns to only the display chips (in chip order)
+      const rawRows = j.data?.data || [];
+      data = rawRows.map(row => {
+        const out = {};
+        for (const f of displayFields) if (f in row) out[f] = row[f];
+        return out;
+      });
       meta = j.data?.metadata;
-    } else {
-      // Full query
-      // When aggregating with metrics, exclude date segments from groupBy
-      // (date columns as groupBy with SUM metrics = too granular, returns empty)
-      const dateSegNames = (_dexActive.segments || []).filter(s => s.type === 'date').map(s => s.name);
-      const groupSegs = _dexSelSegs.filter(s => !dateSegNames.includes(s));
+
+    } else if (hasAgg && !hasGroup) {
+      // ── Agg only → single KPI row ──
       const body = {
         datasetName: dsName,
-        groupBySegments: groupSegs.length ? groupSegs : _dexSelSegs,
-        metrics: _dexSelMets.map(m => {
-          const mo = (_dexActive?.metrics||[]).find(x=>x.name===m);
-          return { metricName: m, aggregation: mo?.agg||'SUM', alias: m };
-        }),
-        filters, limit,
-        orderBy: _dexSelMets.length ? [{ field: _dexSelMets[0], direction: 'DESC' }] : undefined
+        groupBySegments: [],
+        metrics: aggMetrics,
+        filters, limit
+      };
+      dexShowQuery(`${BASE_URL}/bi/query`, body);
+      const r = await apiFetch(`${BASE}/bi/query`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+      const j = await r.json();
+      data = j.data?.data || [];
+      meta = j.data?.metadata;
+
+    } else {
+      // ── Grouped query ──
+      const body = {
+        datasetName: dsName,
+        groupBySegments: groupFields,
+        metrics: aggMetrics,
+        filters, limit
       };
       dexShowQuery(`${BASE_URL}/bi/query`, body);
       const r = await apiFetch(`${BASE}/bi/query`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
@@ -7006,12 +7860,11 @@ function dexRenderTable(rows, meta) {
   }
 
   document.getElementById('dex-export-btn').style.display = '';
-  // Order columns: groupBy segments in click order, then metrics, then anything else
-  const rawCols = Object.keys(rows[0]);
-  const groupCols = _dexSelSegs.filter(c => rawCols.includes(c));
-  const metCols   = _dexSelMets.filter(c => rawCols.includes(c));
-  const restCols  = rawCols.filter(c => !groupCols.includes(c) && !metCols.includes(c));
-  const cols = [...groupCols, ...metCols, ...restCols];
+  // Order columns: chip order first, then anything else from the response
+  const rawCols  = Object.keys(rows[0]);
+  const chipCols = [..._dexQuery.keys()].filter(c => rawCols.includes(c));
+  const restCols = rawCols.filter(c => !chipCols.includes(c));
+  const cols = [...chipCols, ...restCols];
   const isNumCol = col => rows.every(r => r[col] === null || r[col] === '' || (!isNaN(parseFloat(r[col])) && !/[a-zA-Z]/.test(String(r[col]))));
   const numCols = new Set(cols.filter(isNumCol));
   const DATE_COL = /date|Date/i;
@@ -7881,11 +8734,28 @@ function _showToast(msg, type='success') {
     document.body.appendChild(t);
   }
   t.textContent = msg;
-  t.style.background = type === 'success' ? '#00BFA5' : '#ef4444';
+  t.style.background = type === 'error' ? '#ef4444' : type === 'info' ? '#2176c7' : '#00BFA5';
   t.style.color = '#fff';
   t.style.opacity = '1';
   clearTimeout(t._to);
   t._to = setTimeout(() => { t.style.opacity = '0'; }, 2500);
+}
+
+/** Global toast — used throughout Designer/NDS flows. */
+function ddnlToast(msg, type='success', duration=3000) {
+  let t = document.getElementById('_ddnl-toast');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = '_ddnl-toast';
+    t.style.cssText = 'position:fixed;bottom:64px;right:24px;z-index:9999;padding:11px 20px;border-radius:10px;font-size:13px;font-weight:600;pointer-events:none;transition:opacity .3s;opacity:0;box-shadow:0 4px 20px rgba(0,0,0,.22);max-width:420px;word-break:break-word';
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  t.style.background = type === 'error' ? '#ef4444' : type === 'info' ? '#2176c7' : '#065f46';
+  t.style.color = '#fff';
+  t.style.opacity = '1';
+  clearTimeout(t._to);
+  t._to = setTimeout(() => { t.style.opacity = '0'; }, duration);
 }
 
 // Initial load happens in myDashInit
@@ -9689,13 +10559,14 @@ async function dsgnLoadAll() {
 
 function dsgnTab(tab) {
   _dsgnTab = tab;
-  ['datasets','lookups','fiscal'].forEach(t => {
+  ['datasets','lookups','fiscal','webhooks'].forEach(t => {
     document.getElementById('dsgn-nav-' + t)?.classList.toggle('active', t === tab);
   });
   const main = document.getElementById('dsgn-main');
   if (tab === 'datasets') dsgnRenderDatasets(main);
   if (tab === 'lookups')  dsgnRenderLookups(main);
   if (tab === 'fiscal')   dsgnRenderFiscal(main);
+  if (tab === 'webhooks') dsgnRenderWebhooks(main);
   lucide.createIcons();
 }
 
@@ -9711,19 +10582,26 @@ function dsgnRenderDatasets(main) {
 
   let html = `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
     <div>
-      <div style="font-size:18px;font-weight:700;color:var(--navy)">Datasets</div>
+      <div style="font-size:18px;font-weight:700;color:var(--text)">Datasets</div>
       <div style="font-size:13px;color:var(--text-muted);margin-top:3px">Configure field labels, formats, and lookup relationships</div>
     </div>
+    <button class="dsgn-save-btn" style="font-size:12px;padding:7px 16px" onclick="dsgnNewDataset()">
+      <i data-lucide="plus" style="width:13px;height:13px;vertical-align:-2px"></i> New Dataset
+    </button>
   </div>`;
 
   for (const ds of _dsgnDatasets) {
     // List endpoint returns segmentCount/metricCount — no fields array until detail is loaded
     const segs = ds.segmentCount ?? ds.fields?.filter(f => f.fieldType === 'segment').length ?? 0;
     const mets = ds.metricCount  ?? ds.fields?.filter(f => f.fieldType === 'metric').length  ?? 0;
+    const hiddenFromExplorer = ds.showOnExplorer === false;
     html += `<div class="dsgn-ds-card" onclick="dsgnOpenDataset('${ds.name}')">
       <div style="display:flex;align-items:center;justify-content:space-between">
         <div class="dsgn-ds-name">${ds.label || ds.name}</div>
-        <i data-lucide="chevron-right" style="width:16px;height:16px;color:var(--text-muted)"></i>
+        <div style="display:flex;align-items:center;gap:8px">
+          ${hiddenFromExplorer ? '<span title="Hidden from Explorer" style="font-size:10px;font-weight:600;color:var(--text-muted);background:var(--surface2);border:1px solid var(--border);padding:1px 7px;border-radius:10px">hidden</span>' : ''}
+          <i data-lucide="chevron-right" style="width:16px;height:16px;color:var(--text-muted)"></i>
+        </div>
       </div>
       <div class="dsgn-ds-meta" style="margin-top:6px">
         <span class="dsgn-pill seg">${segs} segments</span>
@@ -9735,6 +10613,378 @@ function dsgnRenderDatasets(main) {
 
   main.innerHTML = html;
   lucide.createIcons();
+}
+
+// ── New Dataset — file upload flow ────────────────────────────────────────────────
+let _ndsFile     = null;  // File object from picker
+let _ndsParsed   = null;  // { columns, preview, total_rows, filename }
+let _ndsName     = '';    // immutable internal key (auto-generated)
+let _ndsLabel    = '';    // user-facing display name
+let _ndsPkFields = [];    // primary key field names
+
+function _ndsGenKey() {
+  // ds_ + 8 random hex chars — immutable internal identifier
+  const arr = new Uint8Array(4);
+  crypto.getRandomValues(arr);
+  return 'ds_' + Array.from(arr).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+function dsgnNewDataset() {
+  const main = document.getElementById('dsgn-main');
+  _ndsFile = null; _ndsParsed = null; _ndsName = ''; _ndsLabel = ''; _ndsPkFields = [];
+  main.innerHTML = `
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:24px">
+      <button class="dsgn-cancel-btn" onclick="dsgnRenderDatasets(document.getElementById('dsgn-main'))">
+        <i data-lucide="arrow-left" style="width:13px;height:13px;vertical-align:-2px"></i> Datasets
+      </button>
+      <div>
+        <div style="font-size:18px;font-weight:700;color:var(--text)">New Dataset</div>
+        <div style="font-size:12px;color:var(--text-muted)">Upload a file to define and populate a dataset</div>
+      </div>
+    </div>
+
+    <!-- Step 1: Upload -->
+    <div id="nds-step-upload">
+      <div id="nds-dropzone"
+        style="border:2.5px dashed var(--border);border-radius:14px;padding:60px 40px;text-align:center;
+               background:var(--surface2);cursor:pointer;transition:border-color .15s"
+        onclick="document.getElementById('nds-file-input').click()"
+        ondragover="event.preventDefault();this.style.borderColor='var(--teal)'"
+        ondragleave="this.style.borderColor='var(--border)'"
+        ondrop="event.preventDefault();this.style.borderColor='var(--border)';ndsHandleDrop(event)">
+        <i data-lucide="upload-cloud" style="width:40px;height:40px;color:var(--teal);margin-bottom:12px"></i>
+        <div style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:6px">Drop a file here or click to browse</div>
+        <div style="font-size:12px;color:var(--text-muted)">CSV, TSV, Excel (.xlsx / .xls), JSON · Up to 50 MB</div>
+        <input type="file" id="nds-file-input" style="display:none"
+          accept=".csv,.tsv,.txt,.xlsx,.xls,.ods,.json"
+          onchange="ndsHandleFile(this.files[0])">
+      </div>
+      <div id="nds-upload-status" style="margin-top:12px;font-size:13px;text-align:center;color:var(--text-muted)"></div>
+    </div>
+
+    <!-- Step 2: Define (hidden until file parsed) -->
+    <div id="nds-step-define" style="display:none"></div>`;
+
+  lucide.createIcons();
+}
+
+function ndsHandleDrop(e) {
+  const file = e.dataTransfer.files?.[0];
+  if (file) ndsHandleFile(file);
+}
+
+async function ndsHandleFile(file) {
+  if (!file) return;
+  _ndsFile = file;
+  const status = document.getElementById('nds-upload-status');
+  const dropzone = document.getElementById('nds-dropzone');
+  status.textContent = `Parsing ${file.name}...`;
+  status.style.color = 'var(--text-muted)';
+  dropzone.style.borderColor = 'var(--teal)';
+
+  const fd = new FormData();
+  fd.append('file', file);
+
+  try {
+    const r = await fetch('/api/ingest/admin/datasets/parse-file', {
+      method: 'POST',
+      headers: { 'Authorization': 'Basic ' + btoa('ddnl:ddnl!') },
+      body: fd,
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || 'Parse failed');
+
+    _ndsParsed = j;
+    status.textContent = '';
+    dropzone.style.borderColor = 'var(--border)';
+    ndsRenderDefine();
+  } catch(e) {
+    status.textContent = 'Error: ' + e.message;
+    status.style.color = 'var(--red)';
+    dropzone.style.borderColor = 'var(--red)';
+  }
+}
+
+function ndsRenderDefine() {
+  const p = _ndsParsed;
+  const step = document.getElementById('nds-step-define');
+  step.style.display = 'block';
+
+  // Auto-suggest display label from filename
+  const suggestedLabel = (_ndsFile?.name || 'Dataset')
+    .replace(/\.[^.]+$/, '')
+    .replace(/[_-]+/g, ' ')
+    .replace(/\b\w/g, c => c.toUpperCase());
+  if (!_ndsLabel) _ndsLabel = suggestedLabel;
+  // Generate immutable key if not yet set
+  if (!_ndsName) _ndsName = _ndsGenKey();
+
+  const colRows = p.columns.map((col, i) => `
+    <tr class="bg-row${i%2===1?' bg-row-stripe':''}">
+      <td class="bg-td" style="width:32px;text-align:center">
+        <input type="checkbox" id="nds-col-include-${i}" checked
+          style="width:15px;height:15px;cursor:pointer" onchange="ndsToggleCol(${i})">
+      </td>
+      <td class="bg-td" style="font-family:monospace;font-size:12px;color:var(--text-muted)">${escHtml(col.source_name)}</td>
+      <td class="bg-td">
+        <input id="nds-col-name-${i}" class="dsgn-finput" style="width:100%;font-size:12px;padding:4px 8px"
+          value="${escHtml(col.name)}">
+      </td>
+      <td class="bg-td">
+        <input id="nds-col-label-${i}" class="dsgn-finput" style="width:100%;font-size:12px;padding:4px 8px"
+          value="${escHtml(col.label)}">
+      </td>
+      <td class="bg-td">
+        <select id="nds-col-type-${i}" class="dsgn-fselect" style="font-size:12px;padding:4px 8px">
+          ${['text','number','date','boolean'].map(t =>
+            `<option value="${t}" ${col.type===t?'selected':''}>${t}</option>`).join('')}
+        </select>
+      </td>
+      <td class="bg-td">
+        <input type="checkbox" id="nds-col-pk-${i}" ${_ndsPkFields.includes(col.name)?'checked':''}
+          style="width:15px;height:15px;cursor:pointer" onchange="ndsTogglePk(${i})">
+      </td>
+      <td class="bg-td" style="font-size:11px;color:var(--text-muted);max-width:160px">
+        ${col.sample.map(s => `<span style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:1px 5px;font-size:10px;white-space:nowrap">${escHtml(String(s))}</span>`).join(' ')}
+      </td>
+    </tr>`).join('');
+
+  // Preview table headers from first column names
+  const previewHeaders = p.columns.filter(c=>c.include!==false).slice(0,8).map(c =>
+    `<th class="bg-th"><div class="bg-th-inner" style="font-size:11px">${escHtml(c.label)}</div></th>`).join('');
+  const previewRows = p.preview.map(row => {
+    const cells = p.columns.filter(c=>c.include!==false).slice(0,8)
+      .map(c => `<td class="bg-td" style="font-size:11px;white-space:nowrap;max-width:120px;overflow:hidden;text-overflow:ellipsis">${escHtml(String(row[c.name] ?? ''))}</td>`).join('');
+    return `<tr class="bg-row">${cells}</tr>`;
+  }).join('');
+
+  step.innerHTML = `
+    <div style="border-top:2px solid var(--border);margin-top:24px;padding-top:24px">
+
+      <!-- Dataset name + total rows -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px">
+        <div>
+          <label class="wh-label">Display Name</label>
+          <input id="nds-label" class="dsgn-finput" style="width:100%;box-sizing:border-box"
+            value="${escHtml(_ndsLabel)}" placeholder="e.g. Customer Sales 2024" oninput="_ndsLabel=this.value">
+          <div style="margin-top:5px;font-size:11px;color:var(--text-muted)">Internal key auto-generated &mdash; you can always rename the display name later.</div>
+        </div>
+        <div style="display:flex;align-items:flex-end;gap:8px">
+          <div style="background:var(--surface2);border:1.5px solid var(--border);border-radius:8px;padding:10px 16px;flex:1;text-align:center">
+            <div style="font-size:22px;font-weight:700;color:var(--text)">${p.total_rows.toLocaleString()}</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:2px">rows in ${escHtml(p.filename)}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Column definitions -->
+      <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:10px">Column Definitions</div>
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px">Review detected types, rename fields, and mark primary key column(s).</div>
+      <div class="bg-table-scroll nds-bg-grid" style="background:var(--surface);border:1.5px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:24px">
+        <table class="bg-table" style="width:100%">
+          <thead class="bg-thead">
+            <tr>
+              <th class="bg-th" style="width:32px"><div class="bg-th-inner"></div></th>
+              <th class="bg-th"><div class="bg-th-inner">Source Column</div></th>
+              <th class="bg-th"><div class="bg-th-inner">Field Name</div></th>
+              <th class="bg-th"><div class="bg-th-inner">Label</div></th>
+              <th class="bg-th"><div class="bg-th-inner">Type</div></th>
+              <th class="bg-th" style="width:40px" title="Primary Key"><div class="bg-th-inner">PK</div></th>
+              <th class="bg-th"><div class="bg-th-inner">Samples</div></th>
+            </tr>
+          </thead>
+          <tbody>${colRows}</tbody>
+        </table>
+      </div>
+
+      <!-- Data preview -->
+      <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:10px">Data Preview <span style="font-weight:400;font-size:12px;color:var(--text-muted)">(first 10 rows)</span></div>
+      <div class="bg-table-scroll nds-bg-grid" style="background:var(--surface);border:1.5px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:28px">
+        <table class="bg-table" style="width:100%">
+          <thead class="bg-thead"><tr>${previewHeaders}</tr></thead>
+          <tbody>${previewRows}</tbody>
+        </table>
+      </div>
+
+      <!-- _status system field note + mapping -->
+      <div style="margin-bottom:16px;padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text-muted);display:flex;align-items:flex-start;gap:8px">
+        <i data-lucide="shield-check" style="width:13px;height:13px;flex-shrink:0;color:var(--teal);margin-top:1px"></i>
+        <div>System field <code style="font-size:11px;background:var(--surface);padding:1px 5px;border-radius:4px;border:1px solid var(--border)">_status</code>
+        auto-added to every record — <strong>active</strong> / <strong>deleted</strong> / <strong>archived</strong>.
+        All queries suppress non-active records at the ES level.</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
+        <label class="wh-label" style="white-space:nowrap;margin:0;font-size:12px">Map status from column</label>
+        <select id="nds-status-col" class="dsgn-fselect" style="flex:1;font-size:12px">
+          <option value="">(none — all rows default to active)</option>
+          ${p.columns.map(c=>`<option value="${escHtml(c.source_name)}">${escHtml(c.source_name)}</option>`).join('')}
+        </select>
+        <div style="font-size:11px;color:var(--text-muted);white-space:nowrap">active/enabled/1 → active &nbsp;·&nbsp; deleted/inactive/0 → deleted</div>
+      </div>
+
+      <!-- Actions -->
+      <div style="display:flex;align-items:center;justify-content:flex-end;gap:12px">
+        <div style="font-size:12px;color:var(--text-muted);flex:1">
+          <i data-lucide="info" style="width:12px;height:12px;vertical-align:-1px"></i>
+          Saves schema only — use <strong>Import Data</strong> on the dataset card to load rows.
+        </div>
+        <button class="dsgn-cancel-btn" onclick="dsgnRenderDatasets(document.getElementById('dsgn-main'))">Cancel</button>
+        <button class="dsgn-save-btn" id="nds-save-btn" onclick="ndsSaveDataset()">
+          <i data-lucide="save" style="width:13px;height:13px;vertical-align:-2px"></i>
+          Save Dataset
+        </button>
+      </div>
+    </div>`;
+
+  lucide.createIcons({ el: step });
+}
+
+function ndsToggleCol(i) {
+  if (_ndsParsed) _ndsParsed.columns[i].include = document.getElementById(`nds-col-include-${i}`)?.checked;
+}
+
+function ndsTogglePk(i) {
+  const col  = _ndsParsed?.columns[i];
+  if (!col) return;
+  const name = document.getElementById(`nds-col-name-${i}`)?.value || col.name;
+  const checked = document.getElementById(`nds-col-pk-${i}`)?.checked;
+  if (checked) { if (!_ndsPkFields.includes(name)) _ndsPkFields.push(name); }
+  else         { _ndsPkFields = _ndsPkFields.filter(f => f !== name); }
+}
+
+/** Collect current column map from the define UI. */
+function ndsCollectColMap() {
+  return (_ndsParsed?.columns || []).map((col, i) => ({
+    source_name: col.source_name,
+    name:        document.getElementById(`nds-col-name-${i}`)?.value.trim()  || col.name,
+    label:       document.getElementById(`nds-col-label-${i}`)?.value.trim() || col.label,
+    type:        document.getElementById(`nds-col-type-${i}`)?.value         || col.type,
+    include:     document.getElementById(`nds-col-include-${i}`)?.checked !== false,
+    nullable:    col.nullable,
+  }));
+}
+
+/** Collect PK fields from define UI checkboxes. */
+function ndsCollectPk(colMap) {
+  return (colMap || ndsCollectColMap())
+    .filter((_, i) => document.getElementById(`nds-col-pk-${i}`)?.checked)
+    .map(c => c.name);
+}
+
+/**
+ * Step 2 action: Save dataset schema only. No data ingested.
+ * Calls POST /api/ingest/admin/datasets/:name/define
+ */
+async function ndsSaveDataset() {
+  const btn   = document.getElementById('nds-save-btn');
+
+  // label = user-visible display name from the input
+  const label = (document.getElementById('nds-label')?.value || _ndsLabel || '').trim();
+  if (!label) { alert('Display name is required.'); return; }
+
+  // name = immutable internal key, auto-generated at define-time (never editable)
+  const name = _ndsName || _ndsGenKey();
+
+  const colMap   = ndsCollectColMap();
+  const pkFields = ndsCollectPk(colMap);
+  const included = colMap.filter(c => c.include !== false);
+  if (!included.length) { alert('Select at least one column.'); return; }
+
+  const fields = included.map((c, i) => ({
+    name:        c.name,
+    label:       c.label || c.name,
+    type:        c.type  || 'text',
+    order:       i,
+    required:    !c.nullable,
+    source_name: c.source_name,
+  }));
+
+  const statusCol = document.getElementById('nds-status-col')?.value || '';
+
+  btn.disabled    = true;
+  btn.textContent = 'Saving...';
+
+  try {
+    const r = await fetch(`/api/ingest/admin/datasets/${encodeURIComponent(name)}/define`, {
+      method:  'POST',
+      headers: { 'Authorization': 'Basic ' + btoa('ddnl:ddnl!'), 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ label, fields, primary_key_fields: pkFields, status_source_field: statusCol || null }),
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || 'Save failed');
+
+    await dsgnLoadAll();
+    dsgnRenderDatasets(document.getElementById('dsgn-main'));
+    ddnlToast(`Dataset '${label}' saved — use Import Data on the card to load rows.`, 'success', 5000);
+  } catch(e) {
+    alert('Save failed: ' + e.message);
+    btn.disabled = false;
+    btn.innerHTML = '<i data-lucide="save" style="width:13px;height:13px;vertical-align:-2px"></i> Save Dataset';
+    lucide.createIcons({ el: btn });
+  }
+}
+
+/**
+ * Import Data: triggered from a dataset card.
+ * Opens a file picker, parses, then ingests into the existing dataset.
+ */
+async function ndsImportData(dsName, pkFields) {
+  const input = document.createElement('input');
+  input.type   = 'file';
+  input.accept = '.csv,.tsv,.txt,.xlsx,.xls,.ods,.json';
+  input.style.display = 'none';
+  document.body.appendChild(input);
+
+  input.onchange = async () => {
+    const file = input.files?.[0];
+    input.remove();
+    if (!file) return;
+
+    ddnlToast(`Parsing ${file.name}…`, 'info');
+
+    const fd = new FormData();
+    fd.append('file', file);
+    let parsed;
+    try {
+      const r = await fetch('/api/ingest/admin/datasets/parse-file', {
+        method:  'POST',
+        headers: { 'Authorization': 'Basic ' + btoa('ddnl:ddnl!') },
+        body: fd,
+      });
+      parsed = await r.json();
+      if (!r.ok) throw new Error(parsed.error || 'Parse failed');
+    } catch(e) { ddnlToast('Parse failed: ' + e.message, 'error'); return; }
+
+    ddnlToast(`Importing ${parsed.total_rows.toLocaleString()} rows into '${dsName}'…`, 'info');
+
+    const colMap = parsed.columns.map(c => ({
+      source_name: c.source_name,
+      name:        c.name,
+      label:       c.label,
+      type:        c.type,
+      include:     true,
+    }));
+
+    const fd2 = new FormData();
+    fd2.append('file',               file);
+    fd2.append('column_map',         JSON.stringify(colMap));
+    fd2.append('primary_key_fields', JSON.stringify(pkFields || []));
+
+    try {
+      const r = await fetch(`/api/ingest/admin/datasets/${encodeURIComponent(dsName)}/import-file`, {
+        method:  'POST',
+        headers: { 'Authorization': 'Basic ' + btoa('ddnl:ddnl!') },
+        body:    fd2,
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || 'Import failed');
+      await dsgnLoadAll();
+      dsgnRenderDatasets(document.getElementById('dsgn-main'));
+      ddnlToast(`✓ Imported ${j.upserted.toLocaleString()} rows into '${dsName}'${j.failed ? ` (${j.failed} failed)` : ''}`, 'success', 6000);
+    } catch(e) { ddnlToast('Import failed: ' + e.message, 'error'); }
+  };
+
+  input.click();
 }
 
 async function dsgnOpenDataset(name) {
@@ -9752,17 +11002,31 @@ async function dsgnOpenDataset(name) {
         const dj = await dr.json();
         const data = dj.data || dj;
         // Normalize to a flat fields array: { name, label, fieldType }
-        const segs = (data.segments || data.dataset?.datasetSegments || []).map(s => ({
-          name:      s.segmentName || s.segment?.segmentName,
-          label:     s.displayAlias || s.segmentName || s.segment?.segmentName,
-          fieldType: 'segment',
-        }));
-        const mets = (data.metrics || []).map(m => ({
-          name:      m.metricName,
-          label:     m.displayAlias || m.metricName,
-          fieldType: 'metric',
-        }));
-        ds._fields = [...segs, ...mets];
+        // Handles both publish-flow (segments/metrics) and file-import-flow (raw fields array)
+        if (data.segments || data.dataset?.datasetSegments) {
+          // Publish-flow / BI format
+          const segs = (data.segments || data.dataset?.datasetSegments || []).map(s => ({
+            name:      s.segmentName || s.segment?.segmentName,
+            label:     s.displayAlias || s.segmentName || s.segment?.segmentName,
+            fieldType: 'segment',
+          }));
+          const mets = (data.metrics || []).map(m => ({
+            name:      m.metricName,
+            label:     m.displayAlias || m.metricName,
+            fieldType: 'metric',
+          }));
+          ds._fields = [...segs, ...mets];
+        } else if (Array.isArray(data.fields)) {
+          // File-import-flow: raw fields array with { name, label, type }
+          // number fields → metric, everything else → segment
+          ds._fields = data.fields.map(f => ({
+            name:      f.name,
+            label:     f.label || f.name,
+            fieldType: f.fieldType || (f.type === 'number' ? 'metric' : 'segment'),
+          }));
+        } else {
+          ds._fields = [];
+        }
       } else {
         ds._fields = [];
       }
@@ -9797,7 +11061,15 @@ function dsgnRenderFieldEditor(main, ds) {
   ].map(([v,l]) => `<option value="${v}">${l}</option>`).join('');
 
   if (!fields.length) {
-    main.innerHTML = `<div style="padding:60px;text-align:center;color:var(--text-muted);font-size:13px">No fields found for this dataset.</div>`;
+    main.innerHTML = `
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+        <button class="dsgn-cancel-btn" onclick="dsgnBackToList()">
+          <i data-lucide="arrow-left" style="width:13px;height:13px;vertical-align:-2px"></i> Datasets
+        </button>
+        <div style="font-size:18px;font-weight:700;color:var(--text)">${ds.label || ds.name}</div>
+      </div>
+      <div style="padding:60px;text-align:center;color:var(--text-muted);font-size:13px">No fields found for this dataset.</div>`;
+    lucide.createIcons();
     return;
   }
 
@@ -9807,7 +11079,7 @@ function dsgnRenderFieldEditor(main, ds) {
     const hasLookup = !!m.lookup_dataset_id;
     return `<tr class="dsgn-field-row ${hasLookup ? 'has-lookup' : ''}" data-field="${f.name}">
       <td>
-        <div style="font-weight:600;color:var(--navy);font-size:12.5px">${f.name}</div>
+        <div style="font-weight:600;color:var(--text);font-size:12.5px">${f.name}</div>
         <div style="margin-top:2px">
           <span class="dsgn-pill ${isMetric ? 'met' : 'seg'}" style="font-size:10px">${f.fieldType}</span>
           ${hasLookup ? '<span class="dsgn-pill lkp" style="font-size:10px">linked</span>' : ''}
@@ -9843,17 +11115,38 @@ function dsgnRenderFieldEditor(main, ds) {
     </tr>`;
   }).join('');
 
+  const showOnExplorer = ds.showOnExplorer !== false; // default true
+
   main.innerHTML = `
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
       <button class="dsgn-cancel-btn" onclick="dsgnBackToList()">
         <i data-lucide="arrow-left" style="width:13px;height:13px;vertical-align:-2px"></i> Datasets
       </button>
       <div>
-        <div style="font-size:18px;font-weight:700;color:var(--navy)">${ds.label || ds.name}</div>
+        <div style="font-size:18px;font-weight:700;color:var(--text)">${ds.label || ds.name}</div>
         <div style="font-size:12px;color:var(--text-muted)">Edit field metadata — labels, formats, lookup relationships</div>
       </div>
     </div>
-    <div style="overflow-x:auto;background:#fff;border:1.5px solid var(--border);border-radius:10px">
+
+    <!-- Dataset Settings -->
+    <div style="background:var(--surface);border:1.5px solid var(--border);border-radius:10px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;gap:24px">
+      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);flex-shrink:0">Settings</div>
+      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none">
+        <div style="position:relative;width:36px;height:20px;flex-shrink:0">
+          <input type="checkbox" id="dsgn-toggle-explorer" ${showOnExplorer ? 'checked' : ''}
+            style="opacity:0;width:0;height:0;position:absolute"
+            onchange="dsgnToggleExplorer('${ds.name}', this.checked)">
+          <span id="dsgn-toggle-explorer-track" style="position:absolute;inset:0;border-radius:20px;background:${showOnExplorer ? 'var(--teal)' : 'var(--border)'};transition:background .2s"></span>
+          <span style="position:absolute;top:3px;left:${showOnExplorer ? '19' : '3'}px;width:14px;height:14px;border-radius:50%;background:#fff;transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,.2)" id="dsgn-toggle-explorer-thumb"></span>
+        </div>
+        <div>
+          <div style="font-size:13px;font-weight:600;color:var(--text)">Show on Explorer</div>
+          <div style="font-size:11px;color:var(--text-muted)">When off, this dataset is hidden from the Explorer list</div>
+        </div>
+      </label>
+    </div>
+
+    <div style="overflow-x:auto;background:var(--surface);border:1.5px solid var(--border);border-radius:10px">
       <table class="dsgn-field-table">
         <thead>
           <tr>
@@ -9908,6 +11201,742 @@ function dsgnBackToList() {
   lucide.createIcons();
 }
 
+async function dsgnToggleExplorer(dsName, checked) {
+  // Animate the toggle track + thumb immediately for responsiveness
+  const track = document.getElementById('dsgn-toggle-explorer-track');
+  const thumb = document.getElementById('dsgn-toggle-explorer-thumb');
+  if (track) track.style.background = checked ? 'var(--teal)' : 'var(--border)';
+  if (thumb) thumb.style.left = checked ? '19px' : '3px';
+
+  try {
+    const r = await apiFetch(`${BASE}/bi/datasets/${dsName}/settings`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ show_on_explorer: checked })
+    });
+    if (!r.ok) throw new Error(await r.text());
+    // Update cached dataset entry so the state survives navigation
+    const ds = _dsgnDatasets.find(d => d.name === dsName);
+    if (ds) ds.showOnExplorer = checked;
+    // Also invalidate Explorer cache so it re-fetches on next visit
+    _dexInited = false;
+    ddnlToast(`Explorer visibility ${checked ? 'enabled' : 'disabled'} for ${dsName}`, 'success', 2500);
+  } catch(e) {
+    // Revert toggle on failure
+    if (track) track.style.background = checked ? 'var(--border)' : 'var(--teal)';
+    if (thumb) thumb.style.left = checked ? '3px' : '19px';
+    ddnlToast('Failed to update setting: ' + e.message, 'error', 3000);
+  }
+}
+// ═══════════════════════════════════════════════════════════════════════════
+// ── Webhooks ──────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+
+let _webhooks      = [];
+let _webhookDs     = [];  // dataset list for picker
+let _whEditId      = null; // null = new, number = editing
+
+async function dsgnRenderWebhooks(main) {
+  main.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-muted);font-size:13px">Loading...</div>';
+  try {
+    const whRes = await apiFetch('/api/ingest/admin/webhooks').then(r => r.json());
+    _webhooks  = whRes.webhooks  || [];
+    // Reuse datasets already loaded by dsgnLoadAll — no extra API call needed
+    _webhookDs = _dsgnDatasets || [];
+    document.getElementById('dsgn-badge-webhooks').textContent = _webhooks.length || '0';
+  } catch(e) {
+    main.innerHTML = `<div style="padding:40px;text-align:center;color:var(--red)">${e.message}</div>`;
+    return;
+  }
+  whRenderList(main);
+}
+
+function whRenderList(main) {
+  const rows = _webhooks.map(wh => `
+    <tr class="dsgn-field-row">
+      <td>
+        <div style="display:flex;align-items:center;gap:6px" id="wh-name-cell-${wh.id}">
+          <span style="font-weight:600;color:var(--text);font-size:13px" id="wh-name-text-${wh.id}">${escHtml(wh.name)}</span>
+          <button class="dsgn-cancel-btn" style="padding:2px 5px;opacity:.55;flex-shrink:0" title="Rename"
+            onclick="whInlineRename(${wh.id})">
+            <i data-lucide="pencil" style="width:11px;height:11px;vertical-align:-1px"></i>
+          </button>
+        </div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:2px;display:flex;align-items:center;gap:6px">
+          ${escHtml(wh.dataset_label || wh.dataset_name)}
+          <span style="background:${(wh.endpoint_url||'').startsWith('callback')?'#fef3c7':'#eff6ff'};color:${(wh.endpoint_url||'').startsWith('callback')?'#92400e':'#1d4ed8'};border-radius:9999px;padding:1px 7px;font-size:10px;font-weight:700;text-transform:uppercase">${(wh.endpoint_url||'').startsWith('callback')?'Callback':'Push'}</span>
+        </div>
+      </td>
+      <td style="font-size:12px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:monospace">
+        <span style="color:var(--text-muted)">/api/webhook/${escHtml(wh.client_id||'')}/${wh.id}</span>
+      </td>
+      <td style="font-size:12px;color:var(--text-muted)">
+        ${Object.keys(wh.field_map||{}).length ? Object.keys(wh.field_map).length + ' mapping' + (Object.keys(wh.field_map).length !== 1 ? 's' : '') : '<span style="color:var(--border)">pass-through</span>'}
+      </td>
+      <td>
+        <span style="background:${wh.enabled?'#d1fae5':'#f1f5f9'};color:${wh.enabled?'#065f46':'#64748b'};
+          border-radius:9999px;padding:2px 10px;font-size:11px;font-weight:700">
+          ${wh.enabled ? 'Enabled' : 'Disabled'}
+        </span>
+      </td>
+      <td>
+        <div style="display:flex;gap:6px">
+          <button class="dsgn-cancel-btn" style="padding:4px 10px;font-size:11px"
+            onclick="whOpenEdit(${wh.id})">Edit</button>
+          <button class="dsgn-cancel-btn" style="padding:4px 10px;font-size:11px"
+            onclick="whViewLogs(${wh.id}, '${escHtml(wh.name)}', '${escHtml(wh.client_id||'')}')">
+            <i data-lucide="list" style="width:11px;height:11px;vertical-align:-1px"></i> Logs</button>
+          <button class="dsgn-cancel-btn" style="padding:4px 10px;font-size:11px;color:var(--teal)"
+            onclick="whOpenSimulator(${wh.id}, '${escHtml(wh.name)}', '${escHtml(wh.client_id||'')}')">
+            <i data-lucide="zap" style="width:11px;height:11px;vertical-align:-1px"></i> Simulate</button>
+          <button class="dsgn-cancel-btn" style="padding:4px 10px;font-size:11px;color:var(--red)"
+            onclick="whDelete(${wh.id}, '${escHtml(wh.name)}')">Delete</button>
+        </div>
+      </td>
+    </tr>`).join('');
+
+  main.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+      <div>
+        <div style="font-size:18px;font-weight:700;color:var(--text)">Webhooks</div>
+        <div style="font-size:13px;color:var(--text-muted);margin-top:3px">Inbound webhook receivers — one dataset, multiple subscriptions</div>
+      </div>
+      <button class="dsgn-save-btn" onclick="whOpenEdit(null)">
+        <i data-lucide="plus" style="width:13px;height:13px;vertical-align:-2px"></i> New Webhook
+      </button>
+    </div>
+    ${_webhooks.length ? `
+    <div style="overflow-x:auto;background:var(--surface);border:1.5px solid var(--border);border-radius:10px">
+      <table class="dsgn-field-table">
+        <thead><tr>
+          <th>Name / Dataset</th><th>Receiver URL</th><th>Field Map</th><th>Status</th><th>Actions</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>` : `
+    <div style="padding:60px;text-align:center;color:var(--text-muted);font-size:13px;background:var(--surface);border:1.5px solid var(--border);border-radius:10px">
+      No webhooks yet. Click <strong>New Webhook</strong> to create one.
+    </div>`}`;
+  lucide.createIcons();
+}
+
+// ── Inline rename ─────────────────────────────────────────────────────────
+function whInlineRename(id) {
+  const cell = document.getElementById(`wh-name-cell-${id}`);
+  const span = document.getElementById(`wh-name-text-${id}`);
+  if (!cell || !span) return;
+  if (cell.querySelector('input')) return; // already editing
+
+  const current = span.textContent;
+  cell.innerHTML = '';
+
+  const input = document.createElement('input');
+  input.className = 'dsgn-finput';
+  input.style.cssText = 'font-size:13px;font-weight:600;padding:3px 7px;width:200px;box-sizing:border-box';
+  input.value = current;
+
+  const save = async () => {
+    const newName = input.value.trim();
+    if (!newName) { input.focus(); return; }
+    if (newName === current) { whRenderList(document.getElementById('dsgn-main')); return; }
+    await whRenameWebhook(id, newName);
+  };
+
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter')  { e.preventDefault(); save(); }
+    if (e.key === 'Escape') { whRenderList(document.getElementById('dsgn-main')); }
+  });
+  input.addEventListener('blur', () => { setTimeout(save, 100); });
+
+  cell.appendChild(input);
+  input.focus();
+  input.select();
+}
+
+async function whRenameWebhook(id, newName) {
+  const wh = _webhooks.find(w => w.id === id);
+  if (!wh) return;
+  try {
+    const r = await apiFetch(`/api/ingest/admin/webhooks/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name:           newName,
+        endpoint_url:   wh.endpoint_url,
+        event_triggers: wh.event_triggers,
+        field_map:      wh.field_map,
+        auth_header:    wh.auth_header,
+        hmac_secret:    wh.hmac_secret,
+        custom_headers: wh.custom_headers,
+        enabled:        wh.enabled
+      })
+    }).then(r => r.json());
+    if (r.error) throw new Error(r.error);
+    wh.name = newName; // update local cache
+    ddnlToast('Webhook renamed', 'success', 2000);
+    whRenderList(document.getElementById('dsgn-main'));
+  } catch(e) {
+    ddnlToast('Rename failed: ' + e.message, 'error', 4000);
+    whRenderList(document.getElementById('dsgn-main'));
+  }
+}
+
+// ── Edit / Create modal ────────────────────────────────────────────────────
+async function whOpenEdit(id) {
+  _whEditId = id;
+  let wh = null;
+
+  if (id) {
+    try {
+      const r = await apiFetch(`/api/ingest/admin/webhooks/${id}`).then(r => r.json());
+      wh = r.webhook;
+    } catch(e) { alert('Failed to load webhook: ' + e.message); return; }
+  }
+
+  const dsOptions = _webhookDs.map(d =>
+    `<option value="${d.name}" ${wh?.dataset_name === d.name ? 'selected' : ''}>${escHtml(d.label || d.name)}</option>`
+  ).join('');
+
+  // Event triggers removed — inbound webhooks receive all events from source system
+
+  const customHeaders = (wh?.custom_headers || []);
+  const chRows = customHeaders.map((h,i) => whCustomHeaderRow(i, h.key, h.value)).join('');
+
+  const fieldMap = wh?.field_map || {};
+  const fmRows = Object.entries(fieldMap).map(([src,dst],i) => whFieldMapRow(i, src, dst)).join('');
+
+  const receiverUrl = wh ? `/api/webhook/${wh.client_id || ''}/${wh.id}` : '(saved after creation)';
+
+  const overlay = document.createElement('div');
+  overlay.id = 'wh-modal-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:500;display:flex;align-items:center;justify-content:center';
+  overlay.innerHTML = `
+    <div style="background:var(--surface);border-radius:14px;width:680px;max-width:95vw;max-height:90vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.25)">
+      <!-- Header -->
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:22px 28px 18px;border-bottom:2px solid var(--border)">
+        <div style="font-size:20px;font-weight:700;color:var(--text)">${id ? 'Edit' : 'New'} Subscription</div>
+        <div style="display:flex;gap:10px">
+          <button class="dsgn-cancel-btn" onclick="whCloseModal()">Cancel</button>
+          <button class="dsgn-save-btn" onclick="whSave()">Save</button>
+        </div>
+      </div>
+      <!-- Body -->
+      <div style="flex:1;overflow-y:auto;padding:24px 28px;display:flex;flex-direction:column;gap:20px">
+
+        <!-- Resource + Status -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:end">
+          <div>
+            <label class="wh-label">* Name</label>
+            <input id="wh-name" class="dsgn-finput" style="width:100%;box-sizing:border-box" placeholder="e.g. POS Sales Feed" value="${escHtml(wh?.name||'')}">
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <div>
+              <label class="wh-label">Subscription Status</label>
+              <div style="display:flex;align-items:center;gap:8px;margin-top:6px">
+                <span style="font-size:12px;color:var(--text-muted)">Disable</span>
+                <div class="wh-toggle ${wh?.enabled !== false ? 'on' : ''}" id="wh-enabled-toggle" onclick="this.classList.toggle('on')">
+                  <div class="wh-toggle-knob"></div>
+                </div>
+                <span style="font-size:12px;font-weight:600">Enable</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Dataset + Mode -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+          <div>
+            <label class="wh-label">* Resource (Dataset)</label>
+            <select id="wh-dataset" class="dsgn-fselect" style="width:100%;box-sizing:border-box">
+              <option value="">— select dataset —</option>
+              ${dsOptions}
+            </select>
+          </div>
+          <div>
+            <label class="wh-label">Mode</label>
+            <select id="wh-mode" class="dsgn-fselect" style="width:100%;box-sizing:border-box">
+              <option value="push" ${(wh?.mode||'push')==='push'?'selected':''}>Push — source sends full payload</option>
+              <option value="callback" ${wh?.mode==='callback'?'selected':''}>Callback — we fetch from source API</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Receiver URL (inbound — generated by DDNL, user copies to their source system) -->
+        <div>
+          <label class="wh-label">Receiver URL</label>
+          ${id ? `
+          <div style="display:flex;gap:8px;align-items:center">
+            <input class="dsgn-finput" style="width:100%;box-sizing:border-box;font-family:monospace;font-size:12px;background:var(--surface2);color:var(--text)" readonly
+              value="${location.origin}/api/webhook/${escHtml(wh?.client_id||'')}/${wh?.id||''}" id="wh-receiver-url">
+            <button class="dsgn-cancel-btn" style="white-space:nowrap;padding:6px 12px;font-size:12px"
+              onclick="navigator.clipboard.writeText(document.getElementById('wh-receiver-url').value).then(()=>{this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)})">Copy</button>
+          </div>` : `
+          <div style="font-size:12px;color:var(--text-muted);padding:8px 0">Generated after saving — paste into your source system to start receiving data.</div>
+          `}
+        </div>
+
+        <!-- Security Configuration -->
+        <div style="border-top:2px solid var(--border);padding-top:18px">
+          <div style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:14px">Security Configuration</div>
+          <div style="display:flex;flex-direction:column;gap:12px">
+            <div>
+              <label class="wh-label">HTTP Authorization Header</label>
+              <input id="wh-auth-header" class="dsgn-finput" style="width:100%;box-sizing:border-box"
+                placeholder="Bearer sk-..." value="${escHtml(wh?.auth_header||'')}">
+            </div>
+            <div>
+              <label class="wh-label">HMAC SHA-256 Shared Secret</label>
+              <input id="wh-hmac" class="dsgn-finput" style="width:100%;box-sizing:border-box"
+                placeholder="shared secret" value="${escHtml(wh?.hmac_secret||'')}">
+            </div>
+          </div>
+        </div>
+
+        <!-- Custom Headers -->
+        <div>
+          <div style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:10px">Custom Headers</div>
+          <div id="wh-custom-headers">${chRows}</div>
+          <button class="dsgn-cancel-btn" style="margin-top:8px;font-size:12px" onclick="whAddCustomHeader()">
+            <i data-lucide="plus" style="width:12px;height:12px;vertical-align:-1px"></i> Add Custom Header
+          </button>
+        </div>
+
+        <!-- Field Map -->
+        <div>
+          <div style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:4px">Field Map</div>
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Map incoming payload fields to dataset fields. Unmapped fields pass through as-is.</div>
+          <div style="display:grid;grid-template-columns:1fr auto 1fr auto;gap:8px;align-items:center;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">
+            <span>Source Field</span><span></span><span>Dataset Field</span><span></span>
+          </div>
+          <div id="wh-field-map">${fmRows}</div>
+          <button class="dsgn-cancel-btn" style="margin-top:8px;font-size:12px" onclick="whAddFieldMapRow()">
+            <i data-lucide="plus" style="width:12px;height:12px;vertical-align:-1px"></i> Add Mapping
+          </button>
+        </div>
+
+      </div>
+    </div>`;
+
+  document.body.appendChild(overlay);
+  lucide.createIcons({ el: overlay });
+}
+
+function whCustomHeaderRow(i, key='', value='') {
+  return `<div class="wh-ch-row" style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;margin-bottom:6px" data-idx="${i}">
+    <input class="dsgn-finput wh-ch-key" placeholder="Header name" value="${escHtml(key)}">
+    <input class="dsgn-finput wh-ch-val" placeholder="Value" value="${escHtml(value)}">
+    <button class="dsgn-cancel-btn" style="padding:4px 8px" onclick="this.closest('.wh-ch-row').remove()">
+      <i data-lucide="x" style="width:12px;height:12px"></i>
+    </button>
+  </div>`;
+}
+
+function whFieldMapRow(i, src='', dst='') {
+  return `<div class="wh-fm-row" style="display:grid;grid-template-columns:1fr auto 1fr auto;gap:8px;margin-bottom:6px;align-items:center" data-idx="${i}">
+    <input class="dsgn-finput wh-fm-src" placeholder="source_field" value="${escHtml(src)}">
+    <i data-lucide="arrow-right" style="width:14px;height:14px;color:var(--text-muted);flex-shrink:0"></i>
+    <input class="dsgn-finput wh-fm-dst" placeholder="dataset_field" value="${escHtml(dst)}">
+    <button class="dsgn-cancel-btn" style="padding:4px 8px" onclick="this.closest('.wh-fm-row').remove()">
+      <i data-lucide="x" style="width:12px;height:12px"></i>
+    </button>
+  </div>`;
+}
+
+function whAddCustomHeader() {
+  const container = document.getElementById('wh-custom-headers');
+  const i = container.children.length;
+  container.insertAdjacentHTML('beforeend', whCustomHeaderRow(i));
+  lucide.createIcons({ el: container });
+}
+
+function whAddFieldMapRow() {
+  const container = document.getElementById('wh-field-map');
+  const i = container.children.length;
+  container.insertAdjacentHTML('beforeend', whFieldMapRow(i));
+  lucide.createIcons({ el: container });
+}
+
+function whCloseModal() {
+  document.getElementById('wh-modal-overlay')?.remove();
+}
+
+// whUpdateTriggers removed — inbound webhooks don't filter by event type
+
+async function whSave() {
+  const name        = document.getElementById('wh-name')?.value.trim();
+  const dataset     = document.getElementById('wh-dataset')?.value;
+  const mode        = document.getElementById('wh-mode')?.value || 'push';
+  const authHeader  = document.getElementById('wh-auth-header')?.value.trim() || null;
+  const hmac        = document.getElementById('wh-hmac')?.value.trim() || null;
+  const enabled     = document.getElementById('wh-enabled-toggle')?.classList.contains('on');
+
+  if (!name || !dataset) {
+    alert('Name and dataset are required.');
+    return;
+  }
+  // endpoint_url stores mode:dataset as internal marker until callback mode is fully built
+  const endpoint = `${mode}:${dataset}`;
+
+  // Collect custom headers
+  const custom_headers = [];
+  document.querySelectorAll('#wh-custom-headers .wh-ch-row').forEach(row => {
+    const key = row.querySelector('.wh-ch-key')?.value.trim();
+    const val = row.querySelector('.wh-ch-val')?.value.trim();
+    if (key && val) custom_headers.push({ key, value: val });
+  });
+
+  // Collect field map
+  const field_map = {};
+  document.querySelectorAll('#wh-field-map .wh-fm-row').forEach(row => {
+    const src = row.querySelector('.wh-fm-src')?.value.trim();
+    const dst = row.querySelector('.wh-fm-dst')?.value.trim();
+    if (src && dst) field_map[src] = dst;
+  });
+
+  const payload = { name, dataset, endpoint_url: endpoint,
+    field_map, auth_header: authHeader, hmac_secret: hmac,
+    custom_headers, enabled };
+
+  try {
+    const btn = document.querySelector('#wh-modal-overlay .dsgn-save-btn');
+    if (btn) { btn.textContent = 'Saving...'; btn.disabled = true; }
+
+    const url    = _whEditId ? `/api/ingest/admin/webhooks/${_whEditId}` : '/api/ingest/admin/webhooks';
+    const method = _whEditId ? 'PUT' : 'POST';
+    const r = await apiFetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    }).then(r => r.json());
+
+    if (!r.success) throw new Error(r.error || 'Save failed');
+    whCloseModal();
+    dsgnRenderWebhooks(document.getElementById('dsgn-main'));
+  } catch(e) {
+    alert('Save failed: ' + e.message);
+    const btn = document.querySelector('#wh-modal-overlay .dsgn-save-btn');
+    if (btn) { btn.textContent = 'Save'; btn.disabled = false; }
+  }
+}
+
+async function whDelete(id, name) {
+  if (!confirm(`Delete webhook "${name}"? This cannot be undone.`)) return;
+  try {
+    const r = await apiFetch(`/api/ingest/admin/webhooks/${id}`, { method: 'DELETE' }).then(r => r.json());
+    if (!r.success) throw new Error(r.error);
+    dsgnRenderWebhooks(document.getElementById('dsgn-main'));
+  } catch(e) { alert('Delete failed: ' + e.message); }
+}
+
+// ── Webhook Log Viewer state ────────────────────────────────────────────────
+let _whLogs        = [];   // raw log rows from API
+let _whLogsSort    = 'received_at';
+let _whLogsSortDir = 'desc';
+let _whLogsFilter  = '';   // status filter
+let _whLogCtx      = {};   // { id, name, clientId }
+
+async function whViewLogs(id, name, clientId) {
+  _whLogCtx = { id, name, clientId };
+  _whLogsSort = 'received_at';
+  _whLogsSortDir = 'desc';
+  _whLogsFilter = '';
+
+  const main = document.getElementById('dsgn-main');
+  main.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-muted)">Loading...</div>';
+
+  try {
+    const r = await apiFetch(`/api/ingest/admin/webhooks/${id}/logs?limit=200`).then(r => r.json());
+    _whLogs = r.logs || [];
+    whRenderLogs(main);
+  } catch(e) {
+    main.innerHTML = `<div style="padding:40px;color:var(--red)">${e.message}</div>`;
+  }
+}
+
+function whSortLogs(col) {
+  if (_whLogsSort === col) {
+    _whLogsSortDir = _whLogsSortDir === 'asc' ? 'desc' : 'asc';
+  } else {
+    _whLogsSort    = col;
+    _whLogsSortDir = col === 'received_at' ? 'desc' : 'asc';
+  }
+  whRenderLogs(document.getElementById('dsgn-main'));
+}
+
+function whFilterLogs(status) {
+  _whLogsFilter = status;
+  whRenderLogs(document.getElementById('dsgn-main'));
+}
+
+function whRenderLogs(main) {
+  const { id, name, clientId } = _whLogCtx;
+
+  // Filter
+  let rows = _whLogsFilter
+    ? _whLogs.filter(l => l.status === _whLogsFilter)
+    : _whLogs;
+
+  // Sort
+  rows = [...rows].sort((a, b) => {
+    let av = a[_whLogsSort], bv = b[_whLogsSort];
+    if (typeof av === 'string') av = av.toLowerCase(), bv = (bv||'').toLowerCase();
+    if (av == null) av = _whLogsSortDir === 'asc' ? Infinity : -Infinity;
+    if (bv == null) bv = _whLogsSortDir === 'asc' ? Infinity : -Infinity;
+    return _whLogsSortDir === 'asc' ? (av > bv ? 1 : -1) : (av < bv ? 1 : -1);
+  });
+
+  // Sort icon helper
+  const si = col => {
+    if (_whLogsSort !== col) return `<span style="font-size:9px;margin-left:4px;color:var(--bg-color-sort-inactive)">&#8597;</span>`;
+    return `<span style="font-size:9px;margin-left:4px;color:var(--bg-color-sort-active)">${_whLogsSortDir === 'asc' ? '&#9650;' : '&#9660;'}</span>`;
+  };
+
+  const STATUS_STYLE = {
+    processed: 'background:#d1fae5;color:#065f46',
+    failed:    'background:#fee2e2;color:#991b1b',
+    rejected:  'background:#fee2e2;color:#991b1b',
+    skipped:   'background:#fef3c7;color:#92400e',
+    pending:   'background:#f1f5f9;color:#64748b'
+  };
+
+  // Status filter pills
+  const statuses = ['', 'processed', 'failed', 'rejected', 'skipped'];
+  const filterPills = statuses.map(s => {
+    const active = _whLogsFilter === s;
+    const label  = s || 'All';
+    const count  = s ? _whLogs.filter(l => l.status === s).length : _whLogs.length;
+    return `<button onclick="whFilterLogs('${s}')" style="
+      padding:4px 12px;border-radius:9999px;font-size:11px;font-weight:600;cursor:pointer;
+      border:1.5px solid ${active ? 'var(--navy)' : 'var(--border)'};
+      background:${active ? 'var(--navy)' : '#fff'};
+      color:${active ? '#fff' : 'var(--text-muted)'}">${label} <span style="opacity:.7">${count}</span></button>`;
+  }).join('');
+
+  // Table rows
+  const tbody = rows.length ? rows.map((l, idx) => {
+    const ss = STATUS_STYLE[l.status] || 'background:#f1f5f9;color:#64748b';
+    const hasPreview = l.payload_preview && l.payload_preview !== 'null';
+    let previewJson = null;
+    if (hasPreview) {
+      try {
+        const parsed = typeof l.payload_preview === 'string' ? JSON.parse(l.payload_preview) : l.payload_preview;
+        previewJson = JSON.stringify(parsed, null, 2);
+      } catch { previewJson = String(l.payload_preview); }
+    }
+    return `
+      <tr class="bg-row${idx%2===1?' bg-row-stripe':''}" style="cursor:${hasPreview?'pointer':'default'}"
+        onclick="${hasPreview ? `whTogglePayload('whlp-${idx}')` : ''}">
+        <td class="bg-td" style="white-space:nowrap">
+          <div class="bg-cell-primary">${new Date(l.received_at).toLocaleString()}</div>
+        </td>
+        <td class="bg-td">
+          <span style="${ss};border-radius:9999px;padding:2px 10px;font-size:10px;font-weight:700">${l.status}</span>
+        </td>
+        <td class="bg-td" style="color:var(--bg-color-text-muted);font-size:12px">${l.event_type||'—'}</td>
+        <td class="bg-td" style="text-align:right">${l.records_in||0}</td>
+        <td class="bg-td" style="text-align:right;color:#065f46;font-weight:600">${l.records_upserted||0}</td>
+        <td class="bg-td" style="text-align:right;color:${l.records_failed?'#991b1b':'var(--bg-color-text-muted)'}">${l.records_failed||0}</td>
+        <td class="bg-td" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--bg-color-text-muted);font-size:11px"
+          title="${escHtml(l.error_message||'')}">${l.error_message||'—'}</td>
+        <td class="bg-td" style="text-align:right;color:var(--bg-color-text-muted);font-size:11px">${l.duration_ms != null ? l.duration_ms+'ms' : '—'}</td>
+        <td class="bg-td" style="width:24px;color:var(--teal);font-size:11px">
+          ${hasPreview ? `<span id="whlp-icon-${idx}"><i data-lucide="chevron-right" style="width:13px;height:13px"></i></span>` : ''}
+        </td>
+      </tr>
+      ${hasPreview ? `
+      <tr id="whlp-${idx}" style="display:none">
+        <td colspan="9" style="padding:0 16px 12px;background:var(--bg-color-row-stripe)">
+          <pre style="background:var(--surface);border:1px solid var(--bg-color-border);border-radius:8px;padding:12px 16px;
+            font-size:11px;overflow-x:auto;margin:0;color:var(--text);white-space:pre-wrap;line-height:1.6">${escHtml(previewJson)}</pre>
+        </td>
+      </tr>` : ''}`;
+  }).join('') : `<tr><td colspan="9" class="bg-empty-cell">No deliveries match this filter.</td></tr>`;
+
+  main.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
+      <div style="display:flex;align-items:center;gap:12px">
+        <button class="dsgn-cancel-btn" onclick="dsgnRenderWebhooks(document.getElementById('dsgn-main'))">
+          <i data-lucide="arrow-left" style="width:13px;height:13px;vertical-align:-2px"></i> Webhooks
+        </button>
+        <div>
+          <div style="font-size:18px;font-weight:700;color:var(--text)">Delivery Log — ${escHtml(name)}</div>
+          <div style="font-size:12px;color:var(--bg-color-text-muted)">${_whLogs.length} calls · click a row to preview payload</div>
+        </div>
+      </div>
+      <button class="dsgn-save-btn" style="font-size:12px;padding:7px 16px"
+        onclick="whOpenSimulator(${id}, '${escHtml(name)}', '${escHtml(clientId||'')}')">
+        <i data-lucide="zap" style="width:13px;height:13px;vertical-align:-2px"></i> Simulate
+      </button>
+    </div>
+
+    <!-- Status filter pills -->
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">${filterPills}</div>
+
+    <!-- BestGrid -->
+    <div class="bg-table-scroll" style="background:var(--surface);border:1.5px solid var(--bg-color-border);border-radius:10px;overflow:hidden">
+      <table class="bg-table" style="width:100%">
+        <thead class="bg-thead" style="position:sticky;top:0;z-index:2">
+          <tr>
+            <th class="bg-th" style="cursor:pointer" onclick="whSortLogs('received_at')"><div class="bg-th-inner">Received ${si('received_at')}</div></th>
+            <th class="bg-th" style="cursor:pointer" onclick="whSortLogs('status')"><div class="bg-th-inner">Status ${si('status')}</div></th>
+            <th class="bg-th"><div class="bg-th-inner">Event</div></th>
+            <th class="bg-th" style="text-align:right;cursor:pointer" onclick="whSortLogs('records_in')"><div class="bg-th-inner" style="justify-content:flex-end">In ${si('records_in')}</div></th>
+            <th class="bg-th" style="text-align:right;cursor:pointer" onclick="whSortLogs('records_upserted')"><div class="bg-th-inner" style="justify-content:flex-end">Upserted ${si('records_upserted')}</div></th>
+            <th class="bg-th" style="text-align:right;cursor:pointer" onclick="whSortLogs('records_failed')"><div class="bg-th-inner" style="justify-content:flex-end">Failed ${si('records_failed')}</div></th>
+            <th class="bg-th"><div class="bg-th-inner">Error</div></th>
+            <th class="bg-th" style="text-align:right;cursor:pointer" onclick="whSortLogs('duration_ms')"><div class="bg-th-inner" style="justify-content:flex-end">ms ${si('duration_ms')}</div></th>
+            <th class="bg-th"><div class="bg-th-inner"></div></th>
+          </tr>
+        </thead>
+        <tbody>${tbody}</tbody>
+      </table>
+    </div>`;
+
+  lucide.createIcons();
+}
+
+function whTogglePayload(rowId) {
+  const row  = document.getElementById(rowId);
+  const idx  = rowId.replace('whlp-', '');
+  const icon = document.getElementById(`whlp-icon-${idx}`);
+  if (!row) return;
+  const open = row.style.display !== 'none';
+  row.style.display = open ? 'none' : 'table-row';
+  if (icon) icon.innerHTML = open
+    ? '<i data-lucide="chevron-right" style="width:13px;height:13px"></i>'
+    : '<i data-lucide="chevron-down" style="width:13px;height:13px;color:var(--teal)"></i>';
+  lucide.createIcons({ el: icon });
+}
+
+// ── Webhook Simulator ─────────────────────────────────────────────────────────
+function whOpenSimulator(id, name, clientId) {
+  const receiverUrl = `${location.origin}/api/webhook/${clientId}/${id}`;
+  // Build a realistic sample row based on the dataset name
+  const today = new Date().toISOString().slice(0,10);
+  const SAMPLE_PAYLOADS = {
+    sales: [
+      {
+        sales_pk:      `${today}__store_001__PLU-1042`,
+        date:          today,
+        store_id:      'store_001',
+        store_name:    'Seattle Pike Market',
+        store_city:    'Seattle',
+        store_state:   'WA',
+        store_region:  'Pacific Northwest',
+        store_type:    'Urban',
+        plu_code:      'PLU-1042',
+        item_name:     'Organic Fuji Apple',
+        department:    'Fresh Produce',
+        category:      'Fruit',
+        subcategory:   'Apples',
+        unit_type:     'each',
+        unit_price:    1.29,
+        units_sold:    204,
+        transactions:  97,
+        item_count:    310,
+        revenue:       263.16
+      }
+    ],
+    customers: [
+      {
+        customer_id:   'CUST-00099',
+        first_name:    'Jordan',
+        last_name:     'Rivera',
+        email:         'jrivera@example.com',
+        phone:         '206-555-0192',
+        store_id:      'store_001',
+        loyalty_tier:  'Gold',
+        tags:          ['LOYALTY_MEMBER','HIGH_VALUE'],
+        sms_pref:      'Y',
+        created_at:    today
+      }
+    ]
+  };
+  const datasetKey = (name || '').toLowerCase().replace(/[^a-z]/g,'');
+  const sample = SAMPLE_PAYLOADS[datasetKey] || [
+    { id: 1, event: 'created', name: 'Test Record', value: 42, timestamp: new Date().toISOString() }
+  ];
+  const defaultPayload = JSON.stringify(sample, null, 2);
+
+  const overlay = document.createElement('div');
+  overlay.id = 'wh-sim-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:600;display:flex;align-items:center;justify-content:center';
+  overlay.innerHTML = `
+    <div style="background:var(--surface);border-radius:14px;width:640px;max-width:95vw;max-height:85vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.25)">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:20px 24px 16px;border-bottom:2px solid var(--border)">
+        <div>
+          <div style="font-size:18px;font-weight:700;color:var(--text)">Simulate — ${escHtml(name)}</div>
+          <div style="font-size:11px;font-family:monospace;color:var(--text-muted);margin-top:3px">${escHtml(receiverUrl)}</div>
+        </div>
+        <button class="dsgn-cancel-btn" onclick="document.getElementById('wh-sim-overlay').remove()">Close</button>
+      </div>
+      <div style="flex:1;overflow-y:auto;padding:20px 24px;display:flex;flex-direction:column;gap:14px">
+        <div>
+          <label class="wh-label">Content-Type</label>
+          <select id="sim-content-type" class="dsgn-fselect" style="width:220px">
+            <option value="application/json">application/json</option>
+          </select>
+        </div>
+        <div style="flex:1">
+          <label class="wh-label">Payload (JSON)</label>
+          <textarea id="sim-payload" style="width:100%;box-sizing:border-box;height:220px;font-family:monospace;font-size:12px;padding:10px;border:1.5px solid var(--border);border-radius:8px;resize:vertical;outline:none;color:var(--text)">${escHtml(defaultPayload)}</textarea>
+        </div>
+        <div id="sim-result" style="display:none;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px 14px">
+          <div style="font-size:11px;font-weight:700;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em">Response</div>
+          <pre id="sim-result-body" style="font-size:12px;margin:0;white-space:pre-wrap;color:var(--text)"></pre>
+        </div>
+      </div>
+      <div style="padding:14px 24px;border-top:2px solid var(--border);display:flex;justify-content:flex-end;gap:10px">
+        <button class="dsgn-cancel-btn" onclick="document.getElementById('wh-sim-overlay').remove()">Cancel</button>
+        <button class="dsgn-save-btn" id="sim-send-btn" onclick="whSimSend('${escHtml(receiverUrl)}', ${id}, '${escHtml(name)}', '${escHtml(clientId||'')}')">
+          <i data-lucide="send" style="width:13px;height:13px;vertical-align:-2px"></i> Send
+        </button>
+      </div>
+    </div>`;
+
+  document.body.appendChild(overlay);
+  lucide.createIcons({ el: overlay });
+}
+
+async function whSimSend(receiverUrl, id, name, clientId) {
+  const btn = document.getElementById('sim-send-btn');
+  const resultDiv = document.getElementById('sim-result');
+  const resultBody = document.getElementById('sim-result-body');
+  const rawPayload = document.getElementById('sim-payload')?.value.trim();
+
+  // Validate JSON
+  let parsed;
+  try { parsed = JSON.parse(rawPayload); }
+  catch(e) { alert('Invalid JSON: ' + e.message); return; }
+
+  btn.textContent = 'Sending...';
+  btn.disabled = true;
+  resultDiv.style.display = 'none';
+
+  try {
+    const resp = await fetch(receiverUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(parsed)
+    });
+    const text = await resp.text();
+    let pretty;
+    try { pretty = JSON.stringify(JSON.parse(text), null, 2); } catch { pretty = text; }
+    resultBody.textContent = `HTTP ${resp.status}\n\n${pretty}`;
+    resultBody.style.color = resp.ok ? 'var(--navy)' : '#991b1b';
+    resultDiv.style.display = 'block';
+  } catch(e) {
+    resultBody.textContent = 'Error: ' + e.message;
+    resultBody.style.color = '#991b1b';
+    resultDiv.style.display = 'block';
+  } finally {
+    btn.innerHTML = '<i data-lucide="send" style="width:13px;height:13px;vertical-align:-2px"></i> Send';
+    btn.disabled = false;
+    lucide.createIcons({ el: btn });
+  }
+}
+
+
 /* ── Lookups view ────────────────────────────────────────────── */
 
 let _dsgnActiveLookup = null;
@@ -9925,7 +11954,7 @@ function dsgnRenderLookups(main) {
 
   let html = `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
     <div>
-      <div style="font-size:18px;font-weight:700;color:var(--navy)">Lookup Datasets</div>
+      <div style="font-size:18px;font-weight:700;color:var(--text)">Lookup Datasets</div>
       <div style="font-size:13px;color:var(--text-muted);margin-top:3px">
         Master records — auto-maintained from ingest, enrichable via Designer or API
       </div>
@@ -9997,7 +12026,7 @@ function dsgnRenderLookupDetail(main, data) {
         <i data-lucide="arrow-left" style="width:13px;height:13px;vertical-align:-2px"></i> Lookups
       </button>
       <div>
-        <div style="font-size:18px;font-weight:700;color:var(--navy)">${lookup.label}</div>
+        <div style="font-size:18px;font-weight:700;color:var(--text)">${lookup.label}</div>
         <div style="font-size:12px;color:var(--text-muted)">
           ${rows.length} rows · key: <strong>${lookup.key_field}</strong>
           ${lookup.description ? ' · ' + lookup.description : ''}
@@ -10012,15 +12041,15 @@ function dsgnRenderLookupDetail(main, data) {
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:10px">API Endpoint</div>
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
         <span style="display:inline-block;background:#e8f5e9;color:#1b5e20;font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;letter-spacing:.04em">POST</span>
-        <code style="font-size:12px;color:var(--navy);background:#f0f4ff;padding:4px 10px;border-radius:6px;border:1px solid #c7d2fe;flex:1;min-width:0;overflow:auto;white-space:nowrap">${upsertUrl}</code>
-        <button onclick="navigator.clipboard.writeText('${upsertUrl}').then(()=>{this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)})" style="flex-shrink:0;padding:4px 12px;font-size:12px;border:1.5px solid var(--border);border-radius:6px;background:#fff;cursor:pointer;color:var(--navy)">Copy</button>
+        <code style="font-size:12px;color:var(--text);background:#f0f4ff;padding:4px 10px;border-radius:6px;border:1px solid #c7d2fe;flex:1;min-width:0;overflow:auto;white-space:nowrap">${upsertUrl}</code>
+        <button onclick="navigator.clipboard.writeText('${upsertUrl}').then(()=>{this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)})" style="flex-shrink:0;padding:4px 12px;font-size:12px;border:1.5px solid var(--border);border-radius:6px;background:var(--surface);cursor:pointer;color:var(--text)">Copy</button>
       </div>
       <div style="margin-top:8px;font-size:11.5px;color:var(--text-muted)">
         Header: <code style="font-size:11px">x-api-key: &lt;your-api-key&gt;</code> &nbsp;·&nbsp;
         Body: <code style="font-size:11px">{ "rows": [{ "${lookup.key_field}": "...", ...fields }] }</code>
       </div>
     </div>
-    <div style="overflow-x:auto;background:#fff;border:1.5px solid var(--border);border-radius:10px">
+    <div style="overflow-x:auto;background:var(--surface);border:1.5px solid var(--border);border-radius:10px">
       <table class="dsgn-lookup-table">
         <thead><tr>${thCols}</tr></thead>
         <tbody>${tdRows || '<tr><td colspan="99" style="text-align:center;padding:32px;color:var(--text-muted)">No rows yet</td></tr>'}</tbody>
@@ -10041,11 +12070,11 @@ function dsgnRenderFiscal(main) {
   const calendars = _dsgnFiscal?.calendars;
   if (!calendars || !calendars.length) {
     main.innerHTML = `
-      <div style="font-size:18px;font-weight:700;color:var(--navy);margin-bottom:4px">Fiscal Calendar</div>
+      <div style="font-size:18px;font-weight:700;color:var(--text);margin-bottom:4px">Fiscal Calendar</div>
       <div style="font-size:13px;color:var(--text-muted);margin-bottom:24px">Configure fiscal periods per instance for SWLY, SDLY, and fiscal date slicing.</div>
-      <div style="background:#fff;border:1.5px dashed var(--border);border-radius:12px;padding:48px 32px;text-align:center;max-width:480px">
+      <div style="background:var(--surface2);border:1.5px dashed var(--border);border-radius:12px;padding:48px 32px;text-align:center;max-width:480px">
         <i data-lucide="calendar-x" style="width:36px;height:36px;color:var(--text-muted);margin-bottom:12px"></i>
-        <div style="font-size:15px;font-weight:700;color:var(--navy);margin-bottom:6px">No fiscal calendar configured</div>
+        <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:6px">No fiscal calendar configured</div>
         <div style="font-size:13px;color:var(--text-muted);line-height:1.6;margin-bottom:20px">
           Each instance configures its own fiscal calendar.<br>
           Set your fiscal year start month, week scheme, and coverage range —
@@ -10084,7 +12113,7 @@ function dsgnRenderFiscal(main) {
     </div>`).join('');
 
   main.innerHTML = `
-    <div style="font-size:18px;font-weight:700;color:var(--navy);margin-bottom:4px">Fiscal Calendar</div>
+    <div style="font-size:18px;font-weight:700;color:var(--text);margin-bottom:4px">Fiscal Calendar</div>
     <div style="font-size:13px;color:var(--text-muted);margin-bottom:20px">
       Configure fiscal periods per instance. Used for SWLY, SDLY, and fiscal date slicing.
     </div>
@@ -10109,7 +12138,7 @@ function dsgnRenderFiscal(main) {
         </div>
       </div>
     </div>
-    <div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:10px">Fiscal Period Map</div>
+    <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:10px">Fiscal Period Map</div>
     <div class="dsgn-fiscal-grid">${quarterCards}</div>
     <div style="margin-top:20px;padding:14px 18px;background:#e8f5e9;border:1px solid #a5d6a7;border-radius:8px;font-size:12.5px;color:#2e7d32">
       <strong>Prior-period keys pre-computed:</strong> same_day_last_year, same_week_start_lyr, same_month_start_lyr, same_quarter_start_lyr —

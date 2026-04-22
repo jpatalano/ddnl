@@ -24,6 +24,48 @@ function getClient() {
   return _client;
 }
 
+// ── _status system field ─────────────────────────────────────────────────────
+//
+// Every document carries a `_status` field: 'active' | 'deleted' | 'archived'.
+// ALL read paths (queries, aggregations, segment values, raw drilldown) suppress
+// non-active records by default at the ES level — callers never need to think
+// about it. Ingest paths default to 'active' if the field is absent.
+//
+// To include deleted/archived records, pass includeDeleted:true to the
+// relevant query helpers — used by admin/purge flows only.
+
+const STATUS_FIELD    = '_status';
+const STATUS_ACTIVE   = 'active';
+const STATUS_DELETED  = 'deleted';
+const STATUS_ARCHIVED = 'archived';
+
+/**
+ * Returns an ES filter clause that suppresses deleted + archived records.
+ * Use inside a bool.filter or bool.must_not.
+ * Returns a `bool.must` clause — drop it straight into mustClauses[].
+ */
+function activeOnlyClause() {
+  // must_not: [{terms: {_status: ['deleted','archived']}}]
+  // This also matches docs where _status is missing (pre-migration data) —
+  // those are treated as active since they predate the field.
+  return {
+    bool: {
+      must_not: [{ terms: { [STATUS_FIELD]: [STATUS_DELETED, STATUS_ARCHIVED] } }]
+    }
+  };
+}
+
+/**
+ * Enrich a document before ingest — sets _status to 'active' if not provided.
+ * Preserves explicit 'deleted' or 'archived' values from the payload.
+ */
+function applyStatusDefault(doc) {
+  if (doc[STATUS_FIELD] === undefined || doc[STATUS_FIELD] === null || doc[STATUS_FIELD] === '') {
+    doc[STATUS_FIELD] = STATUS_ACTIVE;
+  }
+  return doc;
+}
+
 // ── Naming helpers ─────────────────────────────────────────────────────────────
 
 function indexName(instanceId, datasetName, version) {
@@ -53,10 +95,11 @@ function buildMappings(fields) {
       properties[f.name] = toEsType(f.segmentType, f.displayFormat);
     }
   }
-  // Always include internal meta
+  // Always include internal meta + system fields
   properties['__instance_id']    = { type: 'keyword' };
   properties['__ingested_at']    = { type: 'date' };
   properties['__ingest_version'] = { type: 'integer' };
+  properties[STATUS_FIELD]       = { type: 'keyword' };  // 'active' | 'deleted' | 'archived'
   return { properties };
 }
 
@@ -144,7 +187,7 @@ async function bulkIndex(instanceId, datasetName, docs, idField = null) {
   const now   = new Date().toISOString();
 
   const body = docs.flatMap(doc => {
-    const enriched = { ...doc, __instance_id: instanceId, __ingested_at: now };
+    const enriched = applyStatusDefault({ ...doc, __instance_id: instanceId, __ingested_at: now });
     const action   = idField && doc[idField] != null
       ? { index: { _index: alias, _id: String(doc[idField]) } }  // upsert by id
       : { index: { _index: alias } };                             // auto-id (append)
@@ -208,11 +251,11 @@ async function bulkUpsert(instanceId, datasetName, docs, idField) {
 
       // Scripted update: set all fields, increment __ingest_version
       // If doc doesn't exist yet (upsert), create with version=1
-      const fields = {
+      const fields = applyStatusDefault({
         ...doc,
         __instance_id: instanceId,
         __ingested_at: now
-      };
+      });
 
       return [
         { update: { _index: alias, _id: String(docId) } },
@@ -285,7 +328,11 @@ function buildEsQuery(instanceId, { groupBySegments = [], metrics = [], filters 
   const { page = 1, pageSize = 1000 } = pagination;
 
   // ── Filters → ES query ──
-  const mustClauses = [{ term: { __instance_id: instanceId } }];
+  // activeOnlyClause() is always prepended — suppresses deleted/archived at ES level.
+  const mustClauses = [
+    { term: { __instance_id: instanceId } },
+    activeOnlyClause()
+  ];
 
   for (const f of filters) {
     const { segmentName, operator, value } = f;
@@ -306,6 +353,11 @@ function buildEsQuery(instanceId, { groupBySegments = [], metrics = [], filters 
   }
 
   const esQuery = { bool: { must: mustClauses } };
+
+  // ── No groupBy + no metrics → raw record scan ──
+  if (groupBySegments.length === 0 && metrics.length === 0) {
+    return { rawScan: true, esBody: { query: esQuery, size: pageSize || 100, from: (page - 1) * (pageSize || 100) || 0 }, metrics };
+  }
 
   // ── No groupBy → single bucket aggregation ──
   if (groupBySegments.length === 0) {
@@ -382,7 +434,17 @@ async function query(instanceId, datasetName, queryParams) {
 
   let rows = [];
 
-  if (plan.noGroup) {
+  if (plan.rawScan) {
+    // Raw record scan — return source docs directly, strip internal fields
+    rows = (result.hits?.hits || []).map(h => {
+      const src = { ...h._source };
+      delete src.__instance_id;
+      delete src.__ingested_at;
+      delete src.__ingest_version;
+      delete src._status;
+      return src;
+    });
+  } else if (plan.noGroup) {
     // Single row of aggregated metrics
     const row = {};
     for (const m of plan.metrics) {
@@ -429,7 +491,7 @@ async function segmentValues(instanceId, datasetName, segmentName, limit = 200) 
     index: alias,
     body: {
       size: 0,
-      query: { term: { __instance_id: instanceId } },
+      query: { bool: { must: [{ term: { __instance_id: instanceId } }, activeOnlyClause()] } },
       aggs: {
         values: {
           terms: { field: segmentName, size: limit, order: { _key: 'asc' } }
@@ -476,8 +538,11 @@ async function rawQuery(instanceId, datasetName, filters = [], size = 100, exclu
   const es    = getClient();
   const alias = aliasName(instanceId, datasetName);
 
-  // Reuse the same filter-building logic as buildEsQuery
-  const mustClauses = [{ term: { __instance_id: instanceId } }];
+  // Reuse the same filter-building logic as buildEsQuery — activeOnlyClause always applied.
+  const mustClauses = [
+    { term: { __instance_id: instanceId } },
+    activeOnlyClause()
+  ];
   for (const f of filters) {
     const { segmentName, operator, value } = f;
     switch (operator) {
@@ -528,5 +593,8 @@ module.exports = {
   bulkIndex, bulkUpsert, replaceAll,
   query, segmentValues, indexStats, rawQuery,
   ping,
-  BULK_CHUNK_SIZE
+  BULK_CHUNK_SIZE,
+  // _status helpers — exported for ingest paths + admin use
+  STATUS_FIELD, STATUS_ACTIVE, STATUS_DELETED, STATUS_ARCHIVED,
+  activeOnlyClause, applyStatusDefault,
 };

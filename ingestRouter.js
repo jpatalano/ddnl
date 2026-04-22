@@ -305,19 +305,51 @@ router.post('/:dataset/bulk', requireApiKey, async (req, res) => {
   const def = await getDatasetDef(clientId, dataset);
   if (!def) return res.status(404).json({ error: `Dataset '${dataset}' not found for this instance` });
 
+  // Resolve upsert key from dataset definition
+  const pkFields = def.primary_key_fields || [];
+
   try {
-    const result = replace
-      ? await es.replaceAll(clientId, dataset, docs)
-      : await es.bulkIndex(clientId, dataset, docs);
+    let result;
+    if (replace) {
+      result = await es.replaceAll(clientId, dataset, docs);
+    } else if (pkFields.length) {
+      // Upsert mode: deterministic _id from primary key fields
+      const crypto = require('crypto');
+      const docsWithIds = docs.map(doc => {
+        const vals = pkFields.map(f => String(doc[f] ?? ''));
+        if (vals.some(v => v === '')) return { doc, id: null };
+        const raw = [clientId, dataset, ...vals].join('|');
+        return { doc, id: crypto.createHash('sha256').update(raw).digest('hex') };
+      });
+      const alias = es.aliasName(clientId, dataset);
+      const now   = new Date().toISOString();
+      const ops   = [];
+      for (const { doc, id } of docsWithIds) {
+        const enriched = es.applyStatusDefault({ ...doc, __instance_id: clientId, __ingested_at: now });
+        ops.push(id ? { index: { _index: alias, _id: id } } : { index: { _index: alias } });
+        ops.push(enriched);
+      }
+      const esClient = es.getClient();
+      const r = await esClient.bulk({ operations: ops, refresh: false });
+      const items = r.items || [];
+      result = {
+        indexed: items.filter(i => !i.index?.error).length,
+        failed:  items.filter(i =>  i.index?.error).length,
+        errors:  items.filter(i =>  i.index?.error).map(i => i.index.error.reason).slice(0, 10),
+      };
+    } else {
+      result = await es.bulkIndex(clientId, dataset, docs);
+    }
 
     const durationMs = Date.now() - t0;
-    await logIngest(clientId, dataset, replace ? 'replace' : 'bulk', result, label, durationMs);
+    await logIngest(clientId, dataset, replace ? 'replace' : 'upsert', result, label, durationMs);
 
     // Auto-maintain lookup datasets — async, never blocks the response
     syncLookupFromDocs(clientId, dataset, def.id, docs).catch(() => {});
 
     res.json({ success: true, indexed: result.indexed, failed: result.failed,
-               errors: result.errors, durationMs });
+               errors: result.errors, durationMs,
+               mode: replace ? 'replace' : pkFields.length ? 'upsert' : 'append' });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -337,15 +369,31 @@ router.post('/:dataset/single', requireApiKey, async (req, res) => {
   const def = await getDatasetDef(clientId, dataset);
   if (!def) return res.status(404).json({ error: `Dataset '${dataset}' not found for this instance` });
 
+  const pkFields = def.primary_key_fields || [];
+
   try {
-    const result = await es.bulkIndex(clientId, dataset, [doc]);
+    let result;
+    if (pkFields.length) {
+      const crypto = require('crypto');
+      const vals = pkFields.map(f => String(doc[f] ?? ''));
+      const id   = vals.some(v => v === '') ? null
+        : crypto.createHash('sha256').update([clientId, dataset, ...vals].join('|')).digest('hex');
+      const alias   = es.aliasName(clientId, dataset);
+      const enriched = es.applyStatusDefault({ ...doc, __instance_id: clientId, __ingested_at: new Date().toISOString() });
+      const esClient = es.getClient();
+      const r = await esClient.index({ index: alias, id: id || undefined, document: enriched, refresh: false });
+      result = { indexed: 1, failed: 0, errors: [], id: r._id };
+    } else {
+      result = await es.bulkIndex(clientId, dataset, [doc]);
+    }
     const durationMs = Date.now() - t0;
     await logIngest(clientId, dataset, 'single', result, label, durationMs);
 
     // Auto-maintain lookup datasets — async, never blocks the response
     syncLookupFromDocs(clientId, dataset, def.id, [doc]).catch(() => {});
 
-    res.json({ success: true, ...result, durationMs });
+    res.json({ success: true, ...result, durationMs,
+               mode: pkFields.length ? 'upsert' : 'append' });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -1239,6 +1287,7 @@ router.post('/customers/import', requireApiKey, async (req, res) => {
     doc.__instance_id = clientId;
     doc.__ingested_at = doc.__ingested_at || new Date().toISOString();
     doc.__updated_at  = new Date().toISOString();
+    es.applyStatusDefault(doc);
 
     enriched.push(doc);
   }

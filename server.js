@@ -6,6 +6,8 @@ const { URL } = require('url');
 const { pool, initDb } = require('./db');
 const esClient = require('./esClient');
 const { router: ingestRouter } = require('./ingestRouter');
+const webhookRouter             = require('./webhookRouter');
+const fileImportRouter          = require('./fileImportRouter');
 const adminRouter = require('./adminRoutes');
 
 const app = express();
@@ -29,8 +31,22 @@ function requireBasicAuth(req, res, next) {
   res.status(401).send('Unauthorized');
 }
 
+// Health check — must be first, no auth
+app.get('/healthz', (req, res) => res.json({ ok: true }));
+
 // Mount ingest router BEFORE basic auth — it has its own X-Api-Key auth
 app.use('/api/ingest', ingestRouter);
+
+// Inbound webhook receiver — public (no API key, auth handled per-webhook)
+// Must use raw body parser for HMAC verification — mounted before express.json()
+app.use('/api/webhook', webhookRouter);
+
+// Webhook admin routes — accept basic auth (browser) or API key (external tools)
+// Note: setInstanceClientId() is called after INSTANCE is initialized (see boot sequence below)
+app.use('/api/ingest', webhookRouter);
+
+// File import — multer handles its own body parsing (must be before express.json() middleware)
+app.use('/api/ingest', fileImportRouter);
 app.use('/api/admin',  requireBasicAuth, adminRouter);
 
 app.use((req, res, next) => {
@@ -44,6 +60,58 @@ app.use((req, res, next) => {
   }
   res.set('WWW-Authenticate', 'Basic realm="DDNL Analytics"');
   res.status(401).send('Unauthorized');
+});
+
+// ─── Index HTML — inject instance config so theme applies synchronously (no FOUC) ─
+const fs = require('fs');
+const _indexHtmlPath = path.join(__dirname, 'index.html');
+app.get('/', (req, res) => {
+  try {
+    let html = fs.readFileSync(_indexHtmlPath, 'utf8');
+    // Inject a synchronous bootstrap script right after <head> so the theme
+    // is applied before the first paint — eliminates flash of light/wrong theme.
+    // Build a synchronous theme bootstrap: set data-theme + critical CSS vars
+    // before the browser paints a single pixel, eliminating all FOUC.
+    const inst = INSTANCE;
+    const t = inst.theme || {};
+    const savedModeKey = `ddnl-theme-mode-${inst.id}`;
+    const injection = `<script>
+(function(){
+  var inst=${JSON.stringify(inst)};
+  window.__INSTANCE_CONFIG__=inst;
+  var t=inst.theme||{};
+  var root=document.documentElement;
+  // Determine mode: localStorage overrides defaultThemeMode
+  var saved='';
+  try{saved=localStorage.getItem('ddnl-theme-mode-'+inst.id)||'';}catch(e){}
+  var mode=saved||(inst.defaultThemeMode==='dark'?'dark':'light');
+  if(mode==='dark') root.setAttribute('data-theme','dark');
+  // Wire instance-specific tokens immediately
+  var isDark=mode==='dark';
+  var bg     =isDark?(t['--inst-bg-dark']     ||t['--inst-bg']    ):(t['--inst-bg-light']     ||t['--inst-bg']    );
+  var surface=isDark?(t['--inst-surface-dark']||t['--inst-surface']):(t['--inst-surface-light']||t['--inst-surface']);
+  var border =isDark?(t['--inst-border-dark'] ||t['--inst-border']):(t['--inst-border-light-lm']||t['--inst-border']);
+  var text   =isDark?(t['--inst-text-dark']   ||t['--inst-text']  ):(t['--inst-text-light']   ||t['--inst-text']  );
+  var muted  =isDark?(t['--inst-text-muted-dark']||t['--inst-text-muted']):(t['--inst-text-muted-light']||t['--inst-text-muted']);
+  var accent =isDark?(t['--inst-accent-dark-dm']||t['--inst-accent']):(t['--inst-accent-light']||t['--inst-accent']);
+  var navBg  =t['--inst-nav-bg'];
+  if(bg)      root.style.setProperty('--bg',bg);
+  if(surface){root.style.setProperty('--surface',surface);root.style.setProperty('--surface2',surface);}
+  if(border)  root.style.setProperty('--border',border);
+  if(text)    root.style.setProperty('--text',text);
+  if(muted)   root.style.setProperty('--text-muted',muted);
+  if(accent) {root.style.setProperty('--teal',accent);root.style.setProperty('--teal-dim',accent);}
+  if(navBg)   root.style.setProperty('--navy',navBg);
+})();
+<\/script>`;
+    html = html.replace('<head>', '<head>' + injection);
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+    res.setHeader('Content-Type', 'text/html');
+    res.send(html);
+  } catch(e) {
+    console.error('Failed to serve index.html with instance injection:', e);
+    res.sendFile(_indexHtmlPath);
+  }
 });
 
 // ─── Static files ────────────────────────────────────────────────────────────
@@ -83,6 +151,11 @@ try {
     INSTANCE.apiToken = process.env.INSTANCE_API_TOKEN;
   }
   console.log(`Instance: ${INSTANCE.id} (${INSTANCE.name}) adapter=${INSTANCE.adapter}`);
+  // Wire instance clientId into webhookRouter for basic-auth admin requests
+  webhookRouter.setInstanceClientId(INSTANCE.clientId);
+  // Wire auth + clientId into fileImportRouter
+  fileImportRouter.setAuth(webhookRouter._requireBasicOrApiKey || ((req,res,next)=>next()));
+  fileImportRouter.setClientId(INSTANCE.clientId);
 } catch (e) {
   console.error('FATAL: Invalid INSTANCE_CONFIG —', e.message);
   process.exit(1);
@@ -724,31 +797,48 @@ function deriveKpis(rows, metrics) {
 
 async function internalGetDatasets(clientId) {
   const { rows } = await pool.query(
-    `SELECT dd.name, dd.label as description, dd.is_active,
+    `SELECT dd.name, dd.label as description, dd.is_active, dd.show_on_explorer,
+            -- publish-flow: count from dataset_schema_versions by fieldType
             (SELECT COUNT(*) FROM dataset_schema_versions dsv
              JOIN LATERAL jsonb_array_elements(dsv.fields) f(v) ON TRUE
              WHERE dsv.dataset_id=dd.id AND dsv.version=dd.current_version AND v->>'fieldType'='segment') as segment_count,
             (SELECT COUNT(*) FROM dataset_schema_versions dsv
              JOIN LATERAL jsonb_array_elements(dsv.fields) f(v) ON TRUE
-             WHERE dsv.dataset_id=dd.id AND dsv.version=dd.current_version AND v->>'fieldType'='metric') as metric_count
+             WHERE dsv.dataset_id=dd.id AND dsv.version=dd.current_version AND v->>'fieldType'='metric') as metric_count,
+            -- file-import-flow: count from dataset_versions (raw fields array)
+            (SELECT jsonb_array_length(dv.fields) FROM dataset_versions dv
+             WHERE dv.client_id=dd.client_id AND dv.name=dd.name AND dv.version=dd.current_version
+             LIMIT 1) as raw_field_count
      FROM dataset_definitions dd
      WHERE dd.client_id=$1 AND dd.is_active=TRUE ORDER BY dd.name`,
     [clientId]
   );
-  return rows.map(r => ({
-    name: r.name, description: r.description,
-    segmentCount: parseInt(r.segment_count,10),
-    metricCount:  parseInt(r.metric_count,10),
-    isActive: r.is_active
-  }));
+  return rows.map(r => {
+    const segCount  = parseInt(r.segment_count, 10) || 0;
+    const metCount  = parseInt(r.metric_count,  10) || 0;
+    const rawCount  = parseInt(r.raw_field_count, 10) || 0;
+    // If publish-flow has fields, use those counts; otherwise use raw field count
+    const isFileImport = segCount === 0 && metCount === 0 && rawCount > 0;
+    return {
+      name:           r.name,
+      description:    r.description,
+      segmentCount:   isFileImport ? rawCount : segCount,
+      metricCount:    isFileImport ? 0        : metCount,
+      isActive:       r.is_active,
+      showOnExplorer: r.show_on_explorer !== false, // default true
+      isFileImport,
+    };
+  });
 }
 
 async function internalGetDatasetDetail(clientId, datasetName) {
+  // Try dataset_schema_versions first (publish flow), fall back to dataset_versions (file-import flow)
   const { rows: [def] } = await pool.query(
     `SELECT dd.id AS dd_id, dd.name, dd.label, dd.current_version, dd.es_alias,
-            dsv.fields
+            COALESCE(dsv.fields, dv.fields) AS fields
      FROM dataset_definitions dd
-     JOIN dataset_schema_versions dsv ON dsv.dataset_id=dd.id AND dsv.version=dd.current_version
+     LEFT JOIN dataset_schema_versions dsv ON dsv.dataset_id=dd.id AND dsv.version=dd.current_version
+     LEFT JOIN dataset_versions dv ON dv.client_id=dd.client_id AND dv.name=dd.name AND dv.version=dd.current_version
      WHERE dd.client_id=$1 AND dd.name=$2 AND dd.is_active=TRUE`,
     [clientId, datasetName]
   );
@@ -796,10 +886,18 @@ async function internalGetDatasetDetail(clientId, datasetName) {
       };
     });
 
+  // For file-import datasets, segments/metrics will be empty (raw fields have no fieldType).
+  // Omit segments/metrics from response so the UI falls through to the raw `fields` path.
+  const isFileImport = segments.length === 0 && metrics.length === 0 && (def.fields || []).length > 0;
+
   return {
     description: def.label,
-    dataset: { name: def.name, baseSQL: '', datasetSegments: segments },
-    segments, metrics
+    ...(isFileImport ? {} : {
+      dataset: { name: def.name, baseSQL: '', datasetSegments: segments },
+      segments,
+      metrics,
+    }),
+    fields: def.fields || [],   // raw fields array for file-import datasets
   };
 }
 
@@ -921,6 +1019,32 @@ app.get('/api/bi/datasets/:name', async (req, res) => {
   }
 });
 
+// PATCH /api/bi/datasets/:name/settings — update dataset settings (show_on_explorer, etc.)
+app.patch('/api/bi/datasets/:name/settings', async (req, res) => {
+  const inst   = resolveInstance(req);
+  const dsName = req.params.name;
+  if (inst.adapter !== 'internal') return res.status(400).json({ error: 'Not supported for this adapter' });
+
+  const allowed = ['show_on_explorer', 'label'];
+  const updates = {};
+  for (const key of allowed) {
+    if (key in req.body) updates[key] = req.body[key];
+  }
+  if (!Object.keys(updates).length) return res.status(400).json({ error: 'No valid fields to update' });
+
+  try {
+    const setClauses = Object.keys(updates).map((k, i) => `${k}=$${i + 1}`).join(', ');
+    const values     = [...Object.values(updates), inst.clientId, dsName];
+    const { rowCount } = await pool.query(
+      `UPDATE dataset_definitions SET ${setClauses}, updated_at=NOW()
+       WHERE client_id=$${values.length - 1} AND name=$${values.length} AND is_active=TRUE`,
+      values
+    );
+    if (!rowCount) return res.status(404).json({ error: `Dataset '${dsName}' not found` });
+    return res.json({ success: true });
+  } catch (e) { return res.status(500).json({ error: e.message }); }
+});
+
 app.post('/api/bi/query', async (req, res) => {
   const inst = resolveInstance(req);
   const body = req.body;
@@ -929,7 +1053,14 @@ app.post('/api/bi/query', async (req, res) => {
     try {
       const result = await esClient.query(inst.clientId, body.datasetName, body);
       return res.json({ success: true, data: result });
-    } catch (e) { return res.status(500).json({ success: false, error: e.message }); }
+    } catch (e) {
+      // ES index_not_found = dataset exists in DB but has never been published/indexed
+      const isNotFound = e.message?.includes('index_not_found') || e.meta?.statusCode === 404;
+      if (isNotFound) {
+        return res.status(404).json({ success: false, error: 'not_published', message: 'This dataset has not been published yet. Open it in Designer to define the schema and publish.' });
+      }
+      return res.status(500).json({ success: false, error: e.message });
+    }
   }
 
   if (inst.adapter === 'insight') {
@@ -1143,6 +1274,62 @@ app.post('/api/bi/datasets/:name/records', async (req, res) => {
     const { records, total } = await esClient.rawQuery(inst.clientId, dsName, filters, Math.min(size, 500));
     return res.json({ success: true, data: { records, total, returned: records.length } });
   } catch (e) {
+    return res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// ─── Generic dataset search endpoint ─────────────────────────────────────────
+// GET /api/bi/datasets/:name/search
+// Works for any dataset — no instance-specific field names.
+// Supports: ?q=text  ?page=1  ?size=50  ?sort=field  ?dir=asc|desc
+// Full-text: query_string across all fields; falls back to match_all when q is empty.
+
+app.get('/api/bi/datasets/:name/search', async (req, res) => {
+  const inst     = resolveInstance(req);
+  if (inst.adapter !== 'internal') return res.status(501).json({ success: false, error: 'internal only' });
+  const dsName   = req.params.name;
+  const es       = esClient.getClient();
+  const alias    = esClient.aliasName(inst.clientId, dsName);
+  const page     = Math.max(1, parseInt(req.query.page || '1',  10));
+  const pageSize = Math.min(500, Math.max(1, parseInt(req.query.size || '50', 10)));
+  const q        = (req.query.q    || '').trim();
+  const sortKey  = req.query.sort  || '_score';
+  const sortDir  = (req.query.dir  || 'desc') === 'asc' ? 'asc' : 'desc';
+  const from     = (page - 1) * pageSize;
+
+  const must = [
+    { term: { __instance_id: inst.clientId } },
+    esClient.activeOnlyClause()
+  ];
+
+  const esQuery = q
+    ? { bool: { must, should: [{ query_string: { query: `*${q.replace(/[+\-=&|><!(){}\[\]^"~*?:\\/]/g, '\\$&')}*`, default_operator: 'AND', lenient: true } }], minimum_should_match: 1 } }
+    : { bool: { must } };
+
+  // Only allow keyword/numeric sort fields — prevent mapping errors
+  const sortSpec = sortKey === '_score'
+    ? [{ _score: { order: sortDir } }]
+    : [{ [sortKey]: { order: sortDir, missing: '_last', unmapped_type: 'keyword' } }];
+
+  try {
+    const result = await es.search({
+      index: alias,
+      body: {
+        query: esQuery,
+        from,
+        size:  pageSize,
+        sort:  sortSpec,
+        _source: { excludes: ['__instance_id', '__ingested_at', '__ingest_version', '_status', 'address_hash'] }
+      }
+    });
+    const hits    = result.hits?.hits || [];
+    const total   = result.hits?.total?.value ?? 0;
+    const records = hits.map(h => h._source);
+    return res.json({ success: true, data: { records, total, page, pageSize, pages: Math.ceil(total / pageSize) } });
+  } catch (e) {
+    const isNotFound = e.message?.includes('index_not_found') || e.meta?.statusCode === 404;
+    if (isNotFound) return res.status(404).json({ success: false, error: 'not_published' });
+    console.error(`[dataset/search:${dsName}]`, e.message);
     return res.status(500).json({ success: false, error: e.message });
   }
 });
@@ -1477,10 +1664,44 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
+// ─── FTP auto-start (instance-specific) ──────────────────────────────────────
+function startFtpServer() {
+  const ftpScripts = {
+    // acuity FTP parked — re-enable when FTPS is ready
+    // acuity:  'ftp-server-acuity.py',
+    produce: 'ftp-server.py',
+  };
+  const script = ftpScripts[INSTANCE.id];
+  if (!script) return; // no FTP for this instance
+  const { spawn } = require('child_process');
+  const path = require('path');
+  const proc = spawn('python3', [path.join(__dirname, script)], {
+    detached: true,
+    stdio:    ['ignore', 'pipe', 'pipe'],
+  });
+  proc.stdout.on('data', d => console.log(`[ftp] ${d.toString().trim()}`));
+  proc.stderr.on('data', d => console.error(`[ftp:err] ${d.toString().trim()}`));
+  proc.on('error', (err) => {
+    console.error(`[ftp] failed to start: ${err.message} — retrying in 10s`);
+    setTimeout(startFtpServer, 10000);
+  });
+  proc.on('exit', (code) => {
+    console.warn(`[ftp] process exited (${code}) — restarting in 5s`);
+    setTimeout(startFtpServer, 5000);
+  });
+  console.log(`[ftp] started ${script} for instance ${INSTANCE.id}`);
+}
+
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 initDb()
-  .then(() => app.listen(PORT, () => console.log(`[${INSTANCE.id}] running on port ${PORT}`)))
+  .then(() => app.listen(PORT, () => {
+    console.log(`[${INSTANCE.id}] running on port ${PORT}`);
+    startFtpServer();
+  }))
   .catch(err => {
     console.error('Failed to init DB, starting without persistence:', err.message);
-    app.listen(PORT, () => console.log(`[${INSTANCE.id}] running (no DB) on port ${PORT}`));
+    app.listen(PORT, () => {
+      console.log(`[${INSTANCE.id}] running (no DB) on port ${PORT}`);
+      startFtpServer();
+    });
   });
