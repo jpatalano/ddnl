@@ -6954,7 +6954,7 @@ function showView(view) {
   document.getElementById('dashboard-screen').style.display  = view==='dashboard' ? 'flex' : 'none';
   document.getElementById('home-screen').style.cssText = view==='home' ? 'display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0' : 'display:none';
   document.getElementById('saved-screen').style.display      = view==='saved'     ? 'flex' : 'none';
-  document.getElementById('my-dash-screen').style.display    = view==='myDash'    ? 'flex' : 'none';
+  document.getElementById('my-dash-screen').style.cssText    = view==='myDash'    ? 'display:flex;flex-direction:column;flex:1;overflow-y:auto' : 'display:none';
   document.getElementById('designer-screen').style.display   = view==='designer'  ? 'flex' : 'none';
   document.getElementById('homeDash-screen').style.display   = view==='homeDash'  ? 'flex' : 'none';
 
@@ -7029,7 +7029,7 @@ function homeDashRender() {
   });
   // Keep homeDash-screen hidden; the view renders in my-dash-screen
   document.getElementById('homeDash-screen').style.display  = 'none';
-  document.getElementById('my-dash-screen').style.display   = 'flex';
+  document.getElementById('my-dash-screen').style.cssText   = 'display:flex;flex-direction:column;flex:1;overflow-y:auto';
   // Ensure saved charts are loaded before rendering (may not be if user lands here before myDash)
   if (!_savedCharts.length) {
     _loadSavedCharts().then(() => myDashOpenView(dash.id));
