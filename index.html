@@ -6951,12 +6951,13 @@ function showView(view) {
   });
   // Fullscreen builder overlays everything
   document.getElementById('rb-screen').classList.toggle('open', view==='builder');
-  document.getElementById('dashboard-screen').style.display  = view==='dashboard' ? 'flex' : 'none';
-  document.getElementById('home-screen').style.cssText = view==='home' ? 'display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0' : 'display:none';
-  document.getElementById('saved-screen').style.display      = view==='saved'     ? 'flex' : 'none';
-  document.getElementById('my-dash-screen').style.cssText    = view==='myDash'    ? 'display:flex;flex-direction:column;flex:1;overflow-y:auto' : 'display:none';
-  document.getElementById('designer-screen').style.display   = view==='designer'  ? 'flex' : 'none';
-  document.getElementById('homeDash-screen').style.display   = view==='homeDash'  ? 'flex' : 'none';
+  // Always use cssText so flex:1 is preserved — style.display alone strips it
+  document.getElementById('dashboard-screen').style.cssText  = view==='dashboard' ? 'display:flex;flex-direction:column;flex:1;overflow-y:auto'          : 'display:none';
+  document.getElementById('home-screen').style.cssText       = view==='home'      ? 'display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0' : 'display:none';
+  document.getElementById('saved-screen').style.cssText      = view==='saved'     ? 'display:flex;flex-direction:column;flex:1;overflow-y:auto'              : 'display:none';
+  document.getElementById('my-dash-screen').style.cssText    = view==='myDash'    ? 'display:flex;flex-direction:column;flex:1;overflow-y:auto'              : 'display:none';
+  document.getElementById('designer-screen').style.cssText   = view==='designer'  ? 'display:flex;flex-direction:column;flex:1;overflow:hidden'              : 'display:none';
+  document.getElementById('homeDash-screen').style.cssText   = view==='homeDash'  ? 'display:flex;flex-direction:column;flex:1;overflow-y:auto'              : 'display:none';
 
   if(view==='builder') {
     // If navigating to builder directly (not via loadReport), it's a new report
