@@ -7407,15 +7407,19 @@ function explGridExportCsv() {
 
 function dexRenderList(datasets) {
   document.getElementById('dex-ds-list').innerHTML = datasets.length
-    ? datasets.map(ds => `
+    ? datasets.map(ds => {
+        const displayLabel = ds.description || ds.label || ds.name;
+        const showKey = displayLabel !== ds.name;
+        return `
       <div class="dex-ds-item" id="dex-item-${ds.name}" onclick="dexSelectDataset('${ds.name}')">
-        <div class="dex-ds-name">${ds.name}</div>
-        <div class="dex-ds-desc">${ds.description || ''}</div>
+        <div class="dex-ds-name">${escHtml(displayLabel)}</div>
+        ${showKey ? `<div class="dex-ds-desc" style="font-family:var(--font-mono,monospace);font-size:10px;opacity:.7">${escHtml(ds.name)}</div>` : ''}
         <div class="dex-ds-pills">
           <span class="dex-pill seg">${ds.segmentCount} segments</span>
           <span class="dex-pill met">${ds.metricCount} metrics</span>
         </div>
-      </div>`).join('')
+      </div>`;
+      }).join('')
     : '<div style="padding:20px;color:var(--text-muted);font-size:12px">No datasets found</div>';
   dexRenderSavedChartsList();
 }
@@ -13059,4 +13063,4 @@ function dsgnRenderFiscal(main) {
 </body>
 </html>
 <!-- rebuild Thu Apr 16 20:02:34 UTC 2026 -->
-<!-- force 853419884 -->
+<!-- force 2432261334 -->
