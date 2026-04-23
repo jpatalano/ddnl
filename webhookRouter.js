@@ -194,40 +194,6 @@ function captureRawBody(req, res, next) {
   });
 }
 
-// ── Inbound webhook receiver ──────────────────────────────────────────────────
-// POST /api/webhook/:client_id/:webhook_id
-router.post('/webhook/:client_id/:webhook_id', captureRawBody, async (req, res) => {
-  const { client_id, webhook_id } = req.params;
-  const t0 = Date.now();
-
-  // Load webhook config
-  const { rows: [webhook] } = await pool.query(
-    `SELECT dw.*, dd.name AS dataset_name, dd.primary_key_fields, dd.event_types
-     FROM dataset_webhooks dw
-     JOIN dataset_definitions dd ON dd.id = dw.dataset_id
-     WHERE dw.id = $1 AND dw.client_id = $2`,
-    [webhook_id, client_id]
-  );
-
-  if (!webhook) return res.status(404).json({ error: 'Webhook not found' });
-  if (!webhook.enabled) return res.status(410).json({ error: 'Webhook disabled' });
-
-  // Verify security
-  const verification = verifyWebhook(req, webhook);
-  if (!verification.ok) {
-    await logDelivery(webhook.id, client_id, 'rejected', null, 0, 0, 0, verification.reason, Date.now() - t0, null);
-    return res.status(401).json({ error: verification.reason });
-  }
-
-  // Acknowledge immediately — process async
-  res.json({ success: true, message: 'Received' });
-
-  // Process in background
-  processWebhookPayload(webhook, client_id, req.body, t0).catch(err => {
-    console.error(`[webhook:${webhook_id}] processing error:`, err.message);
-  });
-});
-
 async function processWebhookPayload(webhook, clientId, payload, t0) {
   let recordsIn = 0, recordsUpserted = 0, recordsFailed = 0, errorMsg = null;
 
@@ -509,6 +475,41 @@ router.patch('/admin/datasets/:name/primary-key', requireBasicOrApiKey, async (r
   );
 
   res.json({ success: true, primary_key_fields, event_types });
+});
+
+// ── Inbound webhook receiver ──────────────────────────────────────────────────
+// POST /api/webhook/:client_id/:webhook_id
+// Defined LAST so /admin/... routes always take priority on the /api/ingest mount.
+router.post('/:client_id/:webhook_id', captureRawBody, async (req, res) => {
+  const { client_id, webhook_id } = req.params;
+  const t0 = Date.now();
+
+  // Load webhook config
+  const { rows: [webhook] } = await pool.query(
+    `SELECT dw.*, dd.name AS dataset_name, dd.primary_key_fields, dd.event_types
+     FROM dataset_webhooks dw
+     JOIN dataset_definitions dd ON dd.id = dw.dataset_id
+     WHERE dw.id = $1 AND dw.client_id = $2`,
+    [webhook_id, client_id]
+  );
+
+  if (!webhook) return res.status(404).json({ error: 'Webhook not found' });
+  if (!webhook.enabled) return res.status(410).json({ error: 'Webhook disabled' });
+
+  // Verify security
+  const verification = verifyWebhook(req, webhook);
+  if (!verification.ok) {
+    await logDelivery(webhook.id, client_id, 'rejected', null, 0, 0, 0, verification.reason, Date.now() - t0, null);
+    return res.status(401).json({ error: verification.reason });
+  }
+
+  // Acknowledge immediately — process async
+  res.json({ success: true, message: 'Received' });
+
+  // Process in background
+  processWebhookPayload(webhook, client_id, req.body, t0).catch(err => {
+    console.error(`[webhook:${webhook_id}] processing error:`, err.message);
+  });
 });
 
 module.exports = router;
