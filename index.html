@@ -3223,6 +3223,10 @@
                 <input type="date" id="dex-date-from" style="display:none">
                 <input type="date" id="dex-date-to" style="display:none">
                 <select id="dex-date-seg" style="display:none"><option value="">(no date filter)</option></select>
+                <button id="dex-add-measure-btn" onclick="dexOpenMeasureModal()" title="Add a derived measure with its own filter"
+                  style="display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border:1.5px solid var(--border);border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;background:var(--surface);color:var(--text);white-space:nowrap">
+                  <i data-lucide="plus-circle" style="width:12px;height:12px"></i> Measure
+                </button>
                 <select class="dex-limit-select" id="dex-limit" title="Row limit">
                   <option value="25">25 rows</option>
                   <option value="100" selected>100 rows</option>
@@ -3232,6 +3236,74 @@
                 <button class="dex-run-btn" id="dex-run-btn" onclick="dexRunQuery()" disabled>
                   <i data-lucide="play" style="width:13px;height:13px"></i> Run
                 </button>
+              </div>
+            </div>
+            <!-- Derived measures row (only shown when measures exist) -->
+            <div id="dex-measures-row" style="display:none;padding:6px 14px;border-bottom:1px solid var(--border);background:var(--surface2);gap:6px;flex-wrap:wrap;align-items:center">
+              <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-right:4px">Measures</span>
+              <div id="dex-measures-pills" style="display:inline-flex;gap:6px;flex-wrap:wrap"></div>
+            </div>
+            <!-- Measure editor modal -->
+            <div id="dex-measure-modal" style="display:none;position:fixed;inset:0;z-index:2000;background:rgba(7,16,28,.55);align-items:center;justify-content:center" onclick="if(event.target===this)dexCloseMeasureModal()">
+              <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:var(--shadow-lg);width:440px;max-width:92vw;padding:18px">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+                  <div style="font-weight:700;font-size:14px;color:var(--text)" id="dex-mm-title">Add Measure</div>
+                  <button onclick="dexCloseMeasureModal()" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:18px;line-height:1">×</button>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:10px">
+                  <label style="display:flex;flex-direction:column;gap:3px;font-size:11px;font-weight:600;color:var(--text-muted)">Name
+                    <input id="dex-mm-name" type="text" placeholder="e.g. Added 30d" style="padding:7px 9px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--surface);color:var(--text)">
+                  </label>
+                  <div style="display:flex;gap:8px">
+                    <label style="flex:1;display:flex;flex-direction:column;gap:3px;font-size:11px;font-weight:600;color:var(--text-muted)">Aggregation
+                      <select id="dex-mm-agg" onchange="dexMmUpdateFieldVisibility()" style="padding:7px 9px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--surface);color:var(--text)">
+                        <option value="count">Count records</option>
+                        <option value="count_distinct">Count distinct</option>
+                        <option value="sum">Sum</option>
+                        <option value="avg">Average</option>
+                        <option value="min">Min</option>
+                        <option value="max">Max</option>
+                      </select>
+                    </label>
+                    <label id="dex-mm-field-wrap" style="flex:1;display:none;flex-direction:column;gap:3px;font-size:11px;font-weight:600;color:var(--text-muted)">Field
+                      <select id="dex-mm-field" style="padding:7px 9px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--surface);color:var(--text)"></select>
+                    </label>
+                  </div>
+                  <div style="border-top:1px solid var(--border);padding-top:10px;margin-top:4px">
+                    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:6px">Filter (optional)</div>
+                    <div style="display:flex;gap:8px;align-items:flex-end">
+                      <label style="flex:1;display:flex;flex-direction:column;gap:3px;font-size:11px;font-weight:600;color:var(--text-muted)">Date field
+                        <select id="dex-mm-datefield" style="padding:7px 9px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--surface);color:var(--text)">
+                          <option value="">(no date filter)</option>
+                        </select>
+                      </label>
+                      <label style="flex:1;display:flex;flex-direction:column;gap:3px;font-size:11px;font-weight:600;color:var(--text-muted)">Range
+                        <select id="dex-mm-range" onchange="dexMmUpdateCustomVisibility()" style="padding:7px 9px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--surface);color:var(--text)">
+                          <option value="">All time</option>
+                          <option value="7">Last 7 days</option>
+                          <option value="30">Last 30 days</option>
+                          <option value="60">Last 60 days</option>
+                          <option value="90">Last 90 days</option>
+                          <option value="180">Last 180 days</option>
+                          <option value="365">Last 365 days</option>
+                          <option value="custom">Custom…</option>
+                        </select>
+                      </label>
+                    </div>
+                    <div id="dex-mm-custom" style="display:none;gap:8px;margin-top:8px">
+                      <label style="flex:1;display:flex;flex-direction:column;gap:3px;font-size:11px;font-weight:600;color:var(--text-muted)">From
+                        <input id="dex-mm-from" type="date" style="padding:7px 9px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--surface);color:var(--text)">
+                      </label>
+                      <label style="flex:1;display:flex;flex-direction:column;gap:3px;font-size:11px;font-weight:600;color:var(--text-muted)">To
+                        <input id="dex-mm-to" type="date" style="padding:7px 9px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--surface);color:var(--text)">
+                      </label>
+                    </div>
+                  </div>
+                </div>
+                <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">
+                  <button onclick="dexCloseMeasureModal()" style="padding:7px 14px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);cursor:pointer;font-size:12px;font-weight:600">Cancel</button>
+                  <button onclick="dexSaveMeasure()" style="padding:7px 14px;border:none;border-radius:6px;background:var(--teal);color:#fff;cursor:pointer;font-size:12px;font-weight:700">Save</button>
+                </div>
               </div>
             </div>
 
@@ -7636,6 +7708,9 @@ async function dexSelectDataset(name) {
     _dexActive.segments = segs;
     _dexActive.metrics  = mets;
 
+    // Load any saved derived measures for this dataset
+    dexLoadMeasures(name);
+
     // Default all fields to Display in _dexQuery
     _dexQuery = new Map();
     for (const f of segs) {
@@ -7735,8 +7810,9 @@ function dexRenderChips() {
   builder.querySelectorAll('.dex-qchip').forEach(el => el.remove());
 
   const hasChips = _dexQuery.size > 0;
-  if (hint) hint.style.display = hasChips ? 'none' : '';
-  if (btn)  btn.disabled = !hasChips;
+  const hasMeasures = Array.isArray(_dexMeasures) && _dexMeasures.length > 0;
+  if (hint) hint.style.display = (hasChips || hasMeasures) ? 'none' : '';
+  if (btn)  btn.disabled = !(hasChips || hasMeasures);
 
   // Insert chips before the controls div (last child)
   const controlsDiv = builder.lastElementChild;
@@ -7799,7 +7875,11 @@ function dexShowQuery(endpoint, body) {
 }
 
 async function dexRunQuery() {
-  if (!_dexActive || _dexQuery.size === 0) return;
+  if (!_dexActive) return;
+  const hasMeasures = Array.isArray(_dexMeasures) && _dexMeasures.length > 0;
+  if (_dexQuery.size === 0 && !hasMeasures) return;
+  // If any derived measures are defined, route to the measures runner (client-side aggregation)
+  if (hasMeasures) return dexRunMeasuresQuery();
   const dsName = _dexActive.name;
   const btn = document.getElementById('dex-run-btn');
   btn.disabled = true;
@@ -7907,6 +7987,374 @@ async function dexRunQuery() {
     btn.disabled = false;
     btn.innerHTML = '<i data-lucide="play" style="width:13px;height:13px"></i> Run Query';
     lucide.createIcons({ el: btn });
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Derived Measures — custom measures with optional date-range filters.
+// Each measure: { id, name, agg: 'count'|'count_distinct'|'sum'|'avg'|'min'|'max',
+//                 field: string (required for non-count aggs),
+//                 dateField: string (optional), range: '' | N days | 'custom', from, to }
+// Stored in _dexMeasures; persisted per-dataset in localStorage.
+// ──────────────────────────────────────────────────────────────────────────────
+let _dexMeasures = [];        // current dataset's measures
+let _dexMeasureEditId = null; // id of measure being edited (null = new)
+
+function _dexMeasuresKey(dsName) { return `dex_measures_${dsName}`; }
+
+function dexLoadMeasures(dsName) {
+  try {
+    const raw = localStorage.getItem(_dexMeasuresKey(dsName));
+    _dexMeasures = raw ? JSON.parse(raw) : [];
+  } catch { _dexMeasures = []; }
+  dexRenderMeasurePills();
+}
+
+function dexSaveMeasures(dsName) {
+  try { localStorage.setItem(_dexMeasuresKey(dsName), JSON.stringify(_dexMeasures)); } catch {}
+}
+
+function dexRenderMeasurePills() {
+  const row   = document.getElementById('dex-measures-row');
+  const pills = document.getElementById('dex-measures-pills');
+  if (!row || !pills) return;
+  if (!_dexMeasures.length) { row.style.display = 'none'; pills.innerHTML = ''; return; }
+  row.style.display = 'flex';
+  pills.innerHTML = _dexMeasures.map(m => {
+    const aggLabel = m.agg === 'count' ? 'COUNT'
+      : m.agg === 'count_distinct' ? 'COUNT DISTINCT'
+      : m.agg.toUpperCase();
+    const filterSuffix = m.dateField && (m.range || (m.from || m.to))
+      ? ` · ${_dexMeasureRangeLabel(m)}`
+      : '';
+    return `<span class="dex-measure-pill" style="display:inline-flex;align-items:center;gap:6px;padding:4px 4px 4px 10px;background:var(--surface);border:1px solid var(--border);border-radius:20px;font-size:11px;font-weight:600;color:var(--text);cursor:pointer" title="${escHtml(aggLabel + (m.field ? ' of ' + m.field : '') + filterSuffix)}" onclick="dexEditMeasure('${m.id}')">
+      <span style="color:var(--teal);font-weight:700">ƒ</span>
+      <span>${escHtml(m.name)}</span>
+      <button onclick="event.stopPropagation();dexRemoveMeasure('${m.id}')" title="Remove" style="background:none;border:none;color:var(--text-muted);font-size:14px;line-height:1;cursor:pointer;padding:0 4px;margin-left:2px">×</button>
+    </span>`;
+  }).join('');
+  if (window.lucide) lucide.createIcons({ el: row });
+}
+
+function _dexMeasureRangeLabel(m) {
+  if (!m.dateField) return '';
+  if (m.range === 'custom') {
+    if (m.from && m.to) return `${m.dateField}: ${m.from} → ${m.to}`;
+    if (m.from) return `${m.dateField} ≥ ${m.from}`;
+    if (m.to)   return `${m.dateField} ≤ ${m.to}`;
+    return '';
+  }
+  if (m.range) return `${m.dateField}: last ${m.range}d`;
+  return `${m.dateField}: all time`;
+}
+
+function dexRemoveMeasure(id) {
+  _dexMeasures = _dexMeasures.filter(m => m.id !== id);
+  if (_dexActive) dexSaveMeasures(_dexActive.name);
+  dexRenderMeasurePills();
+  dexRenderChips(); // refresh run-btn enable state
+}
+
+function dexOpenMeasureModal() {
+  _dexMeasureEditId = null;
+  _dexMeasurePopulateFieldOptions();
+  document.getElementById('dex-mm-title').textContent = 'Add Measure';
+  document.getElementById('dex-mm-name').value  = '';
+  document.getElementById('dex-mm-agg').value   = 'count';
+  document.getElementById('dex-mm-field').value = '';
+  document.getElementById('dex-mm-datefield').value = '';
+  document.getElementById('dex-mm-range').value = '';
+  document.getElementById('dex-mm-from').value  = '';
+  document.getElementById('dex-mm-to').value    = '';
+  dexMmUpdateFieldVisibility();
+  dexMmUpdateCustomVisibility();
+  const modal = document.getElementById('dex-measure-modal');
+  modal.style.display = 'flex';
+  setTimeout(() => document.getElementById('dex-mm-name').focus(), 40);
+}
+
+function dexEditMeasure(id) {
+  const m = _dexMeasures.find(x => x.id === id);
+  if (!m) return;
+  _dexMeasureEditId = id;
+  _dexMeasurePopulateFieldOptions();
+  document.getElementById('dex-mm-title').textContent = 'Edit Measure';
+  document.getElementById('dex-mm-name').value  = m.name || '';
+  document.getElementById('dex-mm-agg').value   = m.agg  || 'count';
+  document.getElementById('dex-mm-field').value = m.field || '';
+  document.getElementById('dex-mm-datefield').value = m.dateField || '';
+  document.getElementById('dex-mm-range').value = m.range || '';
+  document.getElementById('dex-mm-from').value  = m.from  || '';
+  document.getElementById('dex-mm-to').value    = m.to    || '';
+  dexMmUpdateFieldVisibility();
+  dexMmUpdateCustomVisibility();
+  document.getElementById('dex-measure-modal').style.display = 'flex';
+}
+
+function dexCloseMeasureModal() {
+  document.getElementById('dex-measure-modal').style.display = 'none';
+  _dexMeasureEditId = null;
+}
+
+function _dexMeasurePopulateFieldOptions() {
+  const fields = (_dexActive?.segments || []).map(f => f.name);
+  const numericFields = fields.filter(n => {
+    const f = (_dexActive?.segments || []).find(x => x.name === n);
+    return f && f.type === 'number';
+  });
+  const dateFields = fields.filter(n => {
+    // Prefer explicit date type, fall back to name heuristic
+    const f = (_dexActive?.segments || []).find(x => x.name === n);
+    if (f && f.type === 'date') return true;
+    return /date|time|added|created|modified|signup|visit|birth|expir/i.test(n);
+  });
+  const fSel = document.getElementById('dex-mm-field');
+  fSel.innerHTML = numericFields.map(n => `<option value="${escHtml(n)}">${escHtml(n)}</option>`).join('')
+    || '<option value="">(no numeric fields)</option>';
+  const dSel = document.getElementById('dex-mm-datefield');
+  dSel.innerHTML = '<option value="">(no date filter)</option>' +
+    dateFields.map(n => `<option value="${escHtml(n)}">${escHtml(n)}</option>`).join('');
+}
+
+function dexMmUpdateFieldVisibility() {
+  const agg = document.getElementById('dex-mm-agg').value;
+  const wrap = document.getElementById('dex-mm-field-wrap');
+  // count = records; other aggs need a field (count_distinct too)
+  const needsField = agg !== 'count';
+  wrap.style.display = needsField ? 'flex' : 'none';
+}
+
+function dexMmUpdateCustomVisibility() {
+  const rng = document.getElementById('dex-mm-range').value;
+  document.getElementById('dex-mm-custom').style.display = rng === 'custom' ? 'flex' : 'none';
+}
+
+function dexSaveMeasure() {
+  const name      = (document.getElementById('dex-mm-name').value || '').trim();
+  const agg       = document.getElementById('dex-mm-agg').value;
+  const field     = document.getElementById('dex-mm-field').value;
+  const dateField = document.getElementById('dex-mm-datefield').value;
+  const range     = document.getElementById('dex-mm-range').value;
+  const from      = document.getElementById('dex-mm-from').value;
+  const to        = document.getElementById('dex-mm-to').value;
+  if (!name) { ddnlToast('Measure name is required', 'error'); return; }
+  if (agg !== 'count' && !field) { ddnlToast('Pick a field for ' + agg, 'error'); return; }
+  // Disallow duplicate name within the same dataset
+  const dupe = _dexMeasures.find(m => m.name === name && m.id !== _dexMeasureEditId);
+  if (dupe) { ddnlToast('A measure named "' + name + '" already exists', 'error'); return; }
+  const rec = {
+    id: _dexMeasureEditId || ('m_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)),
+    name, agg,
+    field: agg === 'count' ? '' : field,
+    dateField: dateField || '',
+    range: dateField ? range : '',
+    from: (dateField && range === 'custom') ? from : '',
+    to:   (dateField && range === 'custom') ? to   : ''
+  };
+  if (_dexMeasureEditId) {
+    const i = _dexMeasures.findIndex(m => m.id === _dexMeasureEditId);
+    if (i >= 0) _dexMeasures[i] = rec;
+  } else {
+    _dexMeasures.push(rec);
+  }
+  if (_dexActive) dexSaveMeasures(_dexActive.name);
+  dexRenderMeasurePills();
+  dexRenderChips();
+  dexCloseMeasureModal();
+}
+
+// ── Date parsing (supports M/D/YYYY, MM/DD/YYYY, YYYY-MM-DD, ISO timestamps) ──
+function _dexParseDate(v) {
+  if (v === null || v === undefined || v === '') return null;
+  if (v instanceof Date) return isNaN(v) ? null : v;
+  const s = String(v).trim();
+  if (!s) return null;
+  // ISO date or timestamp
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+    const d = new Date(s);
+    return isNaN(d) ? null : d;
+  }
+  // M/D/YYYY or MM/DD/YYYY (optionally with time)
+  const mdy = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([AaPp][Mm])?)?$/);
+  if (mdy) {
+    let [, mm, dd, yy, hh, mi, ss, ap] = mdy;
+    let h = parseInt(hh || '0', 10);
+    if (ap) {
+      const isPm = /p/i.test(ap);
+      if (isPm && h < 12) h += 12;
+      if (!isPm && h === 12) h = 0;
+    }
+    const d = new Date(+yy, +mm - 1, +dd, h, +(mi || 0), +(ss || 0));
+    return isNaN(d) ? null : d;
+  }
+  // Fallback to Date constructor
+  const d = new Date(s);
+  return isNaN(d) ? null : d;
+}
+
+function _dexMeasureRangeBounds(m) {
+  // Returns { gte: Date|null, lt: Date|null } or null if no filter.
+  if (!m.dateField) return null;
+  if (m.range === 'custom') {
+    const gte = m.from ? new Date(m.from + 'T00:00:00') : null;
+    let lt = null;
+    if (m.to) {
+      const d = new Date(m.to + 'T00:00:00');
+      d.setDate(d.getDate() + 1);
+      lt = d;
+    }
+    if (!gte && !lt) return null;
+    return { gte, lt };
+  }
+  if (m.range && /^\d+$/.test(String(m.range))) {
+    const days = parseInt(m.range, 10);
+    const now = new Date();
+    const gte = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+    return { gte, lt: null };
+  }
+  return null; // all time
+}
+
+function _dexMeasureMatches(m, row, bounds) {
+  if (!bounds) return true;
+  const d = _dexParseDate(row[m.dateField]);
+  if (!d) return false;
+  if (bounds.gte && d < bounds.gte) return false;
+  if (bounds.lt  && d >= bounds.lt) return false;
+  return true;
+}
+
+function _dexMeasureAggregate(m, rows) {
+  // rows are the rows in this group that pass this measure's filter.
+  if (m.agg === 'count') return rows.length;
+  if (m.agg === 'count_distinct') {
+    const s = new Set();
+    for (const r of rows) { const v = r[m.field]; if (v !== null && v !== undefined && v !== '') s.add(String(v)); }
+    return s.size;
+  }
+  const nums = [];
+  for (const r of rows) {
+    const v = r[m.field];
+    if (v === null || v === undefined || v === '') continue;
+    const n = parseFloat(v);
+    if (!isNaN(n)) nums.push(n);
+  }
+  if (!nums.length) return 0;
+  if (m.agg === 'sum') return nums.reduce((a,b)=>a+b,0);
+  if (m.agg === 'avg') return nums.reduce((a,b)=>a+b,0) / nums.length;
+  if (m.agg === 'min') return Math.min(...nums);
+  if (m.agg === 'max') return Math.max(...nums);
+  return 0;
+}
+
+// Runner used when one or more derived measures are active.
+// Does a client-side raw fetch + aggregation so text-typed date fields
+// (e.g. M/D/YYYY) work cleanly without ES mapping changes.
+async function dexRunMeasuresQuery() {
+  if (!_dexActive) return;
+  const dsName = _dexActive.name;
+  const btn = document.getElementById('dex-run-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<i data-lucide="loader" style="width:13px;height:13px"></i> Running...';
+  if (window.lucide) lucide.createIcons({ el: btn });
+  document.getElementById('dex-table-wrap').innerHTML =
+    '<div class="dex-spinner-wrap"><div class="spinner"></div><p>Aggregating...</p></div>';
+  document.getElementById('dex-export-btn').style.display = 'none';
+
+  try {
+    // Group fields from chips (if any)
+    const groupFields = [];
+    for (const [name, entry] of _dexQuery) {
+      if (entry.action === 'group') groupFields.push(name);
+    }
+    // Raw-scan fetch via dataset search endpoint (bypasses ES agg / publish gate)
+    const rowLimit = 10000;
+    const t0 = Date.now();
+    const r = await apiFetch(`${BASE}/bi/datasets/${encodeURIComponent(dsName)}/search?size=${rowLimit}`);
+    const j = await r.json();
+    if (j.success === false) throw new Error(j.message || j.error || 'Fetch failed');
+    const allRows = j.data?.records || [];
+
+    dexShowQuery('client-side aggregation', {
+      datasetName: dsName,
+      source: `/bi/datasets/${dsName}/search?size=${rowLimit}`,
+      rowsScanned: allRows.length,
+      groupBy: groupFields,
+      measures: _dexMeasures.map(m => ({
+        name: m.name, agg: m.agg, field: m.field || null,
+        filter: _dexMeasureRangeLabel(m) || null
+      }))
+    });
+
+    // Pre-compute per-measure bounds
+    const measureBounds = _dexMeasures.map(m => _dexMeasureRangeBounds(m));
+
+    // Group rows by composite group key (supports 0+ group fields)
+    const groupMap = new Map(); // key -> { keyValues: {}, rows: [] }
+    const toKey = row => groupFields.length
+      ? groupFields.map(f => String(row[f] ?? '')).join('\u0001')
+      : '__all__';
+
+    for (const row of allRows) {
+      const k = toKey(row);
+      let g = groupMap.get(k);
+      if (!g) {
+        const keyValues = {};
+        if (groupFields.length) {
+          groupFields.forEach(f => { keyValues[f] = row[f]; });
+        }
+        g = { keyValues, rows: [] };
+        groupMap.set(k, g);
+      }
+      g.rows.push(row);
+    }
+
+    // Build output rows: one per group, with one column per measure
+    const outRows = [];
+    for (const [, g] of groupMap) {
+      const out = { ...g.keyValues };
+      _dexMeasures.forEach((m, i) => {
+        const b = measureBounds[i];
+        const matching = b ? g.rows.filter(r => _dexMeasureMatches(m, r, b)) : g.rows;
+        const val = _dexMeasureAggregate(m, matching);
+        // Round fractional aggregations to 2 decimals for display
+        out[m.name] = (m.agg === 'avg' || m.agg === 'sum') ? Math.round(val * 100) / 100 : val;
+      });
+      outRows.push(out);
+    }
+
+    // Sort by first measure descending for nicer default ordering
+    if (_dexMeasures.length) {
+      const k = _dexMeasures[0].name;
+      outRows.sort((a, b) => (parseFloat(b[k]) || 0) - (parseFloat(a[k]) || 0));
+    }
+
+    // Prime state used by visual builder
+    _dexResults  = outRows;
+    _dexSelSegs  = [...groupFields];
+    _dexSelMets  = _dexMeasures.map(m => m.name);
+    // Multi-measure output is best visualized as grouped bars — auto-pick 'multi'
+    // and mark as user-set so downstream heuristics don't override it.
+    if (_dexMeasures.length > 1) {
+      _dexChartType = 'multi';
+      _dexChartTypeUserSet = true;
+      document.querySelectorAll('.dex-chart-type-btn').forEach(b => b.classList.remove('active'));
+      document.getElementById('dex-ct-multi')?.classList.add('active');
+    }
+
+    dexRenderTable(outRows, {
+      totalRows: outRows.length,
+      executionTimeMs: Date.now() - t0,
+      cacheHit: false
+    });
+  } catch (e) {
+    document.getElementById('dex-table-wrap').innerHTML =
+      `<div class="dex-no-data" style="color:var(--red)">Measure error: ${escHtml(e.message)}</div>`;
+    document.getElementById('dex-results-meta').textContent = 'Error';
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i data-lucide="play" style="width:13px;height:13px"></i> Run Query';
+    if (window.lucide) lucide.createIcons({ el: btn });
   }
 }
 
