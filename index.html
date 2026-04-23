@@ -7598,8 +7598,10 @@ async function dexSelectDataset(name) {
         .map(f => ({ name: f.name, agg: 'SUM', label: f.label || f.name }));
       // Fallback: if no numeric fields at all, expose COUNT as the only metric
       if (!mets.length) mets = [{ name: '_count', agg: 'COUNT', label: 'Count' }];
-      document.getElementById('dex-seg-badge').textContent = `${segs.length} fields`;
-      document.getElementById('dex-met-badge').textContent = `${mets.length} measures`;
+      const _segBadge = document.getElementById('dex-seg-badge');
+      if (_segBadge) _segBadge.textContent = `${segs.length} fields`;
+      const _metBadge = document.getElementById('dex-met-badge');
+      if (_metBadge) _metBadge.textContent = `${mets.length} measures`;
     } else {
       // Publish-flow dataset
       segs = (ds?.datasetSegments || []).map(s => ({
@@ -7612,8 +7614,10 @@ async function dexSelectDataset(name) {
         .filter(m => m.isActive !== false)
         .map(m => ({ name: m.metricName, agg: m.aggregationType || 'SUM' }));
       // No hardcoded metric fallback — metrics come from schema only
-      document.getElementById('dex-seg-badge').textContent = `${segs.length} fields`;
-      document.getElementById('dex-met-badge').textContent = `${mets.length} measures`;
+      const _segBadge = document.getElementById('dex-seg-badge');
+      if (_segBadge) _segBadge.textContent = `${segs.length} fields`;
+      const _metBadge = document.getElementById('dex-met-badge');
+      if (_metBadge) _metBadge.textContent = `${mets.length} measures`;
     }
 
     // Merge segs + mets into one unified field list
