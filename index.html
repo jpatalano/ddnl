@@ -11122,8 +11122,14 @@ function dsgnRenderFieldEditor(main, ds) {
       <button class="dsgn-cancel-btn" onclick="dsgnBackToList()">
         <i data-lucide="arrow-left" style="width:13px;height:13px;vertical-align:-2px"></i> Datasets
       </button>
-      <div>
-        <div style="font-size:18px;font-weight:700;color:var(--text)">${ds.label || ds.name}</div>
+      <div style="flex:1">
+        <div style="display:flex;align-items:center;gap:8px" id="dsgn-ds-label-row">
+          <div style="font-size:18px;font-weight:700;color:var(--text)" id="dsgn-ds-label-text">${ds.label || ds.name}</div>
+          <button class="dsgn-cancel-btn" style="padding:3px 6px;opacity:.55" title="Rename dataset" onclick="dsgnInlineRenameDs('${ds.name}')">
+            <i data-lucide="pencil" style="width:12px;height:12px;vertical-align:-1px"></i>
+          </button>
+          <div style="font-size:11px;color:var(--text-muted);opacity:.6">key: <code>${ds.name}</code></div>
+        </div>
         <div style="font-size:12px;color:var(--text-muted)">Edit field metadata — labels, formats, lookup relationships</div>
       </div>
     </div>
@@ -11163,7 +11169,7 @@ function dsgnRenderFieldEditor(main, ds) {
     </div>
     <div class="dsgn-save-row">
       <button class="dsgn-cancel-btn" onclick="dsgnBackToList()">Cancel</button>
-      <button class="dsgn-save-btn" onclick="dsgnSaveFieldMeta('${ds.name}')">Save Field Metadata</button>
+      <button class="dsgn-save-btn" id="dsgn-field-save-btn" onclick="dsgnSaveFieldMeta('${ds.name}')">Save Field Metadata</button>
     </div>`;
   lucide.createIcons();
 }
@@ -11174,7 +11180,7 @@ function dsgnFieldChange(fieldName, key, value) {
 }
 
 async function dsgnSaveFieldMeta(dsName) {
-  const btn = document.querySelector('.dsgn-save-btn');
+  const btn = document.getElementById('dsgn-field-save-btn');
   if (btn) { btn.textContent = 'Saving...'; btn.disabled = true; }
   try {
     const payload = Object.entries(_dsgnFieldMeta).map(([field_name, meta]) => ({ field_name, ...meta }));
@@ -11185,7 +11191,6 @@ async function dsgnSaveFieldMeta(dsName) {
     });
     if (!r.ok) throw new Error(await r.text());
     dsgnBackToList();
-    // Reload datasets to pick up new meta
     await dsgnLoadAll();
     dsgnTab('datasets');
   } catch(e) {
@@ -11199,6 +11204,60 @@ function dsgnBackToList() {
   _dsgnFieldMeta = {};
   dsgnRenderDatasets(document.getElementById('dsgn-main'));
   lucide.createIcons();
+}
+
+function dsgnInlineRenameDs(dsName) {
+  const row  = document.getElementById('dsgn-ds-label-row');
+  const text = document.getElementById('dsgn-ds-label-text');
+  if (!row || !text) return;
+  if (row.querySelector('input')) return; // already editing
+
+  const current = text.textContent;
+  // Replace contents with input
+  row.innerHTML = '';
+
+  const input = document.createElement('input');
+  input.className = 'dsgn-finput';
+  input.style.cssText = 'font-size:18px;font-weight:700;padding:3px 8px;width:280px;box-sizing:border-box';
+  input.value = current;
+
+  const cancel = document.createElement('button');
+  cancel.className = 'dsgn-cancel-btn';
+  cancel.style.cssText = 'padding:4px 10px';
+  cancel.textContent = 'Cancel';
+
+  const save = async () => {
+    const newLabel = input.value.trim();
+    if (!newLabel) { input.focus(); return; }
+    if (newLabel === current) { dsgnOpenDataset(dsName); return; }
+    try {
+      const r = await apiFetch(`${BASE}/bi/datasets/${dsName}/settings`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ label: newLabel })
+      });
+      if (!r.ok) throw new Error(await r.text());
+      // Update cache
+      const ds = _dsgnDatasets.find(d => d.name === dsName);
+      if (ds) ds.label = newLabel;
+      ddnlToast('Dataset renamed', 'success', 2000);
+      dsgnOpenDataset(dsName); // re-render detail with new label
+    } catch(e) {
+      ddnlToast('Rename failed: ' + e.message, 'error', 4000);
+      dsgnOpenDataset(dsName);
+    }
+  };
+
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter')  { e.preventDefault(); save(); }
+    if (e.key === 'Escape') { dsgnOpenDataset(dsName); }
+  });
+  cancel.addEventListener('click', () => dsgnOpenDataset(dsName));
+
+  row.appendChild(input);
+  row.appendChild(cancel);
+  input.focus();
+  input.select();
 }
 
 async function dsgnToggleExplorer(dsName, checked) {
