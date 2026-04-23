@@ -1408,6 +1408,184 @@ app.post('/api/bi/admin/datasets/:name/metadata', async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// POST /api/bi/admin/datasets/:name/import
+// Basic-auth-protected proxy → ingest bulk endpoint.
+// Lets the browser import CSV data without needing to supply the X-Api-Key.
+// The server injects ingestCtx from the known instance clientId.
+app.post('/api/bi/admin/datasets/:name/import', requireBasicAuth, async (req, res) => {
+  const inst = resolveInstance(req);
+  if (inst.adapter !== 'internal') return res.status(400).json({ error: 'Only supported for internal adapter' });
+
+  const dsName = req.params.name;
+  const { docs = [], replace = false } = req.body;
+
+  // Allow replace=true with empty docs as an explicit clear operation
+  const isClear = replace === true && Array.isArray(docs) && docs.length === 0;
+  if (!isClear && (!Array.isArray(docs) || docs.length === 0)) {
+    return res.status(400).json({ error: 'docs must be a non-empty array' });
+  }
+
+  // Inject ingestCtx as if authenticated via API key
+  req.ingestCtx = { clientId: inst.clientId, keyId: null, label: 'browser-import' };
+  req.params.dataset = dsName;
+  req.body.docs = docs;
+  req.body.replace = replace;
+
+  // Forward to ingest router's bulk handler directly via internal fetch
+  const crypto   = require('crypto');
+  const { getClient, aliasName, applyStatusDefault, bulkIndex, replaceAll } = esClient;
+  const { rows: defRows } = await pool.query(
+    `SELECT id, primary_key_fields FROM dataset_definitions WHERE client_id=$1 AND name=$2 AND is_active=TRUE`,
+    [inst.clientId, dsName]
+  );
+  if (!defRows.length) return res.status(404).json({ error: `Dataset '${dsName}' not found` });
+  const def = defRows[0];
+  const pkFields = def.primary_key_fields || [];
+  const t0 = Date.now();
+
+  try {
+    let result;
+    if (isClear || (replace && docs.length === 0)) {
+      result = await replaceAll(inst.clientId, dsName, []);
+    } else if (replace) {
+      result = await replaceAll(inst.clientId, dsName, docs);
+    } else if (pkFields.length) {
+      const docsWithIds = docs.map(doc => {
+        const vals = pkFields.map(f => String(doc[f] ?? ''));
+        if (vals.some(v => v === '')) return { doc, id: null };
+        const raw = [inst.clientId, dsName, ...vals].join('|');
+        return { doc, id: crypto.createHash('sha256').update(raw).digest('hex') };
+      });
+      const alias = aliasName(inst.clientId, dsName);
+      const now   = new Date().toISOString();
+      const ops   = [];
+      // Detect if dataset has a ModifiedDate field — use conditional upsert if so
+      const hasModifiedDate = docs.some(d => 'ModifiedDate' in d);
+      for (const { doc, id } of docsWithIds) {
+        const enriched = applyStatusDefault({ ...doc, __instance_id: inst.clientId, __ingested_at: now });
+        if (!id) {
+          // No PK — plain append
+          ops.push({ index: { _index: alias } });
+          ops.push(enriched);
+        } else if (hasModifiedDate && enriched.ModifiedDate) {
+          // Conditional upsert: only overwrite if incoming ModifiedDate > stored ModifiedDate
+          // Script: if doc exists and its ModifiedDate >= incoming, skip; otherwise apply
+          ops.push({ update: { _index: alias, _id: id } });
+          ops.push({
+            scripted_upsert: true,
+            script: {
+              lang:   'painless',
+              source: `
+                if (ctx.op == 'create') {
+                  ctx._source = params.doc;
+                } else {
+                  def existing = ctx._source.containsKey('ModifiedDate') ? ctx._source.ModifiedDate : null;
+                  def incoming = params.doc.ModifiedDate;
+                  if (existing == null || incoming == null || incoming.compareTo(existing) > 0) {
+                    ctx._source = params.doc;
+                  } else {
+                    ctx.op = 'none';
+                  }
+                }
+              `,
+              params: { doc: enriched }
+            },
+            upsert: {}
+          });
+        } else {
+          // No ModifiedDate — plain upsert (last write wins)
+          ops.push({ index: { _index: alias, _id: id } });
+          ops.push(enriched);
+        }
+      }
+      const es = getClient();
+      const r  = await es.bulk({ operations: ops, refresh: false });
+      const items = r.items || [];
+      // bulk items are keyed by op type (index or update)
+      const getItem = i => i.index || i.update || {};
+      result = {
+        indexed: items.filter(i => !getItem(i).error && getItem(i).result !== 'noop').length,
+        skipped: items.filter(i => getItem(i).result === 'noop').length,
+        failed:  items.filter(i =>  getItem(i).error).length,
+        errors:  items.filter(i =>  getItem(i).error).map(i => getItem(i).error.reason).slice(0, 10),
+      };
+    } else {
+      result = await bulkIndex(inst.clientId, dsName, docs);
+    }
+    const durationMs = Date.now() - t0;
+    res.json({ success: true, indexed: result.indexed, failed: result.failed,
+               errors: result.errors, durationMs,
+               mode: replace ? 'replace' : pkFields.length ? 'upsert' : 'append' });
+  } catch(e) {
+    console.error(`[admin/import:${dsName}]`, e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─── Computed Fields CRUD ───────────────────────────────────────────────────
+// Stored in dataset_field_metadata rows WHERE computed_from IS NOT NULL.
+// computed_from JSONB: { type, fields, date_field, date_part, separator, ... }
+
+// GET /api/bi/admin/datasets/:name/computed-fields
+app.get('/api/bi/admin/datasets/:name/computed-fields', async (req, res) => {
+  const inst   = resolveInstance(req);
+  if (inst.adapter !== 'internal') return res.json({ fields: [] });
+  const dsName = req.params.name;
+  try {
+    const { rows } = await pool.query(
+      `SELECT dfm.field_name, dfm.label, dfm.computed_from
+       FROM dataset_field_metadata dfm
+       JOIN dataset_definitions dd ON dd.id = dfm.dataset_id
+       WHERE dd.client_id=$1 AND dd.name=$2 AND dfm.computed_from IS NOT NULL
+       ORDER BY dfm.field_name`,
+      [inst.clientId, dsName]
+    );
+    res.json({ success: true, fields: rows });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/bi/admin/datasets/:name/computed-fields  — upsert a rule
+app.post('/api/bi/admin/datasets/:name/computed-fields', async (req, res) => {
+  const inst   = resolveInstance(req);
+  if (inst.adapter !== 'internal') return res.status(400).json({ error: 'internal only' });
+  const dsName = req.params.name;
+  const { field_name, label, computed_from } = req.body;
+  if (!field_name || !computed_from) return res.status(400).json({ error: 'field_name and computed_from required' });
+  try {
+    const { rows: def } = await pool.query(
+      `SELECT id FROM dataset_definitions WHERE client_id=$1 AND name=$2 AND is_active=TRUE`,
+      [inst.clientId, dsName]
+    );
+    if (!def.length) return res.status(404).json({ error: `Dataset '${dsName}' not found` });
+    await pool.query(
+      `INSERT INTO dataset_field_metadata (dataset_id, field_name, label, computed_from)
+       VALUES ($1,$2,$3,$4)
+       ON CONFLICT (dataset_id, field_name)
+       DO UPDATE SET label=EXCLUDED.label, computed_from=EXCLUDED.computed_from, updated_at=NOW()`,
+      [def[0].id, field_name, label || field_name, JSON.stringify(computed_from)]
+    );
+    res.json({ success: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE /api/bi/admin/datasets/:name/computed-fields/:field_name
+app.delete('/api/bi/admin/datasets/:name/computed-fields/:field_name', async (req, res) => {
+  const inst   = resolveInstance(req);
+  if (inst.adapter !== 'internal') return res.status(400).json({ error: 'internal only' });
+  const { name: dsName, field_name } = req.params;
+  try {
+    const { rowCount } = await pool.query(
+      `DELETE FROM dataset_field_metadata dfm
+       USING dataset_definitions dd
+       WHERE dd.id=dfm.dataset_id AND dd.client_id=$1 AND dd.name=$2
+         AND dfm.field_name=$3 AND dfm.computed_from IS NOT NULL`,
+      [inst.clientId, dsName, field_name]
+    );
+    if (!rowCount) return res.status(404).json({ error: 'Computed field not found' });
+    res.json({ success: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 // GET /api/bi/admin/lookups
 app.get('/api/bi/admin/lookups', async (req, res) => {
   const inst = resolveInstance(req);

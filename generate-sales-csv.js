@@ -288,7 +288,7 @@ function applyChaos(rows, storeId, date) {
 
 function postToIngest(records) {
   return new Promise((resolve, reject) => {
-    const body = JSON.stringify({ records, idField: 'sales_pk' });
+    const body = JSON.stringify({ docs: records });
     const url  = new URL(`${API_BASE}/api/ingest/${DATASET}/bulk`);
     const mod  = url.protocol === 'https:' ? https : http;
     const req  = mod.request({
@@ -370,7 +370,7 @@ function writeLog(entry) {
       const res = await postToIngest(rows);
       const ms  = Date.now() - t0;
       if (res.status !== 200) throw new Error(`HTTP ${res.status}: ${JSON.stringify(res.body).slice(0,200)}`);
-      const { indexed, failed } = res.body?.data || {};
+      const { indexed, failed } = res.body || {};
       console.log(`✓  ${rows.length} rows → indexed:${indexed??'?'}  failed:${failed??'?'}  defects:${defects}  dupes:${dupes}  growth:+${growthPct}%${badDay?' ⚠ BAD DAY':''}  (${ms}ms)`);
       writeLog({ event:'store_ingested', run_id:runId, date:targetDate, store_id:store.id,
                  rows:rows.length, indexed, failed, defects, dupes, bad_day:badDay, growth_pct:parseFloat(growthPct), duration_ms:ms });
