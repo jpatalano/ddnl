@@ -7110,6 +7110,54 @@ function dexShowAdvanced() {
   document.getElementById('expl-panel-advanced').style.display = 'flex';
 }
 
+// ── Field metadata cache ──
+// Per-dataset field metadata from /api/bi/admin/datasets/:name/metadata.
+// Shape: { [dsName]: { [fieldName]: { format, field_type, ... } } }
+let _fieldMetaCache = {};
+
+async function loadFieldMeta(dsName) {
+  if (!dsName) return {};
+  if (_fieldMetaCache[dsName]) return _fieldMetaCache[dsName];
+  try {
+    const r = await apiFetch(`${BASE}/bi/admin/datasets/${encodeURIComponent(dsName)}/metadata`);
+    const j = await r.json();
+    const map = {};
+    (j.metadata || []).forEach(m => { map[m.field_name] = m; });
+    _fieldMetaCache[dsName] = map;
+    return map;
+  } catch (e) {
+    _fieldMetaCache[dsName] = {};
+    return {};
+  }
+}
+
+// Strict numeric test — rejects leading zeros only if they'd be lost? No, just rejects anything
+// that isn't purely numeric. Values like "03-005555" (invoice numbers with dashes) are NOT numeric.
+const _STRICT_NUM_RE = /^-?\d+(\.\d+)?$/;
+
+// Decide if a column should render as numeric.
+// Priority:
+//   1. Explicit string/text metadata → never numeric
+//   2. Explicit numeric metadata (number/currency/percent) → always numeric
+//   3. Fallback heuristic: every non-empty value matches strict numeric regex
+function isNumericColumn(col, rows, dsName) {
+  const meta = (dsName && _fieldMetaCache[dsName] && _fieldMetaCache[dsName][col]) || null;
+  if (meta) {
+    const fmt = (meta.format || '').toLowerCase();
+    const ft  = (meta.field_type || '').toLowerCase();
+    if (fmt === 'text' || ft === 'string' || ft === 'text' || ft === 'keyword') return false;
+    if (fmt === 'number' || fmt === 'currency' || fmt === 'percent' ||
+        ft === 'number' || ft === 'integer' || ft === 'float' || ft === 'long' || ft === 'double') return true;
+  }
+  // Fallback heuristic — strict: must look like a real number end-to-end
+  return rows.every(r => {
+    const v = r[col];
+    if (v === null || v === undefined || v === '') return true;
+    if (typeof v === 'number') return true;
+    return _STRICT_NUM_RE.test(String(v).trim());
+  });
+}
+
 // ── Grid panel ──
 let _explGridResults  = [];   // full result set from API
 let _explGridFiltered = [];   // after search filter
@@ -7142,6 +7190,8 @@ async function explGridLoad(dsName) {
   _explGridSearch  = '';
   _explGridSortCol = null;
   _explGridSortDir = 'asc';
+  // Prime field metadata in parallel with data fetch
+  const _metaPromise = loadFieldMeta(dsName);
   const search = document.getElementById('expl-grid-search');
   if (search) search.value = '';
   _explLoadPrefs(dsName);
@@ -7155,7 +7205,10 @@ async function explGridLoad(dsName) {
 
   try {
     const t0 = Date.now();
-    const r = await apiFetch(`${BASE}/bi/datasets/${encodeURIComponent(dsName)}/search?size=500`);
+    const [r] = await Promise.all([
+      apiFetch(`${BASE}/bi/datasets/${encodeURIComponent(dsName)}/search?size=500`),
+      _metaPromise
+    ]);
     const j = await r.json();
 
     if (j.success === false) {
@@ -7254,8 +7307,7 @@ function explGridRenderTable() {
   const hidden  = _explGridHidden[dsName] || new Set();
   const widths  = _explGridWidths[dsName] || {};
   const cols    = _explGridAllCols.filter(c => !hidden.has(c));
-  const isNum   = col => rows.every(r => r[col] === null || r[col] === '' || (!isNaN(parseFloat(r[col])) && !/[a-zA-Z]/.test(String(r[col]))));
-  const numCols = new Set(cols.filter(isNum));
+  const numCols = new Set(cols.filter(c => isNumericColumn(c, rows, dsName)));
 
   const fmtDate = v => { if (!v) return '—'; const d = new Date(v); return isNaN(d.getTime()) ? v : d.toLocaleDateString('en-US',{month:'2-digit',day:'2-digit',year:'numeric'}); };
   const fmtCell = (c, v) => {
@@ -7750,6 +7802,9 @@ async function dexRunQuery() {
     '<div class="dex-spinner-wrap"><div class="spinner"></div><p>Querying...</p></div>';
   document.getElementById('dex-export-btn').style.display = 'none';
 
+  // Prime field metadata so the grid can respect format='text' etc.
+  const _dexMetaPromise = loadFieldMeta(dsName);
+
   try {
     const dateFrom = document.getElementById('dex-date-from').value;
     const dateTo   = document.getElementById('dex-date-to').value;
@@ -7833,6 +7888,8 @@ async function dexRunQuery() {
     }
 
     _dexResults = data;
+    // Ensure field metadata has loaded before render so text-typed columns aren't coerced
+    await _dexMetaPromise;
     dexRenderTable(data, meta);
   } catch(e) {
     document.getElementById('dex-table-wrap').innerHTML =
@@ -7865,8 +7922,8 @@ function dexRenderTable(rows, meta) {
   const chipCols = [..._dexQuery.keys()].filter(c => rawCols.includes(c));
   const restCols = rawCols.filter(c => !chipCols.includes(c));
   const cols = [...chipCols, ...restCols];
-  const isNumCol = col => rows.every(r => r[col] === null || r[col] === '' || (!isNaN(parseFloat(r[col])) && !/[a-zA-Z]/.test(String(r[col]))));
-  const numCols = new Set(cols.filter(isNumCol));
+  const dsName = _dexActive?.name || null;
+  const numCols = new Set(cols.filter(c => isNumericColumn(c, rows, dsName)));
   const DATE_COL = /date|Date/i;
   const STRING_SEGS = new Set(['Customer','CustomerLocation','SalesPerson','SalesPersonName','Status','Yard','YardCode','YardName','JobStatus','QuoteStatus','UnitNumber','Description','Type']);
   const fmtDate = v => {
@@ -8430,8 +8487,8 @@ function dexRenderVizTable(rows, labelCol, valCol, grpCol) {
     if (Math.abs(n) >= 1e3) return (n/1e3).toFixed(0) + 'K';
     return n.toLocaleString(undefined, { maximumFractionDigits: 2 });
   };
-  const isNumCol = col => rows.every(r => r[col] === null || r[col] === '' || (!isNaN(parseFloat(r[col])) && !/[a-zA-Z]/.test(String(r[col]))));
-  const numColSet = new Set(cols.filter(isNumCol));
+  const _vizDs = _dexActive?.name || null;
+  const numColSet = new Set(cols.filter(c => isNumericColumn(c, rows, _vizDs)));
 
   // Per-column max for scale
   const colMax = {};
