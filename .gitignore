@@ -15,3 +15,21 @@ ftp-drop/
 *.key
 *.crt
 *.pem
+
+# Instance-specific seed / simulate / one-off migration scripts
+# These contain hardcoded credentials and client-specific data
+fcc-*.js
+setup-customers-v2.js
+reseed-sales-weather.js
+seed-weather.js
+seed-fiscal.js
+generate-sales-csv.js
+fetch-weather.js
+ftp-config.js
+ftp-config-acuity.js
+ftp-poller.js
+dashboard.js
+wizardRouter.js
+
+# Railway project config (contains service/project IDs)
+.railway.json

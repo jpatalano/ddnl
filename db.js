@@ -449,6 +449,79 @@ const MIGRATIONS = [
   // 017 — show_on_explorer flag: controls whether dataset appears in the Explorer
   `ALTER TABLE dataset_definitions
     ADD COLUMN IF NOT EXISTS show_on_explorer BOOLEAN NOT NULL DEFAULT true`,
+
+  // 018 — Dashboard Wizard tables
+  // wizard_domain: top-level domain cards (Q2C, Equipment Usage, ...)
+  `CREATE TABLE IF NOT EXISTS wizard_domain (
+    id            SERIAL PRIMARY KEY,
+    key           TEXT UNIQUE NOT NULL,
+    label         TEXT NOT NULL,
+    tagline       TEXT,
+    icon          TEXT,
+    instance_scope TEXT[] NOT NULL DEFAULT '{}',
+    sort_order    INT NOT NULL DEFAULT 0,
+    is_active     BOOLEAN NOT NULL DEFAULT true,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`,
+
+  // wizard_stage: one canvas node per stage
+  `CREATE TABLE IF NOT EXISTS wizard_stage (
+    id                  SERIAL PRIMARY KEY,
+    domain_id           INT NOT NULL REFERENCES wizard_domain(id) ON DELETE CASCADE,
+    key                 TEXT NOT NULL,
+    label               TEXT NOT NULL,
+    summary             TEXT,
+    narrative           TEXT,
+    sort_order          INT NOT NULL DEFAULT 0,
+    required_datasets   TEXT[] NOT NULL DEFAULT '{}',
+    persona_tags        TEXT[] NOT NULL DEFAULT '{}',
+    failure_mode_keys   TEXT[] NOT NULL DEFAULT '{}',
+    UNIQUE(domain_id, key)
+  )`,
+
+  // wizard_tile_template: reusable tile definitions
+  `CREATE TABLE IF NOT EXISTS wizard_tile_template (
+    id                  SERIAL PRIMARY KEY,
+    key                 TEXT UNIQUE NOT NULL,
+    label               TEXT NOT NULL,
+    tile_type           TEXT NOT NULL,
+    dataset_key         TEXT NOT NULL,
+    metric_expression   JSONB NOT NULL,
+    group_by            TEXT[] NOT NULL DEFAULT '{}',
+    filters             JSONB,
+    time_window         TEXT,
+    compare_to          TEXT,
+    persona_tags        TEXT[] NOT NULL DEFAULT '{}',
+    size                TEXT NOT NULL DEFAULT '1x1',
+    narrative           TEXT,
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`,
+
+  // wizard_stage_tile: junction — which tiles belong to which stage
+  `CREATE TABLE IF NOT EXISTS wizard_stage_tile (
+    stage_id            INT NOT NULL REFERENCES wizard_stage(id) ON DELETE CASCADE,
+    tile_template_id    INT NOT NULL REFERENCES wizard_tile_template(id) ON DELETE CASCADE,
+    sort_order          INT NOT NULL DEFAULT 0,
+    is_primary          BOOLEAN NOT NULL DEFAULT false,
+    PRIMARY KEY (stage_id, tile_template_id)
+  )`,
+
+  // wizard_run: audit trail of every wizard session
+  `CREATE TABLE IF NOT EXISTS wizard_run (
+    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id           TEXT NOT NULL,
+    instance_id         TEXT NOT NULL,
+    domain_id           INT REFERENCES wizard_domain(id),
+    selected_stage_ids  INT[] NOT NULL DEFAULT '{}',
+    dashboard_id        TEXT,
+    tile_count          INT,
+    started_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    completed_at        TIMESTAMPTZ,
+    status              TEXT NOT NULL DEFAULT 'in_progress'
+      CHECK (status IN ('in_progress','completed','abandoned')),
+    notes               TEXT
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_wizard_run_tenant ON wizard_run(tenant_id, instance_id, started_at DESC)`,
 ];
 
 async function initDb() {

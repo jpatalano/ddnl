@@ -509,7 +509,7 @@ router.get('/admin/datasets/:name', requireApiKey, async (req, res) => {
 // Body: { fields: [...] }  — new version of the schema
 router.post('/admin/datasets/:name/publish', requireApiKey, async (req, res) => {
   const { clientId, label: keyLabel } = req.ingestCtx;
-  const { fields = [] } = req.body;
+  const { fields = [], force = false } = req.body;
 
   if (!fields.length) return res.status(400).json({ error: 'fields are required' });
 
@@ -543,10 +543,14 @@ router.post('/admin/datasets/:name/publish', requireApiKey, async (req, res) => 
     );
 
     // Create new ES index from new mapping
+    // If force=true, delete existing index with same version name first
+    if (force) {
+      try { await es.deleteIndex(clientId, req.params.name, newVersion); } catch(_) {}
+    }
     const newIdx = await es.createIndex(clientId, req.params.name, newVersion, fields);
 
-    // Swap alias to new index
-    await es.swapAlias(clientId, req.params.name, newVersion, def.current_version);
+    // Swap alias to new index (only remove old versioned index if one actually exists)
+    await es.swapAlias(clientId, req.params.name, newVersion, def.current_version > 0 ? def.current_version : null);
 
     // Update dataset definition
     await client.query(

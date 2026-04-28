@@ -9,6 +9,7 @@ const { router: ingestRouter } = require('./ingestRouter');
 const webhookRouter             = require('./webhookRouter');
 const fileImportRouter          = require('./fileImportRouter');
 const adminRouter = require('./adminRoutes');
+const { router: wizardRouter, setInstance: wizardSetInstance } = require('./wizardRouter');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -34,6 +35,22 @@ function requireBasicAuth(req, res, next) {
 // Health check — must be first, no auth
 app.get('/healthz', (req, res) => res.json({ ok: true }));
 
+// One-time admin: delete wrongly-named ES indices (auto-created without version suffix)
+// Protected by basic auth (global middleware). Safe to call multiple times.
+app.delete('/api/admin/es-index/:indexName', requireBasicAuth, async (req, res) => {
+  try {
+    const esClient = require('./esClient');
+    const client = esClient.getClient();
+    const idxName = req.params.indexName;
+    const exists = await client.indices.exists({ index: idxName });
+    if (!exists) return res.json({ success: true, message: `Index ${idxName} does not exist` });
+    await client.indices.delete({ index: idxName });
+    res.json({ success: true, deleted: idxName });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Mount ingest router BEFORE basic auth — it has its own X-Api-Key auth
 app.use('/api/ingest', ingestRouter);
 
@@ -48,6 +65,7 @@ app.use('/api/ingest', webhookRouter);
 // File import — multer handles its own body parsing (must be before express.json() middleware)
 app.use('/api/ingest', fileImportRouter);
 app.use('/api/admin',  requireBasicAuth, adminRouter);
+app.use('/api/wizard', wizardRouter);
 
 app.use((req, res, next) => {
   // Allow Railway health checks through without auth
@@ -130,8 +148,8 @@ app.use(express.static(path.join(__dirname), {
 // All configuration comes from INSTANCE_CONFIG env var (JSON) at startup.
 // Each Railway service gets its own INSTANCE_CONFIG. Zero cross-instance knowledge.
 //
-// Required fields:  id, name, adapter ('fcc' | 'insight' | 'internal')
-// adapter=fcc:      apiBase
+// Required fields:  id, name, adapter ('proxy' | 'insight' | 'internal')
+// adapter=proxy:   apiBase, apiToken (upstream BI API)
 // adapter=insight:  apiBase, apiToken
 // adapter=internal: (uses ELASTICSEARCH_URL env var, clientId defaults to id)
 // Optional:         shortName, theme{}, defaultThemeMode, datasetFilter
@@ -156,6 +174,8 @@ try {
   // Wire auth + clientId into fileImportRouter
   fileImportRouter.setAuth(webhookRouter._requireBasicOrApiKey || ((req,res,next)=>next()));
   fileImportRouter.setClientId(INSTANCE.clientId);
+  // Wire instance into wizardRouter
+  wizardSetInstance(INSTANCE);
 } catch (e) {
   console.error('FATAL: Invalid INSTANCE_CONFIG —', e.message);
   process.exit(1);
@@ -445,75 +465,6 @@ app.delete('/api/dashboards/:id', async (req, res) => {
   }
 });
 
-// ─── Saved Charts (Dataset Explorer) ────────────────────────────────────────
-
-// GET /api/charts
-app.get('/api/charts', async (req, res) => {
-  const clientId = getClientId(req);
-  try {
-    const { rows } = await pool.query(
-      `SELECT id, name, dataset, config, created_by, created_at, updated_at
-       FROM saved_charts
-       WHERE client_id = $1
-       ORDER BY updated_at DESC`,
-      [clientId]
-    );
-    res.json({ charts: rows });
-  } catch (err) {
-    console.error('GET /api/charts', err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// POST /api/charts — create or update
-app.post('/api/charts', async (req, res) => {
-  const clientId = getClientId(req);
-  const userOid  = getUserOid(req);
-  const { name, dataset, config, id } = req.body;
-  if (!name) return res.status(400).json({ error: 'name required' });
-  try {
-    let row;
-    if (id) {
-      const r = await pool.query(
-        `UPDATE saved_charts
-         SET name=$1, dataset=$2, config=$3, updated_at=NOW()
-         WHERE id=$4 AND client_id=$5
-         RETURNING *`,
-        [name, dataset || null, JSON.stringify(config || {}), id, clientId]
-      );
-      row = r.rows[0];
-      if (!row) return res.status(404).json({ error: 'Not found' });
-    } else {
-      const r = await pool.query(
-        `INSERT INTO saved_charts (client_id, created_by, name, dataset, config)
-         VALUES ($1, $2, $3, $4, $5)
-         RETURNING *`,
-        [clientId, userOid, name, dataset || null, JSON.stringify(config || {})]
-      );
-      row = r.rows[0];
-    }
-    res.json({ chart: row });
-  } catch (err) {
-    console.error('POST /api/charts', err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// DELETE /api/charts/:id
-app.delete('/api/charts/:id', async (req, res) => {
-  const clientId = getClientId(req);
-  try {
-    await pool.query(
-      `DELETE FROM saved_charts WHERE id=$1 AND client_id=$2`,
-      [req.params.id, clientId]
-    );
-    res.json({ ok: true });
-  } catch (err) {
-    console.error('DELETE /api/charts/:id', err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
 // ─── Schedules ───────────────────────────────────────────────────────────────
 
 // GET /api/schedules — list all schedules for this client
@@ -590,7 +541,7 @@ app.delete('/api/schedules/:id', async (req, res) => {
 // Intercepts /api/bi/* requests and routes them to the correct upstream based on
 // the active instance (resolved from Host header).
 //
-// fcc-adapter  → direct proxy to client FCC API (no translation)
+// proxy-adapter → forwards requests directly to upstream BI API (no translation)
 // insight-adapter → normalises Insight API request/response to platform shape
 
 // Minimal fetch helper using built-in http/https modules
@@ -619,9 +570,7 @@ function fetchJSON(urlStr, opts = {}) {
 }
 
 
-// ── Insight API type inference ────────────────────────────────────
-// Insight API returns segments/metrics as plain string arrays with no type info.
-// We infer segmentType from the field name.
+
 function inferSegmentType(name) {
   const n = name.toLowerCase();
   if (/_date$|_month$|_year$/.test(n)) return 'date';
@@ -640,85 +589,9 @@ function toDisplayAlias(name) {
 // Hardcoded dataset definitions — exact schema from /api/v1/datasets once deployed.
 // Segments and metrics are objects with { name, type, defaultAggregation? }.
 // This is used as a fallback when the live endpoint returns 404.
-const INSIGHT_FALLBACK_DATASETS = {
-  sales: {
-    description: 'Invoice / sales transactions',
-    segments: [
-      { name: 'invoice_id',      type: 'number' },
-      { name: 'internal_id',     type: 'string' },
-      { name: 'status',          type: 'string' },
-      { name: 'location_id',     type: 'number' },
-      { name: 'location_name',   type: 'string' },
-      { name: 'route_id',        type: 'number' },
-      { name: 'route_name',      type: 'string' },
-      { name: 'customer_id',     type: 'number' },
-      { name: 'detail_clerk',    type: 'string' },
-      { name: 'pickup_clerk',    type: 'string' },
-      { name: 'kiosk',           type: 'string' },
-      { name: 'coupon',          type: 'string' },
-      { name: 'dropoff_date',    type: 'date'   },
-      { name: 'ready_date',      type: 'date'   },
-      { name: 'pickup_date',     type: 'date'   },
-      { name: 'dropoff_month',   type: 'string' },
-      { name: 'dropoff_year',    type: 'number' },
-    ],
-    metrics: [
-      { name: 'total',             type: 'currency', defaultAggregation: 'SUM'   },
-      { name: 'base_price',        type: 'currency', defaultAggregation: 'SUM'   },
-      { name: 'upcharge_total',    type: 'currency', defaultAggregation: 'SUM'   },
-      { name: 'alteration_total',  type: 'currency', defaultAggregation: 'SUM'   },
-      { name: 'void_total',        type: 'currency', defaultAggregation: 'SUM'   },
-      { name: 'coupon_total',      type: 'currency', defaultAggregation: 'SUM'   },
-      { name: 'adjustment_total',  type: 'currency', defaultAggregation: 'SUM'   },
-      { name: 'discount_total',    type: 'currency', defaultAggregation: 'SUM'   },
-      { name: 'tax_total',         type: 'currency', defaultAggregation: 'SUM'   },
-      { name: 'pieces',            type: 'count',    defaultAggregation: 'SUM'   },
-      { name: 'invoice_count',     type: 'count',    defaultAggregation: 'COUNT' },
-    ]
-  },
-  customers: {
-    description: 'Customer profiles and lifetime metrics',
-    segments: [
-      { name: 'customer_id',            type: 'number' },
-      { name: 'internal_id',            type: 'string' },
-      { name: 'status',                 type: 'string' },
-      { name: 'location_id',            type: 'number' },
-      { name: 'location_name',          type: 'string' },
-      { name: 'route_id',               type: 'number' },
-      { name: 'route_name',             type: 'string' },
-      { name: 'city',                   type: 'string' },
-      { name: 'state',                  type: 'string' },
-      { name: 'zip',                    type: 'string' },
-      { name: 'payment_method',         type: 'string' },
-      { name: 'referral_source',        type: 'string' },
-      { name: 'signup_origin',          type: 'string' },
-      { name: 'signup_type',            type: 'string' },
-      { name: 'rewards_program',        type: 'string' },
-      { name: 'original_signup_date',   type: 'date'   },
-      { name: 'original_signup_month',  type: 'string' },
-      { name: 'original_signup_year',   type: 'number' },
-      { name: 'last_visit_date',        type: 'date'   },
-      { name: 'last_visit_month',       type: 'string' },
-    ],
-    metrics: [
-      { name: 'sales_pickup_30',       type: 'currency', defaultAggregation: 'SUM' },
-      { name: 'sales_pickup_60',       type: 'currency', defaultAggregation: 'SUM' },
-      { name: 'sales_pickup_90',       type: 'currency', defaultAggregation: 'SUM' },
-      { name: 'sales_pickup_365',      type: 'currency', defaultAggregation: 'SUM' },
-      { name: 'sales_pickup_lifetime', type: 'currency', defaultAggregation: 'SUM' },
-      { name: 'visits_365',            type: 'count',    defaultAggregation: 'SUM' },
-      { name: 'visits_lifetime',       type: 'count',    defaultAggregation: 'SUM' },
-      { name: 'visit_average_sales',   type: 'currency', defaultAggregation: 'AVG' },
-      { name: 'visit_average_pieces',  type: 'count',    defaultAggregation: 'AVG' },
-      { name: 'visits_interval_avg',   type: 'number',   defaultAggregation: 'AVG' },
-      { name: 'rewards_points',        type: 'count',    defaultAggregation: 'SUM' },
-      { name: 'customer_count',        type: 'count',    defaultAggregation: 'COUNT' },
-    ]
-  }
-};
 
 // Normalize GET /api/v1/datasets response (segments/metrics are objects with { name, type })
-// → FCC list shape: [{ name, description, segmentCount, metricCount }]
+// → normalized list shape: [{ name, description, segmentCount, metricCount }]
 function normalizeInsightDatasetList(raw) {
   return Object.entries(raw).map(([name, def]) => ({
     name,
@@ -742,7 +615,7 @@ function insightTypeToDisplayFormat(t) {
   return 'auto';
 }
 
-// Normalize one dataset entry (segments/metrics as objects)  →  FCC detail shape
+// Normalize one dataset entry (segments/metrics as objects) → standard detail shape
 function normalizeInsightDatasetDetail(name, entry) {
   const segments = (entry.segments || []).map(seg => {
     const segName = typeof seg === 'string' ? seg : seg.name;
@@ -772,7 +645,7 @@ function normalizeInsightDatasetDetail(name, entry) {
   };
 }
 
-// Normalize query response  →  FCC shape: { success, data: { data: [...] } }
+// Normalize query response → standard shape: { success, data: { data: [...] } }
 function normalizeInsightQueryResponse(raw) {
   if (raw && Array.isArray(raw.data)) {
     return { success: true, data: { data: raw.data } };
@@ -925,7 +798,7 @@ app.get('/api/bi/datasets', async (req, res) => {
     } catch (e) { /* fall through */ }
 
     // Fallback: return hardcoded dataset list
-    const datasets = Object.entries(INSIGHT_FALLBACK_DATASETS).map(([name, def]) => ({
+    const datasets = Object.entries({}).map(([name, def]) => ({
       name,
       description:  def.description,
       segmentCount: def.segments.length,
@@ -934,7 +807,7 @@ app.get('/api/bi/datasets', async (req, res) => {
     return res.json({ success: true, data: { datasets } });
   }
 
-  // FCC — proxy directly
+  // proxy — forward directly
   try {
     const r = await fetchJSON(`${inst.apiBase}/bi/datasets`);
     return res.status(r.status).json(r.body);
@@ -1005,12 +878,12 @@ app.get('/api/bi/datasets/:name', async (req, res) => {
       // Non-200 — fall through to hardcoded
     } catch (e) { /* fall through */ }
     // Fallback: build detail from hardcoded definitions
-    const def = INSIGHT_FALLBACK_DATASETS[dsName];
+    const def = null;
     if (!def) return res.status(404).json({ error: `Dataset '${dsName}' not found` });
     return res.json({ success: true, data: normalizeInsightDatasetDetail(dsName, def) });
   }
 
-  // FCC — proxy directly
+  // proxy — forward directly
   try {
     const r = await fetchJSON(`${inst.apiBase}/bi/datasets/${dsName}`);
     return res.status(r.status).json(r.body);
@@ -1095,7 +968,7 @@ app.post('/api/bi/query', async (req, res) => {
     }
   }
 
-  // FCC — proxy directly
+  // proxy — forward directly
   try {
     const r = await fetchJSON(`${inst.apiBase}/bi/query`, {
       method: 'POST',
@@ -1150,7 +1023,7 @@ app.post('/api/bi/kpis', async (req, res) => {
     }
   }
 
-  // FCC — proxy directly
+  // proxy — forward directly
   try {
     const r = await fetchJSON(`${inst.apiBase}/bi/kpis`, {
       method: 'POST',
@@ -1246,7 +1119,7 @@ app.get('/api/bi/segment-values', async (req, res) => {
     }
   }
 
-  // FCC — proxy directly (API expects datasetName/segmentName)
+  // proxy — forward directly (API expects datasetName/segmentName)
   try {
     const r = await fetchJSON(
       `${inst.apiBase}/bi/segment-values?datasetName=${encodeURIComponent(dataset)}&segmentName=${encodeURIComponent(segment)}`
@@ -1336,7 +1209,7 @@ app.get('/api/bi/datasets/:name/search', async (req, res) => {
 
 // ─── Designer routes (browser-accessible, basic-auth protected) ─────────────
 // Bridge the browser (apiFetch → /api/bi/admin/*) to Postgres directly.
-// Only meaningful for internal adapter (produce). FCC/Acuity proxy to upstream.
+// Only meaningful for internal adapter. Proxy instances forward to upstream.
 
 // GET /api/bi/admin/datasets/:name/metadata
 app.get('/api/bi/admin/datasets/:name/metadata', async (req, res) => {
@@ -1845,8 +1718,8 @@ app.get('*', (req, res) => {
 // ─── FTP auto-start (instance-specific) ──────────────────────────────────────
 function startFtpServer() {
   const ftpScripts = {
-    // acuity FTP parked — re-enable when FTPS is ready
-    // acuity:  'ftp-server-acuity.py',
+    
+    
     produce: 'ftp-server.py',
   };
   const script = ftpScripts[INSTANCE.id];
