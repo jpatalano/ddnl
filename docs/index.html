@@ -217,6 +217,11 @@
       <a class="nav-item" onclick="scrollTo('ep-get-record')"><span class="method-badge get">GET</span>Fetch Record</a>
       <a class="nav-item" onclick="scrollTo('ep-delete')"><span class="method-badge post">POST</span>Soft Delete</a>
 
+      <div class="nav-section">Relations</div>
+      <a class="nav-item" onclick="scrollTo('ep-list-relations')"><span class="method-badge get">GET</span>List Relations</a>
+      <a class="nav-item" onclick="scrollTo('ep-declare-relation')"><span class="method-badge post">POST</span>Declare Relation</a>
+      <a class="nav-item" onclick="scrollTo('ep-delete-relation')"><span class="method-badge del">DEL</span>Remove Relation</a>
+
       <div class="nav-section">API Keys</div>
       <a class="nav-item" onclick="scrollTo('ep-create-key')"><span class="method-badge post">POST</span>Create Key</a>
       <a class="nav-item" onclick="scrollTo('ep-list-keys')"><span class="method-badge get">GET</span>List Keys</a>
@@ -709,6 +714,133 @@ Content-Type: application/json
   "deleted": 14,
   "noops":   0
 }</pre>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════
+         RELATIONS
+    ══════════════════════════════════════════════════════════════ -->
+    <h2>Relations</h2>
+    <p>Relations declare how datasets are connected. Once declared, DDNL automatically enriches records at upsert time — no extra work required from the sender.</p>
+
+    <div class="callout">
+      <strong>How pull_fields works:</strong> When a Job record is pushed with <code>CustomerId: "CUST-042"</code>, DDNL looks up the <code>customers</code> dataset, finds the matching record, and stamps the declared pull fields (e.g. <code>CustomerName</code>, <code>Region</code>) directly onto the Job before indexing. The sender never needs to include those fields — they're resolved automatically.
+    </div>
+    <div class="callout warn">
+      <strong>Source wins:</strong> If the incoming record already includes a pull field, the sender's value is kept as-is. The lookup only fills fields that are absent or null.
+    </div>
+
+    <h3>Relation types</h3>
+    <table>
+      <tr><th>Type</th><th>Meaning</th><th>pull_fields</th></tr>
+      <tr><td>belongs_to</td><td><strong>Many-to-one.</strong> Source has a FK pointing at one record in the target. e.g. Job → Customer, Job → Yard.</td><td>Supported — fields are stamped at upsert time</td></tr>
+      <tr><td>has_many</td><td><strong>One-to-many.</strong> Source is the parent; target records FK back to it. e.g. Invoice → Lines.</td><td>Not applicable — query-time join (future)</td></tr>
+    </table>
+
+    <!-- List Relations -->
+    <span class="section-anchor" id="ep-list-relations"></span>
+    <div class="endpoint">
+      <div class="endpoint-header" onclick="toggle(this)">
+        <span class="method-tag GET">GET</span>
+        <span class="endpoint-path">/api/ingest/admin/datasets/<span class="param">:name</span>/relations</span>
+        <span class="endpoint-desc">List all declared relations for a dataset</span>
+      </div>
+      <div class="endpoint-body">
+        <p style="margin-top:16px">Returns all relations declared on this dataset as the source.</p>
+        <h3>Example</h3>
+        <pre>GET /api/ingest/admin/datasets/jobs/relations
+X-Api-Key: ik_your_key</pre>
+        <h3>Response</h3>
+        <pre>{
+  "success": true,
+  "relations": [
+    {
+      "id": 1,
+      "source_field":   "CustomerId",
+      "target_dataset": "customers",
+      "target_field":   "CustomerId",
+      "relation_type":  "belongs_to",
+      "pull_fields":    ["CustomerName", "Region"],
+      "label":          "Customer"
+    }
+  ]
+}</pre>
+      </div>
+    </div>
+
+    <!-- Declare Relation -->
+    <span class="section-anchor" id="ep-declare-relation"></span>
+    <div class="endpoint">
+      <div class="endpoint-header" onclick="toggle(this)">
+        <span class="method-tag POST">POST</span>
+        <span class="endpoint-path">/api/ingest/admin/datasets/<span class="param">:name</span>/relations</span>
+        <span class="endpoint-desc">Declare a relation <span class="label new">new</span></span>
+      </div>
+      <div class="endpoint-body">
+        <p style="margin-top:16px">Declares a relation from this dataset to another. Upsert with the same <code>sourceField</code> + <code>targetDataset</code> combination will update the existing relation in place.</p>
+        <h3>Request body</h3>
+        <table>
+          <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+          <tr><td>sourceField <span class="label required">required</span></td><td>string</td><td>The FK field on this dataset's records. e.g. <code>"CustomerId"</code></td></tr>
+          <tr><td>targetDataset <span class="label required">required</span></td><td>string</td><td>The dataset <code>name</code> (key) to relate to. e.g. <code>"customers"</code></td></tr>
+          <tr><td>targetField <span class="label required">required</span></td><td>string</td><td>The field on the target dataset to match against. Typically its primary key. e.g. <code>"CustomerId"</code></td></tr>
+          <tr><td>relationType</td><td>string</td><td><code>belongs_to</code> (default) or <code>has_many</code></td></tr>
+          <tr><td>pullFields</td><td>array</td><td>Field names from the target dataset to auto-stamp onto source records at upsert time. Only for <code>belongs_to</code>. e.g. <code>["CustomerName", "Region"]</code></td></tr>
+          <tr><td>label</td><td>string</td><td>Optional display name for this relation. e.g. <code>"Customer"</code></td></tr>
+        </table>
+        <h3>Example — Job belongs to Customer, pull name + region</h3>
+        <pre>POST /api/ingest/admin/datasets/jobs/relations
+X-Api-Key: ik_your_key
+Content-Type: application/json
+
+{
+  "sourceField":   "CustomerId",
+  "targetDataset": "customers",
+  "targetField":   "CustomerId",
+  "relationType":  "belongs_to",
+  "pullFields":    ["CustomerName", "Region"],
+  "label":         "Customer"
+}</pre>
+        <p>After this is declared, every Job upsert that includes a <code>CustomerId</code> will automatically have <code>CustomerName</code> and <code>Region</code> stamped on the record — no changes needed in the sending system.</p>
+        <h3>Example — Invoice has many Lines</h3>
+        <pre>{
+  "sourceField":   "InvoiceId",
+  "targetDataset": "invoice_lines",
+  "targetField":   "InvoiceId",
+  "relationType":  "has_many",
+  "label":         "Lines"
+}</pre>
+        <h3>Response</h3>
+        <pre>{
+  "success":  true,
+  "relation": {
+    "id":             1,
+    "source_field":   "CustomerId",
+    "target_dataset": "customers",
+    "target_field":   "CustomerId",
+    "relation_type":  "belongs_to",
+    "pull_fields":    ["CustomerName", "Region"],
+    "label":          "Customer"
+  }
+}</pre>
+      </div>
+    </div>
+
+    <!-- Delete Relation -->
+    <span class="section-anchor" id="ep-delete-relation"></span>
+    <div class="endpoint">
+      <div class="endpoint-header" onclick="toggle(this)">
+        <span class="method-tag DELETE">DELETE</span>
+        <span class="endpoint-path">/api/ingest/admin/datasets/<span class="param">:name</span>/relations/<span class="param">:id</span></span>
+        <span class="endpoint-desc">Remove a declared relation</span>
+      </div>
+      <div class="endpoint-body">
+        <p style="margin-top:16px">Removes the relation. Existing records that were already enriched are not affected — only future upserts will no longer receive the pull fields.</p>
+        <h3>Example</h3>
+        <pre>DELETE /api/ingest/admin/datasets/jobs/relations/1
+X-Api-Key: ik_your_key</pre>
+        <h3>Response</h3>
+        <pre>{ "success": true }</pre>
       </div>
     </div>
 

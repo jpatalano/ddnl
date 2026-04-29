@@ -521,6 +521,43 @@ const MIGRATIONS = [
     notes               TEXT
   )`,
   `CREATE INDEX IF NOT EXISTS idx_wizard_run_tenant ON wizard_run(tenant_id, instance_id, started_at DESC)`,
+
+  // 019a — date_field as a first-class column on dataset_definitions
+  // Previously only tracked inside the schema fields JSONB array.
+  // Now promoted so the ingest API and query layer can read it directly.
+  `ALTER TABLE dataset_definitions
+    ADD COLUMN IF NOT EXISTS date_field VARCHAR(255) DEFAULT NULL`,
+
+  // 019b — dataset_relations
+  // Declares relationships between datasets within the same client.
+  //
+  // relation_type:
+  //   belongs_to  — source has a FK pointing at one record in target (many-to-one)
+  //   has_many    — source is the parent; target records FK back to source (one-to-many)
+  //
+  // pull_fields:
+  //   JSONB array of field names from the target dataset to auto-stamp onto the
+  //   source record at upsert time. Only applies to belongs_to relations.
+  //   e.g. ["CustomerName", "Region", "SalesTerritory"]
+  //
+  // Example: jobs belongs_to customers on CustomerId, pull CustomerName + Region
+  `CREATE TABLE IF NOT EXISTS dataset_relations (
+    id                  SERIAL PRIMARY KEY,
+    client_id           VARCHAR(255) NOT NULL REFERENCES clients(client_id) ON DELETE CASCADE,
+    source_dataset_id   INTEGER NOT NULL REFERENCES dataset_definitions(id) ON DELETE CASCADE,
+    source_field        VARCHAR(255) NOT NULL,   -- FK field on the source record
+    target_dataset      VARCHAR(255) NOT NULL,   -- name (key) of the target dataset
+    target_field        VARCHAR(255) NOT NULL,   -- PK field on the target record to match
+    relation_type       VARCHAR(32)  NOT NULL DEFAULT 'belongs_to'
+      CHECK (relation_type IN ('belongs_to', 'has_many')),
+    pull_fields         JSONB        NOT NULL DEFAULT '[]',  -- fields to stamp at upsert time
+    label               VARCHAR(255),            -- optional display name, e.g. "Customer"
+    created_at          TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    updated_at          TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    UNIQUE(source_dataset_id, source_field, target_dataset)
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_dataset_relations_source ON dataset_relations(source_dataset_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_dataset_relations_client ON dataset_relations(client_id)`,
 ];
 
 async function initDb() {

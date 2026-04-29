@@ -288,6 +288,70 @@ async function syncLookupFromDocs(clientId, datasetName, datasetId, docs) {
   }
 }
 
+// ── Relation enrichment ───────────────────────────────────────────────────────
+
+/**
+ * Load all belongs_to relations with pull_fields for a dataset.
+ * Returns an array of relation rows. Cached per (clientId, datasetName) for
+ * the lifetime of the request batch — call once per bulk push, not per doc.
+ */
+async function getRelationsForDataset(clientId, datasetId) {
+  const { rows } = await pool.query(
+    `SELECT * FROM dataset_relations
+     WHERE source_dataset_id = $1
+       AND relation_type = 'belongs_to'
+       AND jsonb_array_length(pull_fields) > 0`,
+    [datasetId]
+  );
+  return rows;
+}
+
+/**
+ * For a single doc, resolve all belongs_to pull_fields and stamp them in-place.
+ * Looks up each relation's target record in ES by targetField value.
+ * Silently skips any relation where the FK is missing or the lookup fails —
+ * a bad lookup must NEVER abort an ingest.
+ */
+async function enrichDocWithRelations(doc, relations, clientId) {
+  if (!relations || !relations.length) return doc;
+  const enriched = { ...doc };
+  const esClient = es.getClient();
+
+  for (const rel of relations) {
+    const fkValue = doc[rel.source_field];
+    if (fkValue == null || fkValue === '') continue;
+
+    const pullFields = Array.isArray(rel.pull_fields) ? rel.pull_fields : [];
+    if (!pullFields.length) continue;
+
+    try {
+      const alias = es.aliasName(clientId, rel.target_dataset);
+      // Search for the target record by the target_field value
+      const result = await esClient.search({
+        index: alias,
+        size: 1,
+        query: { term: { [rel.target_field]: fkValue } },
+        _source: pullFields
+      });
+      const hit = result.hits?.hits?.[0]?._source;
+      if (!hit) continue;
+
+      // Stamp each pull field — only if not already present on the doc
+      // (source wins — caller can always override by including the field themselves)
+      for (const field of pullFields) {
+        if (enriched[field] == null && hit[field] != null) {
+          enriched[field] = hit[field];
+        }
+      }
+    } catch (e) {
+      // Log but never throw — a lookup failure is non-fatal
+      console.warn(`[relations] enrichment failed for ${rel.source_field}=${fkValue} -> ${rel.target_dataset}: ${e.message}`);
+    }
+  }
+
+  return enriched;
+}
+
 // ── Ingest routes ──────────────────────────────────────────────────────────────
 
 // POST /api/ingest/:dataset/bulk
@@ -308,6 +372,9 @@ router.post('/:dataset/bulk', requireApiKey, async (req, res) => {
   // Resolve upsert key from dataset definition
   const pkFields = def.primary_key_fields || [];
 
+  // Load belongs_to relations with pull_fields once per batch (not per doc)
+  const relations = await getRelationsForDataset(clientId, def.id);
+
   try {
     let result;
     if (replace) {
@@ -315,7 +382,11 @@ router.post('/:dataset/bulk', requireApiKey, async (req, res) => {
     } else if (pkFields.length) {
       // Upsert mode: deterministic _id from primary key fields
       const crypto = require('crypto');
-      const docsWithIds = docs.map(doc => {
+      // Enrich all docs in parallel — relation lookups are concurrent per doc
+      const enrichedDocs = await Promise.all(
+        docs.map(doc => enrichDocWithRelations(doc, relations, clientId))
+      );
+      const docsWithIds = enrichedDocs.map(doc => {
         const vals = pkFields.map(f => String(doc[f] ?? ''));
         if (vals.some(v => v === '')) return { doc, id: null };
         const raw = [clientId, dataset, ...vals].join('|');
@@ -369,22 +440,25 @@ router.post('/:dataset/single', requireApiKey, async (req, res) => {
   const def = await getDatasetDef(clientId, dataset);
   if (!def) return res.status(404).json({ error: `Dataset '${dataset}' not found for this instance` });
 
-  const pkFields = def.primary_key_fields || [];
+  const pkFields  = def.primary_key_fields || [];
+  const relations  = await getRelationsForDataset(clientId, def.id);
 
   try {
+    // Enrich doc with belongs_to pull_fields before indexing
+    const enrichedDoc = await enrichDocWithRelations(doc, relations, clientId);
     let result;
     if (pkFields.length) {
       const crypto = require('crypto');
-      const vals = pkFields.map(f => String(doc[f] ?? ''));
+      const vals = pkFields.map(f => String(enrichedDoc[f] ?? ''));
       const id   = vals.some(v => v === '') ? null
         : crypto.createHash('sha256').update([clientId, dataset, ...vals].join('|')).digest('hex');
       const alias   = es.aliasName(clientId, dataset);
-      const enriched = es.applyStatusDefault({ ...doc, __instance_id: clientId, __ingested_at: new Date().toISOString() });
+      const indexed = es.applyStatusDefault({ ...enrichedDoc, __instance_id: clientId, __ingested_at: new Date().toISOString() });
       const esClient = es.getClient();
-      const r = await esClient.index({ index: alias, id: id || undefined, document: enriched, refresh: false });
+      const r = await esClient.index({ index: alias, id: id || undefined, document: indexed, refresh: false });
       result = { indexed: 1, failed: 0, errors: [], id: r._id };
     } else {
-      result = await es.bulkIndex(clientId, dataset, [doc]);
+      result = await es.bulkIndex(clientId, dataset, [enrichedDoc]);
     }
     const durationMs = Date.now() - t0;
     await logIngest(clientId, dataset, 'single', result, label, durationMs);
@@ -871,6 +945,97 @@ router.delete('/admin/api-keys/:id', requireApiKey, async (req, res) => {
     `UPDATE instance_api_keys SET revoked=TRUE WHERE id=$1 AND client_id=$2`,
     [req.params.id, clientId]
   );
+  res.json({ success: true });
+});
+
+
+// ── Dataset Relations ──────────────────────────────────────────────────────────────
+
+// GET /api/ingest/admin/datasets/:name/relations
+// List all relations declared on a dataset.
+router.get('/admin/datasets/:name/relations', requireApiKey, async (req, res) => {
+  const { clientId } = req.ingestCtx;
+  const def = await getDatasetDef(clientId, req.params.name);
+  if (!def) return res.status(404).json({ error: 'Dataset not found' });
+
+  const { rows } = await pool.query(
+    `SELECT * FROM dataset_relations WHERE source_dataset_id = $1 ORDER BY created_at ASC`,
+    [def.id]
+  );
+  res.json({ success: true, relations: rows });
+});
+
+// POST /api/ingest/admin/datasets/:name/relations
+// Declare a relation from this dataset to another.
+// Body: { sourceField, targetDataset, targetField, relationType, pullFields, label }
+router.post('/admin/datasets/:name/relations', requireApiKey, async (req, res) => {
+  const { clientId } = req.ingestCtx;
+  const def = await getDatasetDef(clientId, req.params.name);
+  if (!def) return res.status(404).json({ error: 'Dataset not found' });
+
+  const {
+    sourceField,
+    targetDataset,
+    targetField,
+    relationType = 'belongs_to',
+    pullFields   = [],
+    label
+  } = req.body;
+
+  if (!sourceField)   return res.status(400).json({ error: 'sourceField is required' });
+  if (!targetDataset) return res.status(400).json({ error: 'targetDataset is required' });
+  if (!targetField)   return res.status(400).json({ error: 'targetField is required' });
+  if (!['belongs_to','has_many'].includes(relationType)) {
+    return res.status(400).json({ error: 'relationType must be belongs_to or has_many' });
+  }
+  if (!Array.isArray(pullFields)) {
+    return res.status(400).json({ error: 'pullFields must be an array' });
+  }
+  if (pullFields.length && relationType !== 'belongs_to') {
+    return res.status(400).json({ error: 'pullFields only applies to belongs_to relations' });
+  }
+
+  // Verify target dataset exists for this client
+  const targetDef = await getDatasetDef(clientId, targetDataset);
+  if (!targetDef) {
+    return res.status(404).json({ error: `Target dataset '${targetDataset}' not found` });
+  }
+
+  try {
+    const { rows: [rel] } = await pool.query(
+      `INSERT INTO dataset_relations
+         (client_id, source_dataset_id, source_field, target_dataset, target_field, relation_type, pull_fields, label)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       ON CONFLICT (source_dataset_id, source_field, target_dataset)
+       DO UPDATE SET
+         target_field   = EXCLUDED.target_field,
+         relation_type  = EXCLUDED.relation_type,
+         pull_fields    = EXCLUDED.pull_fields,
+         label          = EXCLUDED.label,
+         updated_at     = NOW()
+       RETURNING *`,
+      [clientId, def.id, sourceField, targetDataset, targetField, relationType,
+       JSON.stringify(pullFields), label || null]
+    );
+    console.log(`[relations] ${req.params.name}.${sourceField} -> ${targetDataset}.${targetField} (${relationType}) pull=${JSON.stringify(pullFields)}`);
+    res.json({ success: true, relation: rel });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// DELETE /api/ingest/admin/datasets/:name/relations/:id
+// Remove a declared relation by its ID.
+router.delete('/admin/datasets/:name/relations/:id', requireApiKey, async (req, res) => {
+  const { clientId } = req.ingestCtx;
+  const def = await getDatasetDef(clientId, req.params.name);
+  if (!def) return res.status(404).json({ error: 'Dataset not found' });
+
+  const { rowCount } = await pool.query(
+    `DELETE FROM dataset_relations WHERE id = $1 AND source_dataset_id = $2`,
+    [req.params.id, def.id]
+  );
+  if (!rowCount) return res.status(404).json({ error: 'Relation not found' });
   res.json({ success: true });
 });
 
