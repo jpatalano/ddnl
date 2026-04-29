@@ -114,8 +114,8 @@ const DEFAULT_FILTER_STATE = {
 };
 
 /* ── Persistence ─────────────────────────────────────────────────── */
-const _FC_CONFIG_KEY = 'fcc_filter_config';
-const _FC_STATE_KEY  = 'fcc_filter_state';
+const _FC_CONFIG_KEY = 'ddnl_filter_config';
+const _FC_STATE_KEY  = 'ddnl_filter_state';
 
 function _fcSaveConfig(cfg) { localStorage.setItem(_FC_CONFIG_KEY, JSON.stringify(cfg)); }
 function _fcLoadConfig() {

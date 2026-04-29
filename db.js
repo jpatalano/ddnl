@@ -77,8 +77,7 @@ const SCHEMA = `
   );
 
   -- Seed one client row per instance (instance id is used as client_id)
-  INSERT INTO clients (client_id, name) VALUES ('demo',   'Demo')   ON CONFLICT (client_id) DO NOTHING;
-  INSERT INTO clients (client_id, name) VALUES ('fcc',    'FCC')    ON CONFLICT (client_id) DO NOTHING;
+  -- Clients are created at setup time via the admin API, not seeded here.
 `;
 
 // Keep SCHEMA clean — additive changes go in MIGRATIONS only

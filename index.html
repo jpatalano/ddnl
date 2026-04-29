@@ -51,7 +51,7 @@
       --blue-pill:  #0d2035;
     }
 
-    /* ─── Produce / modern light skin ──────────────────────────────────────── */
+    /* ─── theme-b / modern light skin ──────────────────────────────────────── */
     [data-theme="theme-b"] {
       --font-body:   'Inter', system-ui, sans-serif;
       --font-mono:   'DM Mono', monospace;
@@ -73,7 +73,7 @@
       --shadow-lg:   0 4px 24px rgba(0,0,0,.12);
     }
 
-    /* ─── Produce dark skin ─────────────────────────────────────────────────── */
+    /* ─── theme-b dark skin ─────────────────────────────────────────────────── */
     [data-theme="theme-b-dark"] {
       --font-body:   'Inter', system-ui, sans-serif;
       --font-mono:   'DM Mono', monospace;
@@ -111,7 +111,7 @@
       font-variant-numeric: tabular-nums;
     }
 
-    /* ─── Produce: sharper corners everywhere ───────────────────────────────── */
+    /* ─── theme-b: sharper corners everywhere ───────────────────────────────── */
     [data-theme="theme-b"] .subnav button,
     [data-theme="theme-b-dark"] .subnav button,
     [data-theme="theme-b"] .save-btn,
@@ -139,7 +139,7 @@
       border-radius: var(--radius-lg) !important;
     }
 
-    /* ─── Produce dark: topbar / surface tweaks ─────────────────────────────── */
+    /* ─── theme-b dark: topbar / surface tweaks ─────────────────────────────── */
     [data-theme="theme-b-dark"] #topbar {
       background: var(--navy);
       border-bottom: 1px solid var(--border);
@@ -916,6 +916,10 @@
     .dkt-icon { width: 38px; height: 38px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 17px; flex-shrink: 0; }
     .dkt-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); margin-bottom: 3px; white-space: normal; word-break: break-word; line-height: 1.3; max-width: 100%; }
     .dkt-value { font-size: clamp(15px, 1.4vw, 20px); font-weight: 800; line-height: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+    .dkt-info-btn { display:inline-flex; align-items:center; justify-content:center; width:13px; height:13px; border-radius:50%; background:rgba(0,51,102,.12); color:var(--navy); font-size:9px; font-weight:700; line-height:1; cursor:default; margin-left:4px; flex-shrink:0; position:relative; vertical-align:middle; }
+    .dkt-info-tip { visibility:hidden; opacity:0; pointer-events:none; position:absolute; bottom:calc(100% + 6px); left:50%; transform:translateX(-50%); background:var(--navy); color:#fff; font-size:11px; font-weight:500; line-height:1.4; padding:7px 11px; border-radius:7px; white-space:normal; width:200px; z-index:999; box-shadow:0 4px 16px rgba(0,0,0,.25); transition:opacity .15s; text-transform:none; letter-spacing:0; }
+    .dkt-info-tip::after { content:''; position:absolute; top:100%; left:50%; transform:translateX(-50%); border:5px solid transparent; border-top-color:var(--navy); }
+    .dkt-info-btn:hover .dkt-info-tip { visibility:visible; opacity:1; }
     /* ── KPI delta pill ─────────────────────────────────────────────────────── */
     .kpi-delta { display: inline-flex; align-items: center; gap: 3px; font-size: 10.5px; font-weight: 700;
                  padding: 2px 7px; border-radius: 20px; margin-top: 5px; white-space: nowrap;
@@ -2096,8 +2100,8 @@
     .myd-panel-resize-handle { flex-shrink:0; height:12px; cursor:ns-resize; display:flex; align-items:center; justify-content:center; opacity:.35; transition:opacity .15s; user-select:none; margin: 4px -20px 0; }
     .myd-panel-resize-handle:hover { opacity:1; }
     .myd-panel-resize-handle::before { content:''; display:block; width:32px; height:3px; border-radius:99px; background:var(--border); }
-    /* Tile grid — fills the body exactly */
-    .myd-view-tiles { display: grid; gap: 12px; height: 100%; }
+    /* Tile grid — fills the body exactly; col count set by designer pills */
+    .myd-view-tiles { display: grid; gap: 12px; height: 100%; grid-template-columns: repeat(2, 1fr); }
     .myd-view-tiles.cols-1 { grid-template-columns: 1fr; }
     .myd-view-tiles.cols-2 { grid-template-columns: repeat(2, 1fr); }
     .myd-view-tiles.cols-3 { grid-template-columns: repeat(3, 1fr); }
@@ -2190,14 +2194,16 @@
     /* KPI panel grid: uniform columns, auto-wrap rows, cards size to content */
     .myd-kpi-row-wrap {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      /* auto-fill columns at the configured min tile width — no media queries needed */
+      grid-template-columns: repeat(auto-fill, minmax(var(--kpi-min-width, 200px), 1fr));
       grid-auto-rows: auto;
       gap: 10px;
       align-items: stretch;
       padding-bottom: 16px;
     }
-    .myd-kpi-slot { min-width: 0; position: relative; }
-    .myd-kpi-row-wrap .dash-kpi-tile { min-width: 0; width: 100%; }
+    .myd-kpi-slot { min-width: 0; position: relative; display: flex; flex-direction: column; }
+    .myd-kpi-slot > div { flex: 1; display: flex; flex-direction: column; }
+    .myd-kpi-row-wrap .dash-kpi-tile { min-width: 0; width: 100%; flex: 1; }
     .myd-view-tile.kpi-row-tile { height: auto !important; min-height: unset; background: none; border: none; box-shadow: none; padding: 0; display: block; }
     .myd-view-tile.kpi-row-tile .myd-view-tile-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--text-muted); margin-bottom: 8px; }
     /* KPI tile in editor */
@@ -2595,7 +2601,8 @@
     .tree-group-row.depth-0 { background: rgba(0,51,102,.07); border-top: 2px solid rgba(0,51,102,.15); }
     .tree-group-row.depth-1 { background: rgba(0,51,102,.04); border-top: 1px solid rgba(0,51,102,.08); }
     .tree-group-row.depth-2 { background: rgba(0,191,165,.05); }
-    .tree-group-row td { padding: 0 !important; }
+    .tree-group-row td { padding: 4px 14px; }
+    .tree-group-row td:first-child { padding: 4px 8px; }
     .tree-subtotal { font-weight: 700; color: var(--navy); text-align: right; font-variant-numeric: tabular-nums; }
     .tree-leaf-row:hover { background: rgba(0,191,165,.05); }
     .tree-leaf-row td { color: var(--text-muted); }
@@ -3285,6 +3292,8 @@
           <button class="sr-rerun-btn" onclick="srRerun()"><i data-lucide="refresh-cw" style="width:13px;height:13px"></i> Change Params</button>
           <button class="sc-btn" onclick="srSaveCanned()"><i data-lucide="bookmark" style="width:13px;height:13px"></i> Save View</button>
           <button class="sc-btn" onclick="srEditInBuilder()"><i data-lucide="pencil" style="width:13px;height:13px"></i> Edit</button>
+          <button class="sc-btn" id="sr-export-csv-btn" onclick="srExportCsv()" style="display:none"><i data-lucide="download" style="width:13px;height:13px"></i> CSV</button>
+          <button class="sc-btn" id="sr-export-pdf-btn" onclick="srExportPdf()" style="display:none"><i data-lucide="file-text" style="width:13px;height:13px"></i> PDF</button>
           <button class="sc-btn" id="sr-history-btn" onclick="srToggleHistory()"><i data-lucide="clock" style="width:13px;height:13px"></i> History</button>
           <button class="sc-btn" id="sr-detail-toggle-btn" onclick="srToggleDetailMode()" title="Toggle row-level detail pane"><i data-lucide="panel-right" style="width:13px;height:13px"></i> Row Details</button>
         </div>
@@ -3485,6 +3494,9 @@ const _collapseState = {};
 let _treeColOrder    = [];
 let _lastTreeMets    = [];
 let _lastTreeRows    = [];   // mirror of lastRowData for active grid
+let _srLastRows      = [];   // rows from last sr-grid render
+let _srLastMets      = [];   // metrics from last sr-grid render
+let _srLastCtx       = null; // ctx from last sr-grid render
 let _activeGridTarget = 'myGrid'; // tracks which grid treeToggle should redraw
 let _activeGridCtx   = null;  // ctx passed to renderGrid — preserved for treeToggle re-renders
 let _dragSrcColIdx   = null;
@@ -4348,6 +4360,7 @@ function renderKpis(data, mets, priorMap) {
 function renderGrid(rows, mets, targetId = 'myGrid', ctx = null) {
   _activeGridTarget = targetId;
   _lastTreeRows = rows;
+  if (targetId === 'sr-grid') { _srLastRows = rows; _srLastMets = mets; _srLastCtx = ctx; }
   _activeGridCtx = ctx;
   if (!rows.length) {
     document.getElementById(targetId).innerHTML =
@@ -4448,7 +4461,7 @@ function renderGrid(rows, mets, targetId = 'myGrid', ctx = null) {
             }
             const val = typeof formatDimCell !== 'undefined' ? formatDimCell(node[col], col) : (node[col] ?? '\u2014');
             if (ci === 0 && leafDepth) {
-              const _cc4=(_rbColConfig||{})[col]||{}; const _al4=_cc4.align?`text-align:${_cc4.align}`:''; return `<td style="padding:3px 8px;${_al4}"><span style="display:inline-block;width:${leafIndentPx}px"></span>${val}</td>`;
+              const _cc4=(_rbColConfig||{})[col]||{}; const _al4=_cc4.align?`text-align:${_cc4.align}`:''; return `<td style="padding:4px 8px;${_al4}"><span style="display:inline-block;width:${leafIndentPx}px"></span>${val}</td>`;
             }
             const _cc5=(_rbColConfig||{})[col]||{}; const _al5=_cc5.align?`text-align:${_cc5.align}`:''; return `<td style="${_al5}">${val}</td>`;
           }).join('')}
@@ -5037,6 +5050,127 @@ function exportCsv() {
   a.click();
 }
 
+// ── Saved-report CSV export ───────────────────────────────────────────────────
+// Walks the rendered rows using formatDimCell so output matches what the user sees
+// (dates formatted, not raw epoch ms, etc.).
+function srExportCsv() {
+  if (!_srLastRows.length) return;
+  const ctx    = _srLastCtx || {};
+  const colCfg = ctx.colConfig || {};
+  const groupCols   = ctx.groupCols   || [];
+  const displayCols = ctx.displayCols || [];
+  const metNames    = (_srLastMets || []).map(m => m.metricName);
+
+  // Build column list in display order: groups → display cols → metrics
+  const allCols = [...new Set([...groupCols, ...displayCols, ...metNames])];
+
+  // Header row: use colConfig label if present, else prettify the field name
+  const fmtHeader = c => (colCfg[c]?.label) || c.replace(/([A-Z])/g,' $1').trim();
+
+  // Temporarily apply saved colConfig so formatDimCell picks up correct formats
+  const _prev = {..._rbColConfig};
+  Object.assign(_rbColConfig, colCfg);
+
+  const metSet = new Set(metNames);
+  const rows = _srLastRows.map(row => {
+    return allCols.map(col => {
+      const raw = row[col];
+      if (raw == null || raw === '') return '';
+      let display;
+      if (metSet.has(col)) {
+        const m = (_srLastMets || []).find(x => x.metricName === col);
+        display = m ? formatCell(raw, m.displayFormat, m.prefix, m.suffix, m.decimalPlaces) : String(raw);
+      } else {
+        display = formatDimCell(raw, col);
+      }
+      // Quote for CSV — strip any em-dash fallback to empty string
+      const s = display === '\u2014' ? '' : String(display);
+      return '"' + s.replace(/"/g, '""') + '"';
+    }).join(',');
+  });
+
+  // Restore colConfig
+  Object.keys(_rbColConfig).forEach(k => delete _rbColConfig[k]);
+  Object.assign(_rbColConfig, _prev);
+
+  const title  = document.getElementById('sr-report-title')?.textContent || 'report';
+  const safeTitle = title.replace(/[^a-z0-9_\-]/gi, '_').toLowerCase();
+  const header = allCols.map(fmtHeader).map(h => '"' + h.replace(/"/g,'""') + '"').join(',');
+  const csv    = [header, ...rows].join('\n');
+  const a      = document.createElement('a');
+  a.href       = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download   = `${safeTitle}_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+}
+
+// ── Saved-report PDF export ───────────────────────────────────────────────────
+// Opens a minimal print window with the report table — user prints to PDF.
+function srExportPdf() {
+  if (!_srLastRows.length) return;
+  const ctx    = _srLastCtx || {};
+  const colCfg = ctx.colConfig || {};
+  const groupCols   = ctx.groupCols   || [];
+  const displayCols = ctx.displayCols || [];
+  const metNames    = (_srLastMets || []).map(m => m.metricName);
+  const allCols     = [...new Set([...groupCols, ...displayCols, ...metNames])];
+  const fmtHeader   = c => (colCfg[c]?.label) || c.replace(/([A-Z])/g,' $1').trim();
+  const title       = document.getElementById('sr-report-title')?.textContent || 'Report';
+  const meta        = document.getElementById('sr-report-meta')?.textContent  || '';
+
+  // Temporarily apply saved colConfig so formatDimCell picks up correct formats
+  const _prev = {..._rbColConfig};
+  Object.assign(_rbColConfig, colCfg);
+
+  const metSet = new Set(metNames);
+  const bodyRows = _srLastRows.map(row => {
+    const cells = allCols.map(col => {
+      const raw = row[col];
+      if (raw == null || raw === '') return '<td></td>';
+      let display;
+      if (metSet.has(col)) {
+        const m = (_srLastMets || []).find(x => x.metricName === col);
+        display = m ? formatCell(raw, m.displayFormat, m.prefix, m.suffix, m.decimalPlaces) : String(raw);
+      } else {
+        display = formatDimCell(raw, col);
+      }
+      if (display === '\u2014') display = '';
+      return `<td>${escHtml(String(display))}</td>`;
+    }).join('');
+    return `<tr>${cells}</tr>`;
+  }).join('');
+
+  // Restore colConfig
+  Object.keys(_rbColConfig).forEach(k => delete _rbColConfig[k]);
+  Object.assign(_rbColConfig, _prev);
+
+  const headerCells = allCols.map(c => `<th>${escHtml(fmtHeader(c))}</th>`).join('');
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+  <title>${escHtml(title)}</title>
+  <style>
+    body { font-family: Arial, sans-serif; font-size: 11px; color: #111; margin: 20px; }
+    h2   { font-size: 14px; margin: 0 0 2px; color: #003366; }
+    p    { font-size: 10px; color: #666; margin: 0 0 12px; }
+    table { width: 100%; border-collapse: collapse; }
+    th   { background: #003366; color: #fff; padding: 5px 8px; text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; white-space: nowrap; }
+    td   { padding: 4px 8px; border-bottom: 1px solid #e5e7eb; vertical-align: top; }
+    tr:nth-child(even) td { background: #f8fafc; }
+    @media print { body { margin: 0; } }
+  </style>
+</head><body>
+  <h2>${escHtml(title)}</h2>
+  <p>${escHtml(meta)} &mdash; Printed ${new Date().toLocaleString()}</p>
+  <table><thead><tr>${headerCells}</tr></thead><tbody>${bodyRows}</tbody></table>
+</body></html>`;
+
+  const w = window.open('', '_blank', 'width=900,height=700');
+  if (!w) { alert('Please allow pop-ups to export PDF.'); return; }
+  w.document.write(html);
+  w.document.close();
+  w.focus();
+  w.print();
+}
+
+
 function formatDimCell(val, col) {
   if (val == null || val === '') return '—';
   const cc = (_rbColConfig || {})[col] || {};
@@ -5044,7 +5178,9 @@ function formatDimCell(val, col) {
   const seg = currentDataset?.segments?.find(s => s.segment.segmentName === col);
   const inferredType = seg?.segment?.segmentType === 'date' ? 'date'
                      : seg?.segment?.segmentType === 'number' ? 'number' : 'text';
-  const fmt = cc.format || inferredType;
+  // Auto-detect epoch ms timestamps even when field is not typed as date
+  const _autoEpoch = (inferredType !== 'date' && (cc.format == null || cc.format === 'text') && typeof val === 'number' && val > 1e11);
+  const fmt = _autoEpoch ? 'date' : (cc.format || inferredType);
   if (fmt === 'text')     return String(val);
   if (fmt === 'number')   { const n=parseFloat(val); return isNaN(n)?String(val):n.toLocaleString('en-US',{maximumFractionDigits:2}); }
   if (fmt === 'currency') { const n=parseFloat(val); if(isNaN(n)) return String(val); const abs=Math.abs(n); let s; if(abs>=1e9) s=(n/1e9).toFixed(2)+'B'; else if(abs>=1e6) s=(n/1e6).toFixed(2)+'M'; else if(abs>=1e3) s=(n/1e3).toFixed(1)+'K'; else s=n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); return '$'+s; }
@@ -5719,6 +5855,12 @@ async function srExecuteReport(report, paramFilters) {
     // Restore builder's colConfig
     Object.keys(_rbColConfig).forEach(k => delete _rbColConfig[k]);
     Object.assign(_rbColConfig, _srPrevColConfig);
+    // Show export buttons now that we have results
+    const csvBtn = document.getElementById('sr-export-csv-btn');
+    const pdfBtn = document.getElementById('sr-export-pdf-btn');
+    if (csvBtn) csvBtn.style.display = '';
+    if (pdfBtn) pdfBtn.style.display = '';
+
     // Show search bar once results are rendered
     const sb = document.getElementById('sr-search-bar');
     if (sb) { sb.style.display = ''; document.getElementById('sr-search-input').value = ''; }
@@ -5892,6 +6034,11 @@ function srBack() {
   document.getElementById('sr-report-view').classList.remove('active');
   const sb = document.getElementById('sr-search-bar');
   if (sb) sb.style.display = 'none';
+  // Hide export buttons — reset for next run
+  const csvBtn = document.getElementById('sr-export-csv-btn');
+  const pdfBtn = document.getElementById('sr-export-pdf-btn');
+  if (csvBtn) csvBtn.style.display = 'none';
+  if (pdfBtn) pdfBtn.style.display = 'none';
   srCloseDetail();
   // Reset active grid target to builder default
   _activeGridTarget = 'myGrid';
@@ -6019,8 +6166,9 @@ async function loadReport(id) {
   // Track which report we're editing so Save can overwrite it
   _editingReportId = id;
 
-  // Open the fullscreen builder
-  showView('builder');
+  // Open the fullscreen builder — skip rbSyncFromGlobals since we're about to
+  // overwrite all state from the saved config (rbOnDatasetChange resets then we restore)
+  document.getElementById('rb-screen').classList.add('open');
 
   // Load the dataset into the fullscreen builder
   await rbOnDatasetChange(cfg.datasetName);
@@ -6870,7 +7018,7 @@ function showView(view) {
   document.getElementById('dashboard-screen').style.cssText  = view==='dashboard' ? 'display:flex;flex-direction:column;flex:1;overflow-y:auto'          : 'display:none';
   document.getElementById('home-screen').style.cssText       = view==='home'      ? 'display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0' : 'display:none';
   document.getElementById('saved-screen').style.cssText      = view==='saved'     ? 'display:flex;flex-direction:column;flex:1;overflow-y:auto'              : 'display:none';
-  document.getElementById('my-dash-screen').style.cssText    = view==='myDash'    ? 'display:flex;flex-direction:column;flex:1;overflow-y:auto'              : 'display:none';
+  document.getElementById('my-dash-screen').style.cssText    = view==='myDash'    ? 'display:flex;flex-direction:column;flex:1;overflow-y:auto;padding:28px 32px' : 'display:none';
   document.getElementById('designer-screen').style.cssText   = view==='designer'  ? 'display:flex;flex-direction:column;flex:1;overflow:hidden'              : 'display:none';
   document.getElementById('homeDash-screen').style.cssText   = view==='homeDash'  ? 'display:flex;flex-direction:column;flex:1;overflow-y:auto'              : 'display:none';
 
@@ -6945,7 +7093,7 @@ function homeDashRender() {
   });
   // Keep homeDash-screen hidden; the view renders in my-dash-screen
   document.getElementById('homeDash-screen').style.display  = 'none';
-  document.getElementById('my-dash-screen').style.cssText   = 'display:flex;flex-direction:column;flex:1;overflow-y:auto';
+  document.getElementById('my-dash-screen').style.cssText   = 'display:flex;flex-direction:column;flex:1;overflow-y:auto;padding:28px 32px';
   myDashOpenView(dash.id);
 }
 
@@ -9010,7 +9158,7 @@ function myDashRenderEdit(screen) {
 }
 
 function myDashRenderPanelCard(panel, pi, pageIdx) {
-  const cols = panel.layout === '4col' ? 4 : panel.layout === '3col' ? 3 : (panel.layout === '2col' || panel.layout === 'two-col') ? 2 : 1;
+  const cols = {'1col':1,'2col':2,'3col':3,'4col':4,'5col':5,'6col':6,'7col':7,'8col':8,'two-col':2}[panel.layout] ?? 1;
   const h    = panel.height || 520;
   const cap  = panel.caption || '';
   return `
@@ -9031,12 +9179,22 @@ function myDashRenderPanelCard(panel, pi, pageIdx) {
         <input class="myd-panel-title-input" type="text" value="${escHtml(panel.title)}"
           onchange="myDashRenamePanel(${pageIdx},${pi},this.value)"
           draggable="false" ondragstart="event.stopPropagation()" placeholder="Panel title">
-        <div class="myd-layout-pills">
-          <button class="myd-layout-pill${panel.layout==='1col'?' active':''}" onclick="myDashSetLayout(${pageIdx},${pi},'1col')">1</button>
-          <button class="myd-layout-pill${panel.layout==='2col'?' active':''}" onclick="myDashSetLayout(${pageIdx},${pi},'2col')">2</button>
-          <button class="myd-layout-pill${panel.layout==='3col'?' active':''}" onclick="myDashSetLayout(${pageIdx},${pi},'3col')">3</button>
-          <button class="myd-layout-pill${panel.layout==='4col'?' active':''}" onclick="myDashSetLayout(${pageIdx},${pi},'4col')">4</button>
-        </div>
+        ${(panel.tiles||[]).every(t=>t.type==='kpi') ? `
+          <div class="myd-layout-pills" title="Minimum tile width in pixels">
+            <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);align-self:center;margin-right:4px">Min width:</span>
+            <input type="number" min="100" max="600" step="10" value="${panel.kpiMinWidth||200}"
+              style="width:58px;padding:2px 4px;font-size:12px;border:1px solid var(--border);border-radius:4px;background:var(--surface);color:var(--text)"
+              draggable="false" ondragstart="event.stopPropagation()"
+              onchange="myDashSetKpiMinWidth(${pageIdx},${pi},this.value)">
+            <span style="font-size:10px;color:var(--text-muted);align-self:center;margin-left:2px">px</span>
+          </div>` : `
+          <div class="myd-layout-pills" title="Chart columns">
+            <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);align-self:center;margin-right:2px">Cols:</span>
+            <button class="myd-layout-pill${panel.layout==='1col'?' active':''}" onclick="myDashSetLayout(${pageIdx},${pi},'1col')">1</button>
+            <button class="myd-layout-pill${panel.layout==='2col'?' active':''}" onclick="myDashSetLayout(${pageIdx},${pi},'2col')">2</button>
+            <button class="myd-layout-pill${panel.layout==='3col'?' active':''}" onclick="myDashSetLayout(${pageIdx},${pi},'3col')">3</button>
+            <button class="myd-layout-pill${panel.layout==='4col'?' active':''}" onclick="myDashSetLayout(${pageIdx},${pi},'4col')">4</button>
+          </div>`}
         <button class="myd-add-tile-btn" onclick="openTilePicker('${_myDashActive.id}',${pageIdx},${pi})">
           <i data-lucide="plus" style="width:12px;height:12px"></i> Add Tile
         </button>
@@ -9121,6 +9279,17 @@ function myDashRenderTileItem(tile, pi, ti, pageIdx) {
           <input type="text" value="${escHtml(captionVal)}" placeholder="Optional description"
             onchange="myDashSaveTileField(${pageIdx},${pi},${ti},'caption',this.value)">
         </div>
+        ${tile.type === 'kpi' && (tile.metrics||[]).length ? `
+        <div>
+          <label>Metric Tooltips <span style="font-weight:400;opacity:.7">(hover ⓘ on tile)</span></label>
+          ${(tile.metrics||[]).map((met,mi) => `
+          <div style="display:flex;align-items:center;gap:6px;margin-top:4px">
+            <span style="font-size:10px;color:var(--text-muted);min-width:80px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(met.name)}">${escHtml(met.label||met.name)}</span>
+            <input type="text" value="${escHtml(met.description||'')}" placeholder="Explain this metric…"
+              style="flex:1"
+              onchange="myDashSaveMetricDesc(${pageIdx},${pi},${ti},${mi},this.value)">
+          </div>`).join('')}
+        </div>` : ''}
         ${tile.type === 'chart' && tile._inline ? `
         <div style="display:flex;gap:10px;flex-wrap:wrap">
           <div>
@@ -9265,6 +9434,14 @@ function myDashSetLayout(pageIdx, pi, layout) {
   myDashRender();
 }
 
+function myDashSetKpiMinWidth(pageIdx, pi, val) {
+  if (!_myDashActive) return;
+  const w = Math.max(100, Math.min(600, parseInt(val) || 200));
+  _myDashActive.pages[pageIdx].panels[pi].kpiMinWidth = w;
+  _saveDashConfig();
+  myDashRender();
+}
+
 // ── Panel edit strip handlers ─────────────────────────────────────────────
 function myDashSavePanelCaption(pageIdx, pi, val) {
   if (!_myDashActive) return;
@@ -9299,6 +9476,15 @@ function myDashSaveTileField(pageIdx, pi, ti, field, val) {
   // Refresh just the tile card name display without full re-render
   const nameEl = document.querySelector(`#myd-tile-card-${pi}-${ti} .myd-tile-name`);
   if (nameEl && (field === 'title' || field === 'label')) nameEl.textContent = val.trim() || 'Chart';
+}
+
+function myDashSaveMetricDesc(pageIdx, pi, ti, mi, val) {
+  if (!_myDashActive) return;
+  const tile = _myDashActive.pages[pageIdx]?.panels[pi]?.tiles[ti];
+  if (!tile || !tile.metrics?.[mi]) return;
+  tile.metrics[mi].description = val.trim() || undefined;
+  if (!tile.metrics[mi].description) delete tile.metrics[mi].description;
+  _saveDashConfig();
 }
 
 function myDashSaveTileInlineField(pageIdx, pi, ti, field, val) {
@@ -10108,7 +10294,7 @@ function _setTileGranLabel(pi, ti, granLabel) {
 }
 
 function myDashRenderViewPanel(panel, pi) {
-  const cols = panel.layout === '4col' ? 4 : panel.layout === '3col' ? 3 : (panel.layout === '2col' || panel.layout === 'two-col') ? 2 : 1;
+  const cols = {'1col':1,'2col':2,'3col':3,'4col':4,'5col':5,'6col':6,'7col':7,'8col':8,'two-col':2}[panel.layout] ?? 1;
   const tiles = panel.tiles || [];
 
   const allKpi   = tiles.length > 0 && tiles.every(t => t.type === 'kpi');
@@ -10118,19 +10304,23 @@ function myDashRenderViewPanel(panel, pi) {
 
   // ── All-KPI panel ────────────────────────────────────────────────────────
   if (allKpi) {
-    const slots = tiles.map((tile, ti) => `
-      <div class="myd-kpi-slot" style="position:relative">
-        <button class="myd-digin-btn" onclick="diginOpen(${pi},${ti})" title="Dig in" style="position:absolute;top:6px;right:8px;z-index:3">
-          <i data-lucide="search" style="width:11px;height:11px"></i>
-        </button>
-        <div id="myd-tile-chart-${pi}-${ti}">
-          <div class="dash-kpi-tile" style="align-items:center;justify-content:center">
-            <div class="spinner"></div>
+    const kpiMinWidth = panel.kpiMinWidth || 200;
+    // One grid slot per individual metric (not per tile) — prevents unequal heights from multi-metric tiles
+    const slots = tiles.flatMap((tile, ti) =>
+      (tile.metrics || [{ name: tile.label || 'value' }]).map((met, mi) => `
+        <div class="myd-kpi-slot" style="position:relative">
+          <button class="myd-digin-btn" onclick="diginOpen(${pi},${ti})" title="Dig in" style="position:absolute;top:6px;right:8px;z-index:3">
+            <i data-lucide="search" style="width:11px;height:11px"></i>
+          </button>
+          <div id="myd-tile-chart-${pi}-${ti}-${mi}" style="height:100%">
+            <div class="dash-kpi-tile" style="align-items:center;justify-content:center;height:100%;box-sizing:border-box">
+              <div class="spinner"></div>
+            </div>
           </div>
-        </div>
-      </div>`).join('');
+        </div>`))
+    .join('');
     return `
-      <div class="myd-view-panel" id="myd-view-panel-${pi}">
+      <div class="myd-view-panel" id="myd-view-panel-${pi}" style="--kpi-min-width:${kpiMinWidth}px">
         ${panel.title ? `<div class="myd-view-panel-title">${escHtml(panel.title)}</div>` : ''}
         <div class="myd-kpi-row-wrap">${slots}</div>
       </div>`;
@@ -10142,7 +10332,7 @@ function myDashRenderViewPanel(panel, pi) {
       <div class="myd-view-panel" id="myd-view-panel-${pi}" style="${heightStyle}">
         ${panel.title ? `<div class="myd-view-panel-title">${escHtml(panel.title)}</div>` : ''}
         <div class="myd-view-panel-body">
-          <div class="myd-donut-grid" style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;height:100%">
+          <div class="myd-donut-grid" style="display:grid;grid-template-columns:repeat(${Math.min(tiles.length,4)},1fr);grid-auto-rows:1fr;gap:12px;height:100%">
             ${tiles.map((tile, ti) => _renderDonutTileHtml(tile, pi, ti)).join('')}
           </div>
         </div>
@@ -10150,35 +10340,7 @@ function myDashRenderViewPanel(panel, pi) {
       </div>`;
   }
 
-  // ── Mixed panel: leading donuts get their own full-width 4-col row ───────
-  // Count consecutive leading donuts
-  let donutCount = 0;
-  while (donutCount < tiles.length && _isDonutTile(tiles[donutCount])) donutCount++;
-  const hasLeadingDonuts = donutCount >= 2;
-
-  if (hasLeadingDonuts) {
-    const donutTiles = tiles.slice(0, donutCount);
-    const restTiles  = tiles.slice(donutCount);
-    const donutHtml  = donutTiles.map((tile, ti) => _renderDonutTileHtml(tile, pi, ti)).join('');
-    const restHtml   = restTiles.length === 0 ? '' : restTiles.map((tile, ti) => _renderChartTileHtml(tile, pi, donutCount + ti)).join('');
-    // Donuts: 55 flex units, bars: 45 flex units — both respond to panel resize
-    return `
-      <div class="myd-view-panel" id="myd-view-panel-${pi}" style="${heightStyle}">
-        ${panel.title ? `<div class="myd-view-panel-title">${escHtml(panel.title)}</div>` : ''}
-        <div style="flex:55;min-height:0;overflow:hidden">
-          <div class="myd-donut-grid" style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;height:100%">
-            ${donutHtml}
-          </div>
-        </div>
-        ${restTiles.length ? `
-        <div style="flex:45;min-height:0;overflow:hidden;margin-top:10px">
-          <div class="myd-view-tiles cols-${cols}" style="height:100%">${restHtml}</div>
-        </div>` : ''}
-        <div class="myd-panel-resize-handle" onmousedown="myDashPanelResizeStart(event,${pi})" title="Drag to resize"></div>
-      </div>`;
-  }
-
-  // ── Regular panel ────────────────────────────────────────────────────────
+  // ── Regular panel (all tile types flow through the same grid) ────────────────────────────────────
   const tileHtml = tiles.length === 0
     ? `<div style="color:var(--text-muted);font-size:13px;padding:20px 0;grid-column:1/-1">No tiles added to this panel.</div>`
     : tiles.map((tile, ti) => _renderChartTileHtml(tile, pi, ti)).join('');
@@ -10541,7 +10703,9 @@ function _diginIsNumCol(col, rows) {
 
 
 async function myDashFetchTile(tile, pi, ti) {
-  const chartEl = document.getElementById(`myd-tile-chart-${pi}-${ti}`);
+  // allKpi panels key slots as myd-tile-chart-pi-ti-mi; chart panels use the old myd-tile-chart-pi-ti key
+  const chartEl = document.getElementById(`myd-tile-chart-${pi}-${ti}`) ||
+                  document.getElementById(`myd-tile-chart-${pi}-${ti}-0`);
   if (!chartEl) return;
 
   // Resolve active date range from filter state
@@ -10599,29 +10763,58 @@ async function myDashFetchTile(tile, pi, ti) {
       const goodDir  = window._INST?.goodDirection || 'up';
       const PAL      = typeof PERF_COLORS !== 'undefined' ? PERF_COLORS : ['#00BFA5','#003366','#f59e0b','#6366f1','#ec4899'];
 
+      // Build a name→value map from API results for reliable lookup
+      const _dktLabel = (met) => {
+        const lbl = escHtml(met.label || met.name.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase()));
+        const desc = met.description ? `<span class="dkt-info-btn">i<span class="dkt-info-tip">${escHtml(met.description)}</span></span>` : '';
+        return `<div class="dkt-label" style="display:flex;align-items:center;gap:0">${lbl}${desc}</div>`;
+      };
       const renderDashKpis = (priorMap) => {
-        chartEl.innerHTML = kpis.map((kpi, i) => {
-          const color  = PAL[i % PAL.length];
-          const icon   = (metaMeta[kpi.name]?.displayFormat === 'currency' || metaMeta[kpi.name]?.prefix === '$') ? 'dollar-sign' : 'hash';
-          const prior  = priorMap ? priorMap[kpi.name] : null;
-          // Build metaM shape for _kpiDeltaHtml
-          const metaM  = { displayFormat: metaMeta[kpi.name]?.displayFormat, prefix: metaMeta[kpi.name]?.prefix, suffix: metaMeta[kpi.name]?.suffix, decimalPlaces: metaMeta[kpi.name]?.decimalPlaces };
-          const delta  = _kpiDeltaHtml(kpi.value, prior, metaM, goodDir);
-          return `
-            <div class="dash-kpi-tile">
+        const kpiMap = {};
+        kpis.forEach(k => { kpiMap[k.name] = k.value; });
+
+        // Iterate the pre-rendered slots (one per tile.metrics entry)
+        (tile.metrics || []).forEach((met, mi) => {
+          const metEl = document.getElementById(`myd-tile-chart-${pi}-${ti}-${mi}`);
+          if (!metEl) return;
+          const color  = PAL[mi % PAL.length];
+          const icon   = (met.displayFormat === 'currency' || met.prefix === '$') ? 'dollar-sign' : 'hash';
+          const rawVal = kpiMap[met.name];
+
+          // If API didn't return this metric (e.g. duplicate name, missing field) show dash
+          if (rawVal === undefined) {
+            metEl.innerHTML = `
+              <div class="dash-kpi-tile" style="height:100%;box-sizing:border-box">
+                <div class="dkt-icon" style="background:${color}22;color:${color}">
+                  <i data-lucide="${icon}" style="width:16px;height:16px;stroke-width:2"></i>
+                </div>
+                <div style="min-width:0;overflow:hidden;flex:1">
+                  ${_dktLabel(met)}
+                  <div class="dkt-value" style="color:${color}">—</div>
+                </div>
+              </div>`;
+            const slot = metEl.closest('.myd-kpi-slot') || metEl.parentElement;
+            if (slot && typeof lucide !== 'undefined') lucide.createIcons({ el: slot });
+            return;
+          }
+
+          const prior  = priorMap ? (priorMap[met.name] ?? null) : null;
+          const metaM  = { displayFormat: met.displayFormat, prefix: met.prefix, suffix: met.suffix, decimalPlaces: met.decimalPlaces };
+          const delta  = _kpiDeltaHtml(rawVal, prior, metaM, goodDir);
+          metEl.innerHTML = `
+            <div class="dash-kpi-tile" style="height:100%;box-sizing:border-box">
               <div class="dkt-icon" style="background:${color}22;color:${color}">
                 <i data-lucide="${icon}" style="width:16px;height:16px;stroke-width:2"></i>
               </div>
-              <div>
-                <div class="dkt-label">${escHtml(metaMeta[kpi.name]?.label || kpi.name.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase()))}</div>
-                <div class="dkt-value" style="color:${color}">${fmtKpi(kpi.value, kpi.name)}</div>
+              <div style="min-width:0;overflow:hidden;flex:1">
+                ${_dktLabel(met)}
+                <div class="dkt-value" style="color:${color}">${fmtKpi(rawVal, met.name)}</div>
                 ${delta}
               </div>
             </div>`;
-        }).join('');
-        // Re-process lucide icons on the tile wrapper so the dig-in button icon renders
-        const slot = chartEl.closest('.myd-kpi-slot, .myd-view-tile') || chartEl.parentElement;
-        if (slot && typeof lucide !== 'undefined') lucide.createIcons({ el: slot });
+          const slot = metEl.closest('.myd-kpi-slot') || metEl.parentElement;
+          if (slot && typeof lucide !== 'undefined') lucide.createIcons({ el: slot });
+        });
       };
 
       renderDashKpis(null); // immediate render
@@ -13390,7 +13583,7 @@ function whOpenSimulator(id, name, clientId) {
         store_type:    'Urban',
         plu_code:      'PLU-1042',
         item_name:     'Organic Fuji Apple',
-        department:    'Fresh Produce',
+        department:    'General',
         category:      'Fruit',
         subcategory:   'Apples',
         unit_type:     'each',

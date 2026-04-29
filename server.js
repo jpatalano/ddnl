@@ -9,7 +9,6 @@ const { router: ingestRouter } = require('./ingestRouter');
 const webhookRouter             = require('./webhookRouter');
 const fileImportRouter          = require('./fileImportRouter');
 const adminRouter = require('./adminRoutes');
-const { router: wizardRouter, setInstance: wizardSetInstance } = require('./wizardRouter');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -65,7 +64,6 @@ app.use('/api/ingest', webhookRouter);
 // File import — multer handles its own body parsing (must be before express.json() middleware)
 app.use('/api/ingest', fileImportRouter);
 app.use('/api/admin',  requireBasicAuth, adminRouter);
-app.use('/api/wizard', wizardRouter);
 
 app.use((req, res, next) => {
   // Allow Railway health checks through without auth
@@ -174,8 +172,6 @@ try {
   // Wire auth + clientId into fileImportRouter
   fileImportRouter.setAuth(webhookRouter._requireBasicOrApiKey || ((req,res,next)=>next()));
   fileImportRouter.setClientId(INSTANCE.clientId);
-  // Wire instance into wizardRouter
-  wizardSetInstance(INSTANCE);
 } catch (e) {
   console.error('FATAL: Invalid INSTANCE_CONFIG —', e.message);
   process.exit(1);
@@ -1715,44 +1711,15 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// ─── FTP auto-start (instance-specific) ──────────────────────────────────────
-function startFtpServer() {
-  const ftpScripts = {
-    
-    
-    produce: 'ftp-server.py',
-  };
-  const script = ftpScripts[INSTANCE.id];
-  if (!script) return; // no FTP for this instance
-  const { spawn } = require('child_process');
-  const path = require('path');
-  const proc = spawn('python3', [path.join(__dirname, script)], {
-    detached: true,
-    stdio:    ['ignore', 'pipe', 'pipe'],
-  });
-  proc.stdout.on('data', d => console.log(`[ftp] ${d.toString().trim()}`));
-  proc.stderr.on('data', d => console.error(`[ftp:err] ${d.toString().trim()}`));
-  proc.on('error', (err) => {
-    console.error(`[ftp] failed to start: ${err.message} — retrying in 10s`);
-    setTimeout(startFtpServer, 10000);
-  });
-  proc.on('exit', (code) => {
-    console.warn(`[ftp] process exited (${code}) — restarting in 5s`);
-    setTimeout(startFtpServer, 5000);
-  });
-  console.log(`[ftp] started ${script} for instance ${INSTANCE.id}`);
-}
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 initDb()
   .then(() => app.listen(PORT, () => {
     console.log(`[${INSTANCE.id}] running on port ${PORT}`);
-    startFtpServer();
   }))
   .catch(err => {
     console.error('Failed to init DB, starting without persistence:', err.message);
     app.listen(PORT, () => {
       console.log(`[${INSTANCE.id}] running (no DB) on port ${PORT}`);
-      startFtpServer();
     });
   });
