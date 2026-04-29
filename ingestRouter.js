@@ -417,6 +417,8 @@ router.post('/:dataset/bulk', requireApiKey, async (req, res) => {
 
     // Auto-maintain lookup datasets — async, never blocks the response
     syncLookupFromDocs(clientId, dataset, def.id, docs).catch(() => {});
+    // Fire on_ingest tag rules async — never blocks response
+    tagEngine.runOnIngestTriggers(clientId, dataset).catch(() => {});
 
     res.json({ success: true, indexed: result.indexed, failed: result.failed,
                errors: result.errors, durationMs,
@@ -464,7 +466,9 @@ router.post('/:dataset/single', requireApiKey, async (req, res) => {
     await logIngest(clientId, dataset, 'single', result, label, durationMs);
 
     // Auto-maintain lookup datasets — async, never blocks the response
-    syncLookupFromDocs(clientId, dataset, def.id, [doc]).catch(() => {});
+    syncLookupFromDocs(clientId, dataset, def.id, [enrichedDoc]).catch(() => {});
+    // Fire on_ingest tag rules async — never blocks response
+    tagEngine.runOnIngestTriggers(clientId, dataset).catch(() => {});
 
     res.json({ success: true, ...result, durationMs,
                mode: pkFields.length ? 'upsert' : 'append' });
@@ -1401,7 +1405,277 @@ router.post('/:dataset/push', requireApiKey, async (req, res) => {
 });
 
 
-module.exports = { router, resolveApiKey, hashKey, generateKey };
+// ── Tag management routes ─────────────────────────────────────────────────────────────
+
+const tagEngine = require('./tagEngine');
+const { esAddTag } = tagEngine;
+
+// GET /api/ingest/admin/tags?dataset=:name
+// List all tags for this client, optionally filtered by target dataset.
+router.get('/admin/tags', requireApiKey, async (req, res) => {
+  const { clientId } = req.ingestCtx;
+  const { dataset } = req.query;
+  const params = [clientId];
+  let where = 'WHERE client_id = $1 AND is_active = TRUE';
+  if (dataset) { where += ' AND target_dataset = $2'; params.push(dataset); }
+  const { rows } = await pool.query(
+    `SELECT * FROM client_tags ${where} ORDER BY tag_type, label`, params
+  );
+  res.json({ success: true, tags: rows });
+});
+
+// POST /api/ingest/admin/tags
+// Create a tag. tag_type defaults to 'user'; only admins should create 'system' tags.
+// Body: { name, label, color, tag_type, target_dataset, description }
+router.post('/admin/tags', requireApiKey, async (req, res) => {
+  const { clientId } = req.ingestCtx;
+  const { name, label, color, tag_type = 'user', target_dataset, description } = req.body;
+  if (!name)           return res.status(400).json({ error: 'name is required' });
+  if (!label)          return res.status(400).json({ error: 'label is required' });
+  if (!target_dataset) return res.status(400).json({ error: 'target_dataset is required' });
+  if (!['system','user'].includes(tag_type)) {
+    return res.status(400).json({ error: 'tag_type must be system or user' });
+  }
+  try {
+    const { rows: [tag] } = await pool.query(
+      `INSERT INTO client_tags (client_id, name, label, color, tag_type, target_dataset, description)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)
+       ON CONFLICT (client_id, name, target_dataset) DO UPDATE
+         SET label=$3, color=$4, description=$7, updated_at=NOW()
+       RETURNING *`,
+      [clientId, name, label, color || '#6366f1', tag_type, target_dataset, description || null]
+    );
+    res.json({ success: true, tag });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// PATCH /api/ingest/admin/tags/:id
+// Update label, color, or description. tag_type and target_dataset are immutable.
+router.patch('/admin/tags/:id', requireApiKey, async (req, res) => {
+  const { clientId } = req.ingestCtx;
+  const { label, color, description, is_active } = req.body;
+  const { rows: [tag] } = await pool.query(
+    `UPDATE client_tags
+     SET label       = COALESCE($1, label),
+         color       = COALESCE($2, color),
+         description = COALESCE($3, description),
+         is_active   = COALESCE($4, is_active),
+         updated_at  = NOW()
+     WHERE id = $5 AND client_id = $6
+     RETURNING *`,
+    [label, color, description, is_active, req.params.id, clientId]
+  );
+  if (!tag) return res.status(404).json({ error: 'Tag not found' });
+  res.json({ success: true, tag });
+});
+
+// DELETE /api/ingest/admin/tags/:id
+// Deactivates the tag and removes all its assignments.
+router.delete('/admin/tags/:id', requireApiKey, async (req, res) => {
+  const { clientId } = req.ingestCtx;
+  const { rowCount } = await pool.query(
+    `UPDATE client_tags SET is_active=FALSE, updated_at=NOW() WHERE id=$1 AND client_id=$2`,
+    [req.params.id, clientId]
+  );
+  if (!rowCount) return res.status(404).json({ error: 'Tag not found' });
+  // Remove all assignments for this tag
+  await pool.query('DELETE FROM client_tag_assignments WHERE tag_id=$1', [req.params.id]);
+  res.json({ success: true });
+});
+
+// ── System tag rules ────────────────────────────────────────────────────────────
+
+// GET /api/ingest/admin/tags/:tagId/rules
+router.get('/admin/tags/:tagId/rules', requireApiKey, async (req, res) => {
+  const { clientId } = req.ingestCtx;
+  const { rows } = await pool.query(
+    `SELECT r.* FROM system_tag_rules r
+     JOIN client_tags t ON t.id = r.tag_id
+     WHERE r.tag_id=$1 AND r.client_id=$2`,
+    [req.params.tagId, clientId]
+  );
+  res.json({ success: true, rules: rows });
+});
+
+// POST /api/ingest/admin/tags/:tagId/rules
+// Body: { rule_action, trigger_type, trigger_dataset, conditions }
+router.post('/admin/tags/:tagId/rules', requireApiKey, async (req, res) => {
+  const { clientId } = req.ingestCtx;
+  const { rule_action, trigger_type, trigger_dataset, conditions = [] } = req.body;
+  if (!rule_action)  return res.status(400).json({ error: 'rule_action is required (apply|remove)' });
+  if (!trigger_type) return res.status(400).json({ error: 'trigger_type is required (schedule|on_ingest)' });
+  if (trigger_type === 'on_ingest' && !trigger_dataset) {
+    return res.status(400).json({ error: 'trigger_dataset is required for on_ingest rules' });
+  }
+  // Verify tag belongs to this client
+  const { rows: [tag] } = await pool.query(
+    `SELECT * FROM client_tags WHERE id=$1 AND client_id=$2 AND tag_type='system'`,
+    [req.params.tagId, clientId]
+  );
+  if (!tag) return res.status(404).json({ error: 'System tag not found' });
+  try {
+    const { rows: [rule] } = await pool.query(
+      `INSERT INTO system_tag_rules
+         (tag_id, client_id, rule_action, trigger_type, trigger_dataset, conditions)
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+      [tag.id, clientId, rule_action, trigger_type, trigger_dataset || null, JSON.stringify(conditions)]
+    );
+    res.json({ success: true, rule });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// PATCH /api/ingest/admin/tags/:tagId/rules/:ruleId
+// Update conditions or toggle active state.
+router.patch('/admin/tags/:tagId/rules/:ruleId', requireApiKey, async (req, res) => {
+  const { clientId } = req.ingestCtx;
+  const { conditions, is_active, trigger_dataset } = req.body;
+  const { rows: [rule] } = await pool.query(
+    `UPDATE system_tag_rules
+     SET conditions      = COALESCE($1, conditions),
+         is_active       = COALESCE($2, is_active),
+         trigger_dataset = COALESCE($3, trigger_dataset),
+         updated_at      = NOW()
+     WHERE id=$4 AND tag_id=$5 AND client_id=$6
+     RETURNING *`,
+    [
+      conditions ? JSON.stringify(conditions) : null,
+      is_active, trigger_dataset,
+      req.params.ruleId, req.params.tagId, clientId
+    ]
+  );
+  if (!rule) return res.status(404).json({ error: 'Rule not found' });
+  res.json({ success: true, rule });
+});
+
+// DELETE /api/ingest/admin/tags/:tagId/rules/:ruleId
+router.delete('/admin/tags/:tagId/rules/:ruleId', requireApiKey, async (req, res) => {
+  const { clientId } = req.ingestCtx;
+  const { rowCount } = await pool.query(
+    `DELETE FROM system_tag_rules WHERE id=$1 AND tag_id=$2 AND client_id=$3`,
+    [req.params.ruleId, req.params.tagId, clientId]
+  );
+  if (!rowCount) return res.status(404).json({ error: 'Rule not found' });
+  res.json({ success: true });
+});
+
+// POST /api/ingest/admin/tags/:tagId/run
+// Manually trigger a system tag rule evaluation immediately (useful for testing).
+router.post('/admin/tags/:tagId/run', requireApiKey, async (req, res) => {
+  const { clientId } = req.ingestCtx;
+  const { rows: [tag] } = await pool.query(
+    `SELECT * FROM client_tags WHERE id=$1 AND client_id=$2 AND tag_type='system'`,
+    [req.params.tagId, clientId]
+  );
+  if (!tag) return res.status(404).json({ error: 'System tag not found' });
+  const { rows: rules } = await pool.query(
+    `SELECT * FROM system_tag_rules WHERE tag_id=$1 AND client_id=$2 AND is_active=TRUE`,
+    [tag.id, clientId]
+  );
+  let totalApplied = 0, totalRemoved = 0;
+  for (const rule of rules) {
+    const stats = await tagEngine.runScheduledTriggers(clientId);
+    totalApplied += stats.totalApplied || 0;
+    totalRemoved += stats.totalRemoved || 0;
+  }
+  res.json({ success: true, applied: totalApplied, removed: totalRemoved });
+});
+
+// ── User tag assignments ──────────────────────────────────────────────────────────
+
+// GET /api/ingest/:dataset/records/:recordId/tags
+// List all tags assigned to a specific record.
+router.get('/:dataset/records/:recordId/tags', requireApiKey, async (req, res) => {
+  const { clientId } = req.ingestCtx;
+  const { dataset, recordId } = req.params;
+  const { rows } = await pool.query(
+    `SELECT t.id, t.name, t.label, t.color, t.tag_type,
+            a.assigned_at, a.assigned_by
+     FROM client_tag_assignments a
+     JOIN client_tags t ON t.id = a.tag_id
+     WHERE a.client_id=$1 AND a.dataset_name=$2 AND a.record_id=$3
+       AND t.is_active=TRUE
+     ORDER BY t.tag_type, t.label`,
+    [clientId, dataset, recordId]
+  );
+  res.json({ success: true, tags: rows });
+});
+
+// POST /api/ingest/:dataset/records/:recordId/tags
+// Assign a user tag to a record.
+// Body: { tagId, assignedBy }
+router.post('/:dataset/records/:recordId/tags', requireApiKey, async (req, res) => {
+  const { clientId } = req.ingestCtx;
+  const { dataset, recordId } = req.params;
+  const { tagId, assignedBy = 'user' } = req.body;
+  if (!tagId) return res.status(400).json({ error: 'tagId is required' });
+
+  // Verify tag exists, belongs to this client, targets this dataset, and is a user tag
+  const { rows: [tag] } = await pool.query(
+    `SELECT * FROM client_tags WHERE id=$1 AND client_id=$2 AND target_dataset=$3 AND tag_type='user' AND is_active=TRUE`,
+    [tagId, clientId, dataset]
+  );
+  if (!tag) return res.status(404).json({ error: 'User tag not found for this dataset' });
+
+  try {
+    await pool.query(
+      `INSERT INTO client_tag_assignments (client_id, tag_id, dataset_name, record_id, assigned_by)
+       VALUES ($1,$2,$3,$4,$5) ON CONFLICT (tag_id, record_id) DO NOTHING`,
+      [clientId, tagId, dataset, recordId, assignedBy]
+    );
+    // Sync to ES
+    const alias = es.aliasName(clientId, dataset);
+    await esAddTag(alias, [recordId], tag.label);
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// DELETE /api/ingest/:dataset/records/:recordId/tags/:tagId
+// Remove a user tag from a record. System tags cannot be removed this way.
+router.delete('/:dataset/records/:recordId/tags/:tagId', requireApiKey, async (req, res) => {
+  const { clientId } = req.ingestCtx;
+  const { dataset, recordId, tagId } = req.params;
+
+  // Verify it's a user tag (system tags managed by engine only)
+  const { rows: [tag] } = await pool.query(
+    `SELECT * FROM client_tags WHERE id=$1 AND client_id=$2 AND tag_type='user'`,
+    [tagId, clientId]
+  );
+  if (!tag) return res.status(404).json({ error: 'User tag not found' });
+
+  await pool.query(
+    `DELETE FROM client_tag_assignments WHERE tag_id=$1 AND record_id=$2 AND client_id=$3`,
+    [tagId, recordId, clientId]
+  );
+
+  // Sync ES — remove label from __tags
+  try {
+    const alias = es.aliasName(clientId, dataset);
+    const client = es.getClient();
+    await client.updateByQuery({
+      index: alias, refresh: false,
+      body: {
+        query: { ids: { values: [recordId] } },
+        script: {
+          lang: 'painless',
+          source: `if (ctx._source.__tags != null && ctx._source.__tags.contains(params.tag)) {
+            ctx._source.__tags.remove(ctx._source.__tags.indexOf(params.tag));
+          } else { ctx.op = 'noop'; }`,
+          params: { tag: tag.label }
+        }
+      }
+    });
+  } catch (e) { console.warn('[tags] ES sync failed on remove:', e.message); }
+
+  res.json({ success: true });
+});
+
+module.exports = { router, resolveApiKey, hashKey, generateKey, runOnIngestTriggers };
 
 // ── Customer import — geocoding + tag engine ───────────────────────────────────
 //

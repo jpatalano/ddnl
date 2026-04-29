@@ -558,6 +558,78 @@ const MIGRATIONS = [
   )`,
   `CREATE INDEX IF NOT EXISTS idx_dataset_relations_source ON dataset_relations(source_dataset_id)`,
   `CREATE INDEX IF NOT EXISTS idx_dataset_relations_client ON dataset_relations(client_id)`,
+
+  // 020a — client_tags: tag registry per client
+  // tag_type: 'system' (rule-driven, admin-managed) | 'user' (manually assigned, never touched by system)
+  // target_dataset: which dataset this tag applies to (e.g. 'customers', 'employees')
+  `CREATE TABLE IF NOT EXISTS client_tags (
+    id              SERIAL PRIMARY KEY,
+    client_id       VARCHAR(255) NOT NULL REFERENCES clients(client_id) ON DELETE CASCADE,
+    name            VARCHAR(255) NOT NULL,    -- machine key, e.g. 'lost_tuna'
+    label           VARCHAR(255) NOT NULL,    -- display name, e.g. 'Lost Tuna'
+    color           VARCHAR(32)  DEFAULT '#6366f1', -- hex color for UI pills
+    tag_type        VARCHAR(16)  NOT NULL DEFAULT 'user'
+      CHECK (tag_type IN ('system', 'user')),
+    target_dataset  VARCHAR(255) NOT NULL,    -- dataset name key this tag applies to
+    description     TEXT,
+    is_active       BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(client_id, name, target_dataset)
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_client_tags_client  ON client_tags(client_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_client_tags_dataset ON client_tags(client_id, target_dataset)`,
+
+  // 020b — client_tag_assignments: record-level tag assignments
+  // record_id: the ES _id of the tagged record
+  // assigned_by: 'system' for rule-driven, or a user identifier for user tags
+  // Postgres is the source of truth; __tags on the ES doc is the denormalized query copy.
+  `CREATE TABLE IF NOT EXISTS client_tag_assignments (
+    id              SERIAL PRIMARY KEY,
+    client_id       VARCHAR(255) NOT NULL REFERENCES clients(client_id) ON DELETE CASCADE,
+    tag_id          INTEGER NOT NULL REFERENCES client_tags(id) ON DELETE CASCADE,
+    dataset_name    VARCHAR(255) NOT NULL,
+    record_id       VARCHAR(255) NOT NULL,    -- ES _id
+    assigned_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    assigned_by     VARCHAR(255) NOT NULL DEFAULT 'system',
+    UNIQUE(tag_id, record_id)
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_tag_assignments_client  ON client_tag_assignments(client_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_tag_assignments_tag     ON client_tag_assignments(tag_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_tag_assignments_record  ON client_tag_assignments(dataset_name, record_id)`,
+
+  // 020c — system_tag_rules: apply/remove rules for system tags
+  // One row per rule per tag. A tag can have multiple rules (e.g. one apply + one remove).
+  //
+  // trigger_type:
+  //   'schedule'   — evaluated on a nightly/scheduled run
+  //   'on_ingest'  — evaluated after records are ingested into trigger_dataset
+  //
+  // rule_action: 'apply' | 'remove'
+  //
+  // conditions: array of { segmentName, operator, value } filter objects.
+  //   Applied to the target_dataset records (i.e. the records being tagged).
+  //   Pre-computed fields expected on the record (e.g. TotalSpend, LastJobDate).
+  //
+  // trigger_dataset: for on_ingest rules, the dataset whose ingest fires this rule.
+  //   e.g. for Lost Tuna remove: trigger_dataset='jobs', conditions check CustomerId match.
+  `CREATE TABLE IF NOT EXISTS system_tag_rules (
+    id              SERIAL PRIMARY KEY,
+    tag_id          INTEGER NOT NULL REFERENCES client_tags(id) ON DELETE CASCADE,
+    client_id       VARCHAR(255) NOT NULL REFERENCES clients(client_id) ON DELETE CASCADE,
+    rule_action     VARCHAR(16)  NOT NULL CHECK (rule_action IN ('apply', 'remove')),
+    trigger_type    VARCHAR(16)  NOT NULL CHECK (trigger_type IN ('schedule', 'on_ingest')),
+    trigger_dataset VARCHAR(255),             -- required when trigger_type = 'on_ingest'
+    conditions      JSONB NOT NULL DEFAULT '[]', -- [{ segmentName, operator, value }]
+    is_active       BOOLEAN NOT NULL DEFAULT TRUE,
+    last_run_at     TIMESTAMPTZ,
+    last_run_count  INTEGER DEFAULT 0,        -- records affected on last run
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_system_tag_rules_tag     ON system_tag_rules(tag_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_system_tag_rules_client  ON system_tag_rules(client_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_system_tag_rules_trigger ON system_tag_rules(trigger_type, trigger_dataset)`,
 ];
 
 async function initDb() {
