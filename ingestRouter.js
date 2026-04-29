@@ -399,6 +399,92 @@ router.post('/:dataset/single', requireApiKey, async (req, res) => {
   }
 });
 
+// GET /api/ingest/:dataset/records/:id
+// Fetch a single document by its deterministic PK-derived _id.
+// Pass the raw PK field values as query params: ?field1=val1&field2=val2
+// OR pass ?_id=<sha256_hex> directly.
+router.get('/:dataset/records/:id', requireApiKey, async (req, res) => {
+  const { clientId } = req.ingestCtx;
+  const { dataset, id } = req.params;
+
+  const def = await getDatasetDef(clientId, dataset);
+  if (!def) return res.status(404).json({ error: `Dataset '${dataset}' not found` });
+
+  try {
+    const alias  = es.aliasName(clientId, dataset);
+    const client = es.getClient();
+    const result = await client.get({ index: alias, id });
+    if (!result.found) return res.status(404).json({ error: 'Record not found' });
+    const doc = result._source;
+    // Respect soft-delete
+    if (doc._status === 'deleted') return res.status(404).json({ error: 'Record not found' });
+    res.json({ success: true, id: result._id, doc });
+  } catch (e) {
+    if (e.meta?.statusCode === 404) return res.status(404).json({ error: 'Record not found' });
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/ingest/:dataset/delete
+// Soft-delete records matching the supplied filters.
+// Body: { filters: [ { segmentName, operator, value } ], ids: ["sha256hex",...] }
+// Either filters OR ids must be provided (both accepted together).
+// Sets _status = 'deleted' on all matching documents via update-by-query.
+router.post('/:dataset/delete', requireApiKey, async (req, res) => {
+  const { clientId } = req.ingestCtx;
+  const { dataset }  = req.params;
+  const { filters = [], ids = [] } = req.body || {};
+
+  if (!filters.length && !ids.length) {
+    return res.status(400).json({ error: 'Provide at least one of: filters, ids' });
+  }
+
+  const def = await getDatasetDef(clientId, dataset);
+  if (!def) return res.status(404).json({ error: `Dataset '${dataset}' not found` });
+
+  try {
+    const alias  = es.aliasName(clientId, dataset);
+    const client = es.getClient();
+
+    // Build ES query
+    const mustClauses = [];
+    // Only target active records
+    mustClauses.push({ bool: { must_not: [{ terms: { _status: ['deleted', 'archived'] } }] } });
+
+    if (ids.length) {
+      mustClauses.push({ ids: { values: ids } });
+    }
+
+    for (const f of filters) {
+      const { segmentName, operator, value } = f;
+      switch (operator) {
+        case 'eq':      mustClauses.push({ term:  { [segmentName]: value } }); break;
+        case 'neq':     mustClauses.push({ bool:  { must_not: [{ term: { [segmentName]: value } }] } }); break;
+        case 'in':      mustClauses.push({ terms: { [segmentName]: Array.isArray(value) ? value : [value] } }); break;
+        case 'not_in':  mustClauses.push({ bool:  { must_not: [{ terms: { [segmentName]: Array.isArray(value) ? value : [value] } }] } }); break;
+        case 'gt':      mustClauses.push({ range: { [segmentName]: { gt: value } } }); break;
+        case 'gte':     mustClauses.push({ range: { [segmentName]: { gte: value } } }); break;
+        case 'lt':      mustClauses.push({ range: { [segmentName]: { lt: value } } }); break;
+        case 'lte':     mustClauses.push({ range: { [segmentName]: { lte: value } } }); break;
+        default: return res.status(400).json({ error: `Unknown operator: ${operator}` });
+      }
+    }
+
+    const r = await client.updateByQuery({
+      index: alias,
+      refresh: true,
+      body: {
+        query: { bool: { must: mustClauses } },
+        script: { source: "ctx._source._status = 'deleted'; ctx._source.__deleted_at = params.ts;", lang: 'painless', params: { ts: new Date().toISOString() } }
+      }
+    });
+
+    res.json({ success: true, deleted: r.updated ?? 0, noops: r.noops ?? 0 });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // GET /api/ingest/:dataset/status
 router.get('/:dataset/status', requireApiKey, async (req, res) => {
   const { clientId } = req.ingestCtx;
@@ -503,6 +589,58 @@ router.get('/admin/datasets/:name', requireApiKey, async (req, res) => {
   const stats = await es.indexStats(clientId, req.params.name);
 
   res.json({ success: true, dataset: def, versions, invalidations, stats });
+});
+
+// GET /api/ingest/admin/datasets/:name/fields
+// Returns the current field list for a dataset plus any stored display metadata
+// (labels, display formats, prefixes, suffixes). Useful for automation / integration setup.
+router.get('/admin/datasets/:name/fields', requireApiKey, async (req, res) => {
+  const { clientId } = req.ingestCtx;
+  const { name }     = req.params;
+
+  const { rows: [def] } = await pool.query(
+    `SELECT * FROM dataset_definitions WHERE client_id=$1 AND name=$2`, [clientId, name]
+  );
+  if (!def) return res.status(404).json({ error: 'Dataset not found' });
+
+  // Current schema version fields
+  const { rows: [ver] } = await pool.query(
+    `SELECT fields FROM dataset_schema_versions WHERE dataset_id=$1 AND version=$2`,
+    [def.id, def.current_version]
+  );
+  const schemaFields = ver?.fields || [];
+
+  // Display metadata (labels, formats, etc.) from field_metadata table
+  const { rows: metaRows } = await pool.query(
+    `SELECT field_name, field_type, display_label, display_format, prefix, suffix, decimal_places
+     FROM dataset_field_metadata WHERE dataset_id=$1`, [def.id]
+  );
+  const metaMap = {};
+  metaRows.forEach(r => { metaMap[r.field_name] = r; });
+
+  // Merge schema fields with metadata
+  const fields = schemaFields.map(f => {
+    const m = metaMap[f.name] || {};
+    return {
+      name:          f.name,
+      type:          f.type || m.field_type || 'keyword',
+      label:         m.display_label  || f.name,
+      displayFormat: m.display_format || null,
+      prefix:        m.prefix         || null,
+      suffix:        m.suffix         || null,
+      decimalPlaces: m.decimal_places ?? null,
+    };
+  });
+
+  res.json({
+    success:        true,
+    dataset:        name,
+    label:          def.label,
+    primaryKeyFields: def.primary_key_fields || [],
+    dateField:      def.date_field || null,
+    currentVersion: def.current_version,
+    fields,
+  });
 });
 
 // POST /api/admin/datasets/:name/publish

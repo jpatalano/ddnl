@@ -315,6 +315,10 @@
     <button class="sidebar-item" data-page="generator" onclick="showPage('generator')">
       <i data-lucide="cpu" style="width:15px;height:15px"></i> Generator History
     </button>
+    <div class="sidebar-section">AI</div>
+    <button class="sidebar-item" data-page="ai-generator" onclick="showPage('ai-generator')">
+      <i data-lucide="sparkles" style="width:15px;height:15px"></i> Dashboard Generator
+    </button>
     <button class="sidebar-item" data-page="alerts" onclick="showPage('alerts')">
       <i data-lucide="bell" style="width:15px;height:15px"></i> Alerts
       <span class="sidebar-badge amber" id="abadge" style="display:none">0</span>
@@ -622,7 +626,7 @@ async function apiFetch(path) {
 }
 
 // ─── Page navigation ─────────────────────────────────────────────────────────
-const PAGE_LOADERS = { overview: loadOverview, history: loadHistory, files: loadFiles, quarantine: loadQuarantine, generator: loadGenerator, alerts: loadAlerts };
+const PAGE_LOADERS = { overview: loadOverview, history: loadHistory, files: loadFiles, quarantine: loadQuarantine, generator: loadGenerator, alerts: loadAlerts, 'ai-generator': initAiGenerator };
 const _loaded = {};
 
 function showPage(name) {

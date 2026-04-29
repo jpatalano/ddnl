@@ -943,9 +943,9 @@
     }
     .kpi-delta:hover .kpi-delta-tip { visibility: visible; opacity: 1; }
     /* inside .kpi-tile (report builder bar) */
-    .kpi-tile .kpi-delta { display: block; margin-top: 4px; }
+    .kpi-tile .kpi-delta { display: inline-flex; margin-top: 4px; }
     /* inside .dash-kpi-tile (dashboard) */
-    .dash-kpi-tile .kpi-delta { display: block; margin-top: 4px; }
+    .dash-kpi-tile .kpi-delta { display: inline-flex; margin-top: 4px; }
 
     /* Chart grid */
     .dash-chart-row { display: grid; gap: 16px; }
@@ -3462,6 +3462,13 @@ let BASE = '/api';
 const BASE_URL = '/api'; // alias used in some older functions
 let _activeInstance = null; // populated after bootstrapInstance()
 
+// ── Tenant Context session ───────────────────────────────────────────────
+// Populated by bootstrapInstance when launched via ?token= URL.
+// When set, sent as X-Ddnl-Session header instead of Basic auth.
+let _tcSessionToken = null;
+let _tcUsername = null;
+let _tcDataSource = null;
+
 // ── Instance-aware fetch wrapper ─────────────────────────────────────────────
 // All /api calls MUST go through apiFetch so the server knows which instance
 // is making the request (X-Instance-Id header). This is critical for data
@@ -3470,8 +3477,13 @@ function apiFetch(url, opts = {}) {
   const instId = _activeInstance?.id || '';
   const headers = new Headers(opts.headers || {});
   if (instId) headers.set('X-Instance-Id', instId);
-  // Always send basic auth so API calls pass the global auth middleware
-  headers.set('Authorization', 'Basic ' + btoa('ddnl:ddnl!'));
+  if (_tcSessionToken) {
+    // Tenant-context launch: authenticate via session token
+    headers.set('X-Ddnl-Session', _tcSessionToken);
+  } else {
+    // Standard launch: Basic auth
+    headers.set('Authorization', 'Basic ' + btoa('ddnl:ddnl!'));
+  }
   return fetch(url, { ...opts, headers });
 }
 
@@ -3697,6 +3709,21 @@ window._ipSelect = function(idx) {
 // Main boot: resolve instance then start the app
 (async function bootstrapInstance() {
   let inst;
+
+  // ── Tenant Context: consume server-injected session (token launch) ─────────────
+  // window.__TC_SESSION__ is injected by the server when ?token= is in the URL
+  // and resolved successfully. Populate module-level vars so apiFetch uses it.
+  if (window.__TC_SESSION__) {
+    _tcSessionToken = window.__TC_SESSION__.sessionToken;
+    _tcUsername     = window.__TC_SESSION__.username;
+    _tcDataSource   = window.__TC_SESSION__.dataSource;
+    console.log(`[tenant-context] Session active: user=${_tcUsername} dataSource=${_tcDataSource}`);
+    // Clean the token from the URL so it can't be bookmarked or accidentally shared
+    try {
+      const cleanUrl = window.location.pathname;
+      window.history.replaceState({}, '', cleanUrl);
+    } catch(e) { /* ignore */ }
+  }
 
   // Fast path: server injects window.__INSTANCE_CONFIG__ synchronously so
   // applyInstance() runs before the first paint — no FOUC, no async round-trip.
@@ -4622,7 +4649,7 @@ function _renderCompareBar(targetId, el) {
     <button class="ct-pill${activeMode==='splyr'?' active':''}" onclick="ctSelectMode('${targetId}','splyr',this)">Same Period Last Year</button>
     <button class="ct-pill${activeMode==='prior'?' active':''}" onclick="ctSelectMode('${targetId}','prior',this)">Prior Period</button>
     ${activeMode!=='none'?'<button class="ct-pill" onclick="ctSelectMode(\''+targetId+'\',\'none\',this)" style="border-color:var(--red);color:var(--red)">Clear</button>':''}
-    <span class="ct-bar-label" style="margin-left:4px;font-weight:400;color:var(--text-muted)">· ${meta.dateFrom} → ${meta.dateTo}</span>
+    <span class="ct-bar-label" style="margin-left:4px;font-weight:400;color:var(--text-muted)">· ${new Date(meta.dateFrom+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})} – ${new Date(meta.dateTo+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</span>
   </div>`;
   el.after(wrap);
 
@@ -9796,15 +9823,10 @@ let _myDashCompareRange = null; // { from, to } set when compare data arrives
 
 function _myDashDebugCaption(dateFrom, dateTo, presetId, compareRange) {
   if (!dateFrom) return '';
-  let s = `${dateFrom} → ${dateTo}`;
-  // Append 'through [date]' badge for open periods
-  const opm = _myDashFilterState?.openPeriodMeta;
-  if (opm && opm.presetId === presetId) {
-    const fmt = d => new Date(d + 'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'});
-    s += ` · thru ${fmt(dateTo)}`;
-  }
+  const fmtD = d => new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  let s = `${fmtD(dateFrom)} – ${fmtD(dateTo)}`;
   const cr = compareRange || _myDashCompareRange;
-  if (cr?.from && cr?.to) s += ` · comparing to ${cr.from} → ${cr.to}`;
+  if (cr?.from && cr?.to) s += ` · vs ${fmtD(cr.from)} – ${fmtD(cr.to)}`;
   return s;
 }
 
@@ -10438,10 +10460,16 @@ function _applyTopN(rows, labelCol, valueCol, n) {
   return [...top, otherRow];
 }
 
-// Resolve maxSeries for a tile: line charts are always unlimited
+// Resolve maxSeries for a tile.
+// Line charts and date-dimensioned charts are always unlimited — TopN/Other
+// makes no sense when the x-axis is a time series.
 function _tileMaxSeries(tile) {
   const chartType = tile._inline?.chartType || '';
   if (chartType === 'line') return 0; // unlimited
+  // Skip TopN when the dimension looks like a date/time field
+  const dim = (tile._inline?.dimension || tile._inline?.labelCol || '').toLowerCase();
+  const dateish = /(date|month|week|year|period|time|day)/.test(dim);
+  if (dateish) return 0;
   return tile._inline?.maxSeries || 0; // 0 = unlimited
 }
 
@@ -11135,19 +11163,33 @@ function _autoGranularity(rows, labelCol, valCol) {
     const ym = String(r[labelCol] ?? '');
     const [y, m] = ym.split('-').map(Number);
     const d = new Date(y, m - 1, 1);
-    r[newLabelCol] = d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+    r[newLabelCol] = d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
   });
   return { rows: newRows, labelCol: newLabelCol };
 }
 
-// Sort rows whose labelCol is YYYY-MM chronologically
+// Sort rows whose labelCol is YYYY-MM or 'Mon YYYY' chronologically
+const _MON_IDX = { Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11 };
 function _sortMonthRows(rows, labelCol) {
+  if (!rows.length) return rows;
   const sample = String(rows[0]?.[labelCol] ?? '');
-  if (!/^\d{4}-\d{2}$/.test(sample)) return rows;
-  return [...rows].sort((a, b) => {
-    const la = String(a[labelCol] ?? ''), lb = String(b[labelCol] ?? '');
-    return la < lb ? -1 : la > lb ? 1 : 0;
-  });
+  // YYYY-MM: sort lexicographically (already correct)
+  if (/^\d{4}-\d{2}$/.test(sample)) {
+    return [...rows].sort((a, b) => {
+      const la = String(a[labelCol] ?? ''), lb = String(b[labelCol] ?? '');
+      return la < lb ? -1 : la > lb ? 1 : 0;
+    });
+  }
+  // 'Mon YYYY' (e.g. 'Jun 2024'): parse and sort by date
+  if (/^[A-Za-z]{3}\s\d{4}$/.test(sample)) {
+    return [...rows].sort((a, b) => {
+      const pa = String(a[labelCol] ?? '').split(' '), pb = String(b[labelCol] ?? '').split(' ');
+      const da = (_MON_IDX[pa[0]] ?? 0) + parseInt(pa[1] || 0) * 12;
+      const db = (_MON_IDX[pb[0]] ?? 0) + parseInt(pb[1] || 0) * 12;
+      return da - db;
+    });
+  }
+  return rows;
 }
 
 // Smart Y-axis floor: if all values are positive, start at ~90% of min

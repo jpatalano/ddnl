@@ -20,8 +20,71 @@ app.use(express.json({ limit: '10mb' }));
 const BASIC_USER = process.env.BASIC_AUTH_USER || 'ddnl';
 const BASIC_PASS = process.env.BASIC_AUTH_PASS || 'ddnl!';
 
+// ─── Tenant Context Session Store ────────────────────────────────────────────
+// In-memory store for sessions resolved from tenant-context tokens.
+// Key: DDNL session token (random hex), Value: { username, dataSource, clientId, expiresAt }
+// Sessions expire after 8 hours — TTL checked on every lookup.
+const _tcSessions = new Map();
+const _TC_SESSION_TTL_MS = 8 * 60 * 60 * 1000; // 8 hours
+
+function _tcCreateSession(username, dataSource) {
+  const token = require('crypto').randomBytes(32).toString('hex');
+  _tcSessions.set(token, {
+    username,
+    dataSource,
+    clientId: dataSource, // DataSource maps to clientId (crane company / tenant)
+    expiresAt: Date.now() + _TC_SESSION_TTL_MS
+  });
+  // Passive cleanup: evict expired entries whenever a new session is created
+  for (const [k, v] of _tcSessions) {
+    if (v.expiresAt < Date.now()) _tcSessions.delete(k);
+  }
+  return token;
+}
+
+function _tcLookupSession(token) {
+  if (!token) return null;
+  const s = _tcSessions.get(token);
+  if (!s) return null;
+  if (s.expiresAt < Date.now()) { _tcSessions.delete(token); return null; }
+  return s;
+}
+
+// Helper: call external tenant-context resolve API.
+// resolveUrl is the base URL, e.g. https://erp.example.com
+async function _tcResolveExternal(resolveUrl, token) {
+  const url = resolveUrl.replace(/\/$/, '') + '/api/v1/tenant-context-integration/resolve';
+  return new Promise((resolve, reject) => {
+    const body = JSON.stringify({ Token: token });
+    const parsed = new URL(url);
+    const isHttps = parsed.protocol === 'https:';
+    const mod = isHttps ? https : http;
+    const options = {
+      hostname: parsed.hostname,
+      port: parsed.port || (isHttps ? 443 : 80),
+      path: parsed.pathname + parsed.search,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }
+    };
+    const req = mod.request(options, (res) => {
+      let data = '';
+      res.on('data', d => data += d);
+      res.on('end', () => {
+        try { resolve({ status: res.statusCode, body: JSON.parse(data) }); }
+        catch(e) { reject(new Error('Invalid JSON from tenant-context resolve: ' + data)); }
+      });
+    });
+    req.on('error', reject);
+    req.write(body);
+    req.end();
+  });
+}
+
 function requireBasicAuth(req, res, next) {
   if (req.path === '/healthz' || req.headers['user-agent']?.includes('Railway')) return next();
+  // Accept DDNL session token (tenant-context launch)
+  const sessionToken = req.headers['x-ddnl-session'];
+  if (sessionToken && _tcLookupSession(sessionToken)) return next();
   const auth = req.headers['authorization'];
   if (auth && auth.startsWith('Basic ')) {
     const [user, pass] = Buffer.from(auth.slice(6), 'base64').toString().split(':');
@@ -65,23 +128,93 @@ app.use('/api/ingest', webhookRouter);
 app.use('/api/ingest', fileImportRouter);
 app.use('/api/admin',  requireBasicAuth, adminRouter);
 
-app.use((req, res, next) => {
-  // Allow Railway health checks through without auth
-  if (req.path === '/healthz' || req.headers['user-agent']?.includes('Railway')) return next();
-
-  const auth = req.headers['authorization'];
-  if (auth && auth.startsWith('Basic ')) {
-    const [user, pass] = Buffer.from(auth.slice(6), 'base64').toString().split(':');
-    if (user === BASIC_USER && pass === BASIC_PASS) return next();
+// ─── Tenant Context — public resolve endpoint ────────────────────────────────────────
+// Public — no auth required. Client calls this with the raw token from ?token= query param.
+// Returns a short-lived DDNL session token the client sends as X-Ddnl-Session on all API calls.
+app.post('/api/tenant-context/resolve', async (req, res) => {
+  try {
+    const { token } = req.body || {};
+    if (!token) return res.status(400).json({ success: false, error: 'token is required' });
+    // Resolve URL: check INSTANCE_CONFIG first, then env var
+    const resolveUrl = (INSTANCE && INSTANCE.tenantContextUrl) || process.env.TENANT_CONTEXT_URL;
+    if (!resolveUrl) {
+      return res.status(503).json({ success: false, error: 'tenantContextUrl not configured for this instance' });
+    }
+    console.log(`[tenant-context] Resolving external token via ${resolveUrl}`);
+    const result = await _tcResolveExternal(resolveUrl, token);
+    if (result.status !== 200) {
+      console.warn(`[tenant-context] External resolve returned ${result.status}:`, result.body);
+      return res.status(401).json({ success: false, error: 'Token could not be resolved', detail: result.body });
+    }
+    // ApiResult wrapper — unwrap if needed
+    const info = result.body?.Data || result.body;
+    const username = info?.Username || info?.username;
+    const dataSource = info?.DataSource || info?.dataSource;
+    if (!username || !dataSource) {
+      console.warn('[tenant-context] Unexpected resolve response shape:', result.body);
+      return res.status(502).json({ success: false, error: 'Unexpected response from tenant-context API', detail: result.body });
+    }
+    const sessionToken = _tcCreateSession(username, dataSource);
+    console.log(`[tenant-context] Session created for user=${username} dataSource=${dataSource}`);
+    res.json({ success: true, sessionToken, username, dataSource });
+  } catch(e) {
+    console.error('[tenant-context] resolve error:', e);
+    res.status(500).json({ success: false, error: e.message });
   }
-  res.set('WWW-Authenticate', 'Basic realm="DDNL Analytics"');
-  res.status(401).send('Unauthorized');
 });
 
 // ─── Index HTML — inject instance config so theme applies synchronously (no FOUC) ─
+// Mounted BEFORE global auth middleware so ?token= launches work without Basic credentials.
 const fs = require('fs');
 const _indexHtmlPath = path.join(__dirname, 'index.html');
-app.get('/', (req, res) => {
+app.get('/', async (req, res) => {
+  // If a tenant-context token is in the query string, resolve it server-side
+  // and inject the DDNL session token into the page so apiFetch can use it immediately.
+  let tcSession = null;
+  const rawToken = req.query.token;
+  if (rawToken) {
+    try {
+      const resolveUrl = (INSTANCE && INSTANCE.tenantContextUrl) || process.env.TENANT_CONTEXT_URL;
+      if (resolveUrl) {
+        const result = await _tcResolveExternal(resolveUrl, rawToken);
+        if (result.status === 200) {
+          const info = result.body?.Data || result.body;
+          const username = info?.Username || info?.username;
+          const dataSource = info?.DataSource || info?.dataSource;
+          if (username && dataSource) {
+            const sessionToken = _tcCreateSession(username, dataSource);
+            tcSession = { sessionToken, username, dataSource };
+            console.log(`[tenant-context] Page launch: user=${username} dataSource=${dataSource}`);
+          }
+        } else {
+          console.warn(`[tenant-context] Page launch resolve failed (${result.status}) — falling back to basic auth`);
+        }
+      }
+    } catch(e) {
+      console.error('[tenant-context] Page launch resolve error:', e);
+    }
+  }
+
+  // If this is a token launch and resolve failed, reject with a clear message
+  // rather than a browser basic-auth prompt
+  if (rawToken && !tcSession) {
+    return res.status(401).send('<html><body style="font-family:sans-serif;padding:40px"><h2>Session Expired</h2><p>Your launch token could not be resolved. Please re-launch from your application.</p></body></html>');
+  }
+
+  // Non-token requests still require basic auth
+  if (!rawToken) {
+    const auth = req.headers['authorization'];
+    let authed = false;
+    if (auth && auth.startsWith('Basic ')) {
+      const [user, pass] = Buffer.from(auth.slice(6), 'base64').toString().split(':');
+      authed = (user === BASIC_USER && pass === BASIC_PASS);
+    }
+    if (!authed) {
+      res.set('WWW-Authenticate', 'Basic realm="DDNL Analytics"');
+      return res.status(401).send('Unauthorized');
+    }
+  }
+
   try {
     let html = fs.readFileSync(_indexHtmlPath, 'utf8');
     // Inject a synchronous bootstrap script right after <head> so the theme
@@ -95,6 +228,7 @@ app.get('/', (req, res) => {
 (function(){
   var inst=${JSON.stringify(inst)};
   window.__INSTANCE_CONFIG__=inst;
+  ${tcSession ? `window.__TC_SESSION__=${JSON.stringify(tcSession)};` : ''}
   var t=inst.theme||{};
   var root=document.documentElement;
   // Determine mode: localStorage overrides defaultThemeMode
@@ -128,6 +262,21 @@ app.get('/', (req, res) => {
     console.error('Failed to serve index.html with instance injection:', e);
     res.sendFile(_indexHtmlPath);
   }
+});
+
+app.use((req, res, next) => {
+  // Allow Railway health checks through without auth
+  if (req.path === '/healthz' || req.headers['user-agent']?.includes('Railway')) return next();
+  // Accept DDNL session token (tenant-context launch)
+  const sessionToken = req.headers['x-ddnl-session'];
+  if (sessionToken && _tcLookupSession(sessionToken)) return next();
+  const auth = req.headers['authorization'];
+  if (auth && auth.startsWith('Basic ')) {
+    const [user, pass] = Buffer.from(auth.slice(6), 'base64').toString().split(':');
+    if (user === BASIC_USER && pass === BASIC_PASS) return next();
+  }
+  res.set('WWW-Authenticate', 'Basic realm="DDNL Analytics"');
+  res.status(401).send('Unauthorized');
 });
 
 // ─── Static files ────────────────────────────────────────────────────────────

@@ -310,4 +310,96 @@ router.get('/ingest/alerts', (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ─── AI Dashboard Generator ──────────────────────────────────────────────────
+// POST /api/admin/generate-dashboard
+// Body: { prompt, datasets, openaiKey }
+// Returns: { config } — a ready-to-insert dashboard config object
+router.post('/generate-dashboard', async (req, res) => {
+  const { prompt, datasets = [], openaiKey } = req.body || {};
+  if (!prompt) return res.status(400).json({ error: 'prompt is required' });
+
+  const apiKey = openaiKey || process.env.OPENAI_API_KEY;
+  if (!apiKey) return res.status(400).json({ error: 'No OpenAI API key — provide openaiKey in body or set OPENAI_API_KEY env var' });
+
+  const datasetContext = datasets.length
+    ? `The instance has these datasets available:\n${datasets.map(d => `- ${d.name}: fields ${(d.fields||[]).join(', ')}`).join('\n')}`
+    : 'Dataset names and fields will be inferred from the industry context.';
+
+  const systemPrompt = `You are a dashboard configuration generator for DDNL Analytics, a multi-tenant BI platform.
+Your job is to output a single valid JSON object that matches the DDNL dashboard config schema exactly.
+
+SCHEMA RULES:
+- Top level: { "dashboards": [ <dashboard> ] }
+- dashboard: { "id": <uuidv4>, "name": <string>, "show_on_home": true|false, "pages": [ <page> ] }
+- page: { "id": <uuidv4>, "name": <string>, "panels": [ <panel> ] }
+- panel: { "id": <uuidv4>, "label": <string>, "layout": <layout>, "tiles": [ <tile> ], "height": <number 200-600> }
+- layout values: "kpi-row" for KPI panels, "1col"|"2col"|"3col"|"4col" for chart panels
+- KPI tile: { "id": <uuidv4>, "type": "kpi", "label": <string>, "dataset": <datasetName>, "dateSegment": <fieldName>, "metrics": [ <metric> ] }
+- metric: { "name": <fieldName>, "label": <string>, "aggregation": "SUM"|"AVG"|"COUNT"|"MIN"|"MAX", "displayFormat": "currency"|"percent"|"number", "prefix": "$"|null, "suffix": "%"|" d"|null, "description": <plain english explanation of this KPI> }
+- chart tile: { "id": <uuidv4>, "type": "chart", "label": <string>, "caption": <string>, "dataset": <datasetName>, "dateSegment": <fieldName>, "_inline": { "chartType": "bar"|"line"|"doughnut", "dimension": <fieldName>, "metric": <fieldName>, "aggregation": "SUM"|"AVG"|"COUNT", "series": <fieldName>|null, "maxSeries": 6 } }
+
+RULES:
+- Use realistic field names in camelCase matching the industry (e.g. RevenueAmount, JobStartDate, CustomerName)
+- Every tile id, panel id, page id, dashboard id must be a valid UUID v4
+- KPI panels should have 6-12 tiles, chart panels 2-4 tiles
+- Include 2-4 pages per dashboard covering different personas/views (e.g. Executive, Operations, Finance, Sales)
+- Always add a "description" to every KPI metric explaining what it means in plain English
+- Return ONLY raw JSON — no markdown, no explanation, no code fences
+
+${datasetContext}`;
+
+  const userMsg = `Generate a complete DDNL dashboard config for the following:\n\n${prompt}`;
+
+  try {
+    const https = require('https');
+    const body = JSON.stringify({
+      model: 'gpt-4o',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user',   content: userMsg }
+      ],
+      temperature: 0.4,
+      max_tokens: 4096,
+      response_format: { type: 'json_object' }
+    });
+
+    const aiRes = await new Promise((resolve, reject) => {
+      const options = {
+        hostname: 'api.openai.com',
+        path:     '/v1/chat/completions',
+        method:   'POST',
+        headers:  { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}`, 'Content-Length': Buffer.byteLength(body) }
+      };
+      const req2 = https.request(options, r => {
+        let data = '';
+        r.on('data', c => data += c);
+        r.on('end', () => resolve({ status: r.statusCode, body: data }));
+      });
+      req2.on('error', reject);
+      req2.write(body);
+      req2.end();
+    });
+
+    if (aiRes.status !== 200) {
+      const errBody = JSON.parse(aiRes.body);
+      return res.status(502).json({ error: errBody?.error?.message || 'OpenAI error' });
+    }
+
+    const parsed = JSON.parse(aiRes.body);
+    const content = parsed.choices?.[0]?.message?.content;
+    if (!content) return res.status(502).json({ error: 'Empty response from OpenAI' });
+
+    let config;
+    try { config = JSON.parse(content); }
+    catch (e) { return res.status(502).json({ error: 'OpenAI returned invalid JSON', raw: content.slice(0, 500) }); }
+
+    if (!config.dashboards) return res.status(502).json({ error: 'Missing dashboards key in generated config', raw: config });
+
+    res.json({ success: true, config });
+  } catch (e) {
+    console.error('[generate-dashboard]', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 module.exports = router;
