@@ -598,14 +598,23 @@ router.get('/admin/datasets', requireApiKey, async (req, res) => {
 });
 
 // POST /api/admin/datasets
-// Body: { name, label, description, fields: [{name, fieldType, segmentType, displayFormat, aggregationType, prefix, suffix, isFilterable, isGroupable}] }
+// Body: { name, label, description, fields: [...], dataset_type?, version_field?, version_type? }
+//
+// version_field {string}              — optional: name of the field in each doc that carries
+//                                       the record's version or last-modified timestamp.
+//                                       When set, the /push upsert will skip (no-op) any
+//                                       incoming row whose version_field value is <= the
+//                                       value already stored in ES for that document ID.
+// version_type  {'timestamp'|'integer'} — how to compare version values (default: 'timestamp')
 router.post('/admin/datasets', requireApiKey, async (req, res) => {
   const { clientId, label: keyLabel } = req.ingestCtx;
-  const { name, label, description, fields = [], dataset_type = 'client' } = req.body;
+  const { name, label, description, fields = [], dataset_type = 'client',
+          version_field = null, version_type = 'timestamp' } = req.body;
 
   if (!name || !label) return res.status(400).json({ error: 'name and label are required' });
   if (!fields.length)  return res.status(400).json({ error: 'at least one field is required' });
   if (!['client','provided'].includes(dataset_type)) return res.status(400).json({ error: 'dataset_type must be client or provided' });
+  if (!['timestamp','integer'].includes(version_type)) return res.status(400).json({ error: 'version_type must be timestamp or integer' });
 
   const client = await pool.connect();
   try {
@@ -613,9 +622,10 @@ router.post('/admin/datasets', requireApiKey, async (req, res) => {
 
     // 1. Create dataset definition
     const { rows: [def] } = await client.query(
-      `INSERT INTO dataset_definitions (client_id, name, label, description, current_version, dataset_type)
-       VALUES ($1,$2,$3,$4,1,$5) RETURNING *`,
-      [clientId, name.toLowerCase().replace(/\s+/g, '_'), label, description, dataset_type]
+      `INSERT INTO dataset_definitions (client_id, name, label, description, current_version, dataset_type, version_field, version_type)
+       VALUES ($1,$2,$3,$4,1,$5,$6,$7) RETURNING *`,
+      [clientId, name.toLowerCase().replace(/\s+/g, '_'), label, description, dataset_type,
+       version_field || null, version_type]
     );
 
     // 2. Create schema version 1
@@ -711,12 +721,14 @@ router.get('/admin/datasets/:name/fields', requireApiKey, async (req, res) => {
   });
 
   res.json({
-    success:        true,
-    dataset:        name,
-    label:          def.label,
+    success:          true,
+    dataset:          name,
+    label:            def.label,
     primaryKeyFields: def.primary_key_fields || [],
-    dateField:      def.date_field || null,
-    currentVersion: def.current_version,
+    dateField:        def.date_field    || null,
+    versionField:     def.version_field || null,
+    versionType:      def.version_type  || 'timestamp',
+    currentVersion:   def.current_version,
     fields,
   });
 });
@@ -1329,9 +1341,11 @@ router.post('/:dataset/push', requireApiKey, async (req, res) => {
      WHERE dataset_id=$1 AND channel_name=$2 AND method='api_push'`,
     [def.id, channelName]
   );
-  const idField = ch?.id_field || null;
+  const idField      = ch?.id_field      || null;
+  const versionField = def.version_field || null;
+  const versionType  = def.version_type  || 'timestamp';
 
-  console.log(`[ingest/push] batch_id=${batchId} client=${clientId} dataset=${dataset} channel=${channelName} docs=${docs.length} idField=${idField || 'none'} replace=${replace}`);
+  console.log(`[ingest/push] batch_id=${batchId} client=${clientId} dataset=${dataset} channel=${channelName} docs=${docs.length} idField=${idField || 'none'} versionField=${versionField || 'none'} replace=${replace}`);
 
   try {
     let result;
@@ -1339,20 +1353,23 @@ router.post('/:dataset/push', requireApiKey, async (req, res) => {
     if (replace) {
       // Full swap: wipe instance slice + re-index everything
       result = await es.replaceAll(clientId, dataset, docs);
-      result.chunks = Math.ceil(docs.length / es.BULK_CHUNK_SIZE);
+      result.chunks  = Math.ceil(docs.length / es.BULK_CHUNK_SIZE);
+      result.skipped = 0;
     } else if (idField) {
-      // High-volume upsert path: scripted update with __ingest_version increment
-      result = await es.bulkUpsert(clientId, dataset, docs, idField);
+      // High-volume upsert path: scripted update with __ingest_version increment.
+      // When versionField is configured, rows with a stale/equal version are skipped (no-op).
+      result = await es.bulkUpsert(clientId, dataset, docs, idField, versionField, versionType);
     } else {
       // Append-only: no id_field configured, fall back to standard bulk index
       result = await es.bulkIndex(clientId, dataset, docs);
-      result.chunks = Math.ceil(docs.length / es.BULK_CHUNK_SIZE);
+      result.chunks  = Math.ceil(docs.length / es.BULK_CHUNK_SIZE);
+      result.skipped = 0;
     }
 
     const durationMs = Date.now() - t0;
 
     // ── Structured log ────────────────────────────────────────────────────────
-    console.log(`[ingest/push] batch_id=${batchId} done: indexed=${result.indexed} failed=${result.failed} chunks=${result.chunks || 1} durationMs=${durationMs}`);
+    console.log(`[ingest/push] batch_id=${batchId} done: indexed=${result.indexed} skipped=${result.skipped || 0} failed=${result.failed} chunks=${result.chunks || 1} durationMs=${durationMs}`);
     if (result.failed > 0) {
       console.warn(`[ingest/push] batch_id=${batchId} errors (first ${result.errors.length}):`, JSON.stringify(result.errors));
     }
@@ -1381,15 +1398,17 @@ router.post('/:dataset/push', requireApiKey, async (req, res) => {
 
     // ── Response ─────────────────────────────────────────────────────────────
     return res.json({
-      success:   true,
-      batch_id:  batchId,
-      channel:   channelName,
-      id_field:  idField,
-      indexed:   result.indexed,
-      failed:    result.failed,
-      chunks:    result.chunks || 1,
+      success:       true,
+      batch_id:      batchId,
+      channel:       channelName,
+      id_field:      idField,
+      version_field: versionField,
+      indexed:       result.indexed,
+      skipped:       result.skipped || 0,
+      failed:        result.failed,
+      chunks:        result.chunks || 1,
       durationMs,
-      errors:    result.errors    // [] when clean; up to 20 sample errors if any
+      errors:        result.errors   // [] when clean; up to 20 sample errors if any
     });
 
   } catch (e) {
@@ -1675,7 +1694,7 @@ router.delete('/:dataset/records/:recordId/tags/:tagId', requireApiKey, async (r
   res.json({ success: true });
 });
 
-module.exports = { router, resolveApiKey, hashKey, generateKey, runOnIngestTriggers };
+module.exports = { router, resolveApiKey, hashKey, generateKey };
 
 // ── Customer import — geocoding + tag engine ───────────────────────────────────
 //

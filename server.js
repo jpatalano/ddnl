@@ -8,7 +8,10 @@ const esClient = require('./esClient');
 const { router: ingestRouter } = require('./ingestRouter');
 const webhookRouter             = require('./webhookRouter');
 const fileImportRouter          = require('./fileImportRouter');
-const adminRouter = require('./adminRoutes');
+const adminRouter               = require('./adminRoutes');
+const adviseRouter              = require('./adviseRouter');
+const aiChatRouter              = require('./aiChatRouter');
+const adviseEngine              = require('./adviseEngine');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -127,6 +130,8 @@ app.use('/api/ingest', webhookRouter);
 // File import — multer handles its own body parsing (must be before express.json() middleware)
 app.use('/api/ingest', fileImportRouter);
 app.use('/api/admin',  requireBasicAuth, adminRouter);
+app.use('/api/advise', adviseRouter);
+app.use('/api/ai',     aiChatRouter);
 
 // ─── Tenant Context — public resolve endpoint ────────────────────────────────────────
 // Public — no auth required. Client calls this with the raw token from ?token= query param.
@@ -815,7 +820,8 @@ function deriveKpis(rows, metrics) {
 
 async function internalGetDatasets(clientId) {
   const { rows } = await pool.query(
-    `SELECT dd.name, dd.label as description, dd.is_active, dd.show_on_explorer,
+    `SELECT dd.name, dd.label as description, dd.is_active, dd.show_on_explorer, dd.visible_to_ai,
+            dd.version_field, dd.version_type,
             -- publish-flow: count from dataset_schema_versions by fieldType
             (SELECT COUNT(*) FROM dataset_schema_versions dsv
              JOIN LATERAL jsonb_array_elements(dsv.fields) f(v) ON TRUE
@@ -844,6 +850,9 @@ async function internalGetDatasets(clientId) {
       metricCount:    isFileImport ? 0        : metCount,
       isActive:       r.is_active,
       showOnExplorer: r.show_on_explorer !== false, // default true
+      visible_to_ai:  r.visible_to_ai === true,
+      version_field:  r.version_field || null,
+      version_type:   r.version_type  || 'timestamp',
       isFileImport,
     };
   });
@@ -1043,7 +1052,7 @@ app.patch('/api/bi/datasets/:name/settings', async (req, res) => {
   const dsName = req.params.name;
   if (inst.adapter !== 'internal') return res.status(400).json({ error: 'Not supported for this adapter' });
 
-  const allowed = ['show_on_explorer', 'label'];
+  const allowed = ['show_on_explorer', 'label', 'visible_to_ai', 'version_field', 'version_type'];
   const updates = {};
   for (const key of allowed) {
     if (key in req.body) updates[key] = req.body[key];
@@ -1851,6 +1860,66 @@ app.get('/api/bi/fiscal/compare-range', async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// ─── Admin: AI Settings ─────────────────────────────────────────────────────
+// These routes are basic-auth protected (admin page only).
+// Key is stored as-is in instance_settings — DB is the security boundary.
+// The GET route never echoes the key back; it only returns a masked hint.
+
+const llm = require('./llmProvider');
+
+// GET /api/admin/settings/ai — returns current config (never echoes raw key)
+app.get('/api/admin/settings/ai', requireBasicAuth, async (req, res) => {
+  const inst = resolveInstance(req);
+  if (inst.adapter !== 'internal') return res.status(400).json({ error: 'Not supported' });
+  try {
+    const provider = await llm.getInstanceSetting(inst.clientId, 'ai.provider', 'ADVISE_LLM_PROVIDER') || 'mock';
+    const model    = await llm.getInstanceSetting(inst.clientId, 'ai.model',    null) || '';
+    const rawKey   = await llm.getInstanceSetting(inst.clientId, 'ai.api_key',
+                       provider === 'openai' ? 'OPENAI_API_KEY' : 'ANTHROPIC_API_KEY') || '';
+    const has_key  = rawKey.length > 0;
+    // Show only last 4 chars of the key — never the full value
+    const key_hint = has_key ? rawKey.slice(-4) : null;
+    res.json({ success: true, provider, model, has_key, key_hint });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/admin/settings/ai — save provider, key, model
+app.post('/api/admin/settings/ai', requireBasicAuth, async (req, res) => {
+  const inst = resolveInstance(req);
+  if (inst.adapter !== 'internal') return res.status(400).json({ error: 'Not supported' });
+  const { provider, api_key, model } = req.body;
+  const validProviders = ['openai', 'anthropic', 'mock'];
+  if (provider && !validProviders.includes(provider)) {
+    return res.status(400).json({ error: 'provider must be openai, anthropic, or mock' });
+  }
+  try {
+    if (provider) await llm.setInstanceSetting(inst.clientId, 'ai.provider', provider);
+    if (model    !== undefined) await llm.setInstanceSetting(inst.clientId, 'ai.model',    model    || '');
+    if (api_key)               await llm.setInstanceSetting(inst.clientId, 'ai.api_key',  api_key);
+    // Return hint so UI can update without re-fetching
+    const storedKey = api_key || await llm.getInstanceSetting(inst.clientId, 'ai.api_key', null) || '';
+    const key_hint  = storedKey.length > 4 ? storedKey.slice(-4) : null;
+    console.log(`[admin/ai-settings] client=${inst.clientId} provider=${provider||'(unchanged)'} key=${api_key ? 'updated' : 'unchanged'}`);
+    res.json({ success: true, key_hint });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/admin/settings/ai/test — fire a minimal completion to verify the key works
+app.post('/api/admin/settings/ai/test', requireBasicAuth, async (req, res) => {
+  const inst = resolveInstance(req);
+  if (inst.adapter !== 'internal') return res.status(400).json({ error: 'Not supported' });
+  try {
+    const text = await llm.complete(
+      'You are a test. Reply with exactly: OK',
+      'Reply with exactly: OK',
+      inst.clientId
+    );
+    res.json({ success: true, message: `Connection OK — model replied: "${text.slice(0, 80)}"` });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
 // ─── Fallback ─────────────────────────────────────────────────────────────────
 app.get('/debug', (req, res) => res.sendFile(path.join(__dirname, 'debug.html')));
 app.get('/admin', requireBasicAuth, (req, res) => res.sendFile(path.join(__dirname, 'admin', 'index.html')));
@@ -1864,11 +1933,41 @@ app.get('*', (req, res) => {
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 initDb()
-  .then(() => app.listen(PORT, () => {
-    console.log(`[${INSTANCE.id}] running on port ${PORT}`);
-  }))
+  .then(() => {
+    // Expose INSTANCE to routers that need clientId resolution
+    app.locals.INSTANCE = INSTANCE;
+
+    app.listen(PORT, () => {
+      console.log(`[${INSTANCE.id}] running on port ${PORT}`);
+    });
+
+    // ─── Advise engine cron ──────────────────────────────────────────────────
+    // Runs every 4 hours. Interval configurable via ADVISE_CRON_HOURS env var.
+    const adviseHours = Math.max(1, parseInt(process.env.ADVISE_CRON_HOURS || '4', 10));
+    const adviseIntervalMs = adviseHours * 60 * 60 * 1000;
+    console.log(`[advise] Scheduler starting — runs every ${adviseHours}h`);
+
+    // Seed global rule templates (idempotent upsert — safe on every boot)
+    adviseEngine.seedGlobalTemplates().catch(err =>
+      console.error('[advise] Template seed error:', err.message)
+    );
+
+    // Run once shortly after boot (90s delay to let ES warm up), then on interval
+    setTimeout(() => {
+      adviseEngine.runAll().catch(err =>
+        console.error('[advise] Boot run error:', err.message)
+      );
+    }, 90 * 1000);
+
+    setInterval(() => {
+      adviseEngine.runAll().catch(err =>
+        console.error('[advise] Scheduled run error:', err.message)
+      );
+    }, adviseIntervalMs);
+  })
   .catch(err => {
     console.error('Failed to init DB, starting without persistence:', err.message);
+    app.locals.INSTANCE = INSTANCE;
     app.listen(PORT, () => {
       console.log(`[${INSTANCE.id}] running (no DB) on port ${PORT}`);
     });

@@ -2652,6 +2652,44 @@
 
     /* ══ DESIGNER ══════════════════════════════════════════════════════════ */
     #designer-screen { flex:1; display:none; flex-direction:column; overflow:hidden; background:var(--surface); }
+    /* ─ Intelligence ─ */
+    .intel-role-btn { padding:7px 12px; border:1.5px solid var(--border); border-radius:8px; background:var(--surface2); color:var(--text); font-size:12.5px; font-weight:500; cursor:pointer; text-align:left; transition:all .12s; }
+    .intel-role-btn:hover  { border-color:var(--teal); color:var(--teal); }
+    .intel-role-btn.active { background:var(--teal); border-color:var(--teal); color:#fff; font-weight:600; }
+    .intel-cat-btn  { padding:6px 10px; border:1.5px solid var(--border); border-radius:6px; background:var(--surface2); color:var(--text); font-size:12px; font-weight:500; cursor:pointer; text-align:left; transition:all .12s; }
+    .intel-cat-btn:hover  { border-color:var(--teal); color:var(--teal); }
+    .intel-cat-btn.active { background:rgba(0,191,165,.1); border-color:var(--teal); color:var(--teal); font-weight:600; }
+    .intel-rec-cat-btn  { padding:6px 10px; border:1.5px solid var(--border); border-radius:6px; background:var(--surface2); color:var(--text); font-size:12px; font-weight:500; cursor:pointer; text-align:left; transition:all .12s; }
+    .intel-rec-cat-btn:hover  { border-color:var(--teal); color:var(--teal); }
+    .intel-rec-cat-btn.active { background:rgba(0,191,165,.1); border-color:var(--teal); color:var(--teal); font-weight:600; }
+    .intel-role-btn-sm { padding:4px 9px; border:1.5px solid var(--border); border-radius:6px; background:var(--surface2); color:var(--text); font-size:11px; font-weight:500; cursor:pointer; transition:all .12s; }
+    .intel-role-btn-sm:hover  { border-color:var(--teal); color:var(--teal); }
+    .intel-role-btn-sm.active { background:var(--teal); border-color:var(--teal); color:#fff; font-weight:600; }
+    .intel-finding-card { background:var(--surface); border:1.5px solid var(--border); border-radius:10px; padding:14px 16px; margin-bottom:10px; }
+    .intel-finding-card.severity-critical { border-left:4px solid var(--red, #ef4444); }
+    .intel-finding-card.severity-watch    { border-left:4px solid #f59e0b; }
+    .intel-finding-card.severity-opportunity { border-left:4px solid var(--teal); }
+    .intel-severity-chip { display:inline-block; padding:2px 8px; border-radius:4px; font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; }
+    .intel-severity-chip.critical { background:rgba(239,68,68,.1); color:#ef4444; }
+    .intel-severity-chip.watch    { background:rgba(245,158,11,.1); color:#f59e0b; }
+    .intel-severity-chip.opportunity { background:rgba(0,191,165,.1); color:var(--teal); }
+    .advise-badge { position:absolute; top:-5px; right:-5px; width:16px; height:16px; border-radius:50%; background:#ef4444; color:#fff; font-size:9px; font-weight:700; display:flex; align-items:center; justify-content:center; z-index:10; cursor:pointer; border:2px solid var(--surface); }
+    .advise-badge.watch { background:#f59e0b; }
+    .advise-badge.opportunity { background:var(--teal); }
+    .chat-msg { display:flex; flex-direction:column; gap:2px; }
+    .chat-msg.user  { align-items:flex-end; }
+    .chat-msg.assistant { align-items:flex-start; }
+    .chat-bubble { max-width:88%; padding:9px 13px; border-radius:12px; font-size:13px; line-height:1.55; white-space:pre-wrap; word-break:break-word; }
+    .chat-msg.user      .chat-bubble { background:var(--teal); color:#fff; border-bottom-right-radius:3px; }
+    .chat-msg.assistant .chat-bubble { background:var(--surface2); color:var(--text); border:1.5px solid var(--border); border-bottom-left-radius:3px; }
+    .chat-action-card { background:var(--surface2); border:1.5px solid var(--border); border-radius:10px; padding:12px 14px; margin-top:8px; max-width:92%; }
+    .chat-action-card .action-title { font-size:12.5px; font-weight:700; color:var(--text); margin-bottom:4px; }
+    .chat-action-card .action-desc  { font-size:12px; color:var(--text-muted); margin-bottom:10px; }
+    .intel-conv-item { display:flex; align-items:center; gap:8px; padding:7px 10px; border-radius:7px; cursor:pointer; border:1px solid transparent; margin-bottom:2px; font-size:13px; color:var(--text); }
+    .intel-conv-item:hover  { background:var(--surface2); }
+    .intel-conv-item.active { background:rgba(0,191,165,.08); border-color:rgba(0,191,165,.25); color:var(--teal); font-weight:600; }
+    .intel-conv-title { flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    #chat-fab { display:none; }
     .dsgn-layout   { display:flex; flex:1; overflow:hidden; }
     .dsgn-sidebar  { width:220px; flex-shrink:0; border-right:1px solid var(--border);
                      background:var(--surface); overflow-y:auto; padding:16px 0; }
@@ -2776,9 +2814,8 @@
     <button onclick="showView('homeDash')" id="nav-homeDash" title="Home" style="display:flex;align-items:center;gap:5px"><i data-lucide="home" style="width:14px;height:14px"></i> Home</button>
     <button onclick="showView('myDash')"    id="nav-myDash">My Dashboards</button>
     <button onclick="showView('home')"      id="nav-home">Explorer</button>
-    <button onclick="showView('builder')"   id="nav-builder">Report Builder</button>
-    <button onclick="showView('saved')"     id="nav-saved">Saved Reports</button>
-    <button onclick="showView('designer')"  id="nav-designer">Designer</button>
+    <button onclick="showView('saved')"     id="nav-saved">Reports</button>
+    <button onclick="showView('intelligence')" id="nav-intelligence" style="display:flex;align-items:center;gap:5px"><i data-lucide="brain" style="width:14px;height:14px"></i> Intelligence</button>
   </div>
   <div class="topbar-right">
     <a href="/admin" style="display:flex;align-items:center;gap:5px;color:rgba(255,255,255,.6);font-size:12.5px;font-weight:500;text-decoration:none;padding:5px 10px;border-radius:6px;transition:background .12s" onmouseover="this.style.background='rgba(255,255,255,.1)'" onmouseout="this.style.background=''"><i data-lucide="settings" style="width:13px;height:13px"></i> Admin</a>
@@ -3277,7 +3314,10 @@
     <div id="saved-screen">
       <!-- List view -->
       <div id="sr-list-view">
-        <h2>Saved Reports</h2>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+          <h2 style="margin:0">Reports</h2>
+          <button class="sc-btn" onclick="showView('builder')" style="display:flex;align-items:center;gap:6px"><i data-lucide="plus" style="width:13px;height:13px"></i> New Report</button>
+        </div>
         <p>Your saved report configurations. Click Run to execute with live params.</p>
         <div class="saved-list" id="saved-list"></div>
       </div>
@@ -3394,9 +3434,163 @@
       <h3>Running query...</h3>
       <p id="loading-msg">Fetching data</p>
     </div>
+  <!-- ═══ INTELLIGENCE SCREEN ═══ -->
+  <div id="intelligence-screen" style="display:none;flex:1;flex-direction:column;overflow:hidden;min-height:0">
+    <!-- Tab bar -->
+    <div style="display:flex;align-items:center;gap:0;padding:0 32px;background:var(--surface);border-bottom:1.5px solid var(--border);flex-shrink:0">
+      <button class="intel-tab active" id="intel-tab-advise" onclick="intelSwitchTab('advise')" style="padding:13px 20px;font-size:13px;font-weight:600;background:none;border:none;border-bottom:2.5px solid var(--teal);color:var(--teal);cursor:pointer;margin-bottom:-1.5px">Advise</button>
+      <button class="intel-tab" id="intel-tab-recs" onclick="intelSwitchTab('recs')" style="padding:13px 20px;font-size:13px;font-weight:600;background:none;border:none;border-bottom:2.5px solid transparent;color:var(--text-muted);cursor:pointer;margin-bottom:-1.5px">Recommendations</button>
+      <button class="intel-tab" id="intel-tab-chat" onclick="intelSwitchTab('chat')" style="padding:13px 20px;font-size:13px;font-weight:600;background:none;border:none;border-bottom:2.5px solid transparent;color:var(--text-muted);cursor:pointer;margin-bottom:-1.5px">AI Chat</button>
+    </div>
+
+    <!-- Advise panel -->
+    <div id="intel-advise-panel" style="display:flex;flex:1;overflow:hidden;min-height:0">
+      <!-- Role lens picker sidebar -->
+      <div id="intel-advise-sidebar" style="width:220px;flex-shrink:0;background:var(--surface);border-right:1.5px solid var(--border);display:flex;flex-direction:column;padding:20px 16px;gap:6px;overflow-y:auto">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-muted);margin-bottom:6px">I am viewing as</div>
+        <button class="intel-role-btn active" data-role="owner"   onclick="intelSetRole('owner')">Owner / Executive</button>
+        <button class="intel-role-btn"        data-role="ops"     onclick="intelSetRole('ops')">Operations Manager</button>
+        <button class="intel-role-btn"        data-role="finance" onclick="intelSetRole('finance')">Finance / Billing</button>
+        <button class="intel-role-btn"        data-role="sales"   onclick="intelSetRole('sales')">Sales / Biz Dev</button>
+        <button class="intel-role-btn"        data-role="yard"    onclick="intelSetRole('yard')">Yard Manager</button>
+        <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)"></div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-muted);margin-bottom:6px">Category</div>
+        <button class="intel-cat-btn active" data-cat="all"       onclick="intelSetCat('all')">All</button>
+        <button class="intel-cat-btn"        data-cat="equipment" onclick="intelSetCat('equipment')">Equipment</button>
+        <button class="intel-cat-btn"        data-cat="yard"      onclick="intelSetCat('yard')">Yard</button>
+        <button class="intel-cat-btn"        data-cat="customer"  onclick="intelSetCat('customer')">Customer</button>
+        <button class="intel-cat-btn"        data-cat="financial" onclick="intelSetCat('financial')">Financial</button>
+        <div style="flex:1"></div>
+        <button onclick="intelRunAdvise()" id="intel-run-btn" style="margin-top:12px;padding:9px 14px;background:var(--teal);color:#fff;border:none;border-radius:8px;font-size:12.5px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">
+          <i data-lucide="play" style="width:13px;height:13px"></i> Run Advise
+        </button>
+        <div id="intel-last-run" style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:6px"></div>
+      </div>
+      <!-- Findings area -->
+      <div style="flex:1;overflow-y:auto;padding:24px 28px" id="intel-findings-area">
+        <div style="color:var(--text-muted);font-size:13px;text-align:center;padding:60px 0">Click <strong>Run Advise</strong> to generate recommendations.</div>
+      </div>
+    </div>
+
+    <!-- Recommendations panel -->
+    <div id="intel-recs-panel" style="display:none;flex:1;overflow:hidden;min-height:0">
+      <!-- Category sidebar -->
+      <div style="width:200px;flex-shrink:0;background:var(--surface);border-right:1.5px solid var(--border);display:flex;flex-direction:column;padding:20px 16px;gap:6px;overflow-y:auto">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-muted);margin-bottom:6px">Category</div>
+        <button class="intel-rec-cat-btn active" data-cat="all"       onclick="intelRecsSetCat('all')">All</button>
+        <button class="intel-rec-cat-btn"        data-cat="equipment" onclick="intelRecsSetCat('equipment')">Equipment</button>
+        <button class="intel-rec-cat-btn"        data-cat="yard"      onclick="intelRecsSetCat('yard')">Yard</button>
+        <button class="intel-rec-cat-btn"        data-cat="customer"  onclick="intelRecsSetCat('customer')">Customer</button>
+        <button class="intel-rec-cat-btn"        data-cat="financial" onclick="intelRecsSetCat('financial')">Financial</button>
+      </div>
+      <!-- Pinned findings area -->
+      <div style="flex:1;overflow-y:auto;padding:24px 28px" id="intel-recs-area">
+        <div style="color:var(--text-muted);font-size:13px;text-align:center;padding:60px 0">Loading…</div>
+      </div>
+    </div>
+
+    <!-- Chat panel -->
+    <div id="intel-chat-panel" style="display:none;flex:1;overflow:hidden;min-height:0">
+      <!-- Conversation sidebar -->
+      <div style="width:240px;flex-shrink:0;background:var(--surface);border-right:1.5px solid var(--border);display:flex;flex-direction:column;overflow:hidden">
+        <div style="padding:14px 16px 10px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
+          <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-muted)">Conversations</div>
+          <button onclick="intelNewConversation()" style="width:24px;height:24px;border-radius:6px;background:var(--teal);border:none;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center" title="New conversation">
+            <i data-lucide="plus" style="width:13px;height:13px"></i>
+          </button>
+        </div>
+        <div id="intel-conv-list" style="flex:1;overflow-y:auto;padding:0 8px 8px"></div>
+      </div>
+      <!-- Chat main -->
+      <div style="flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0">
+        <!-- Chat messages -->
+        <div id="intel-chat-messages" style="flex:1;overflow-y:auto;padding:24px 28px;display:flex;flex-direction:column;gap:16px">
+          <div style="color:var(--text-muted);font-size:13px;text-align:center;padding:40px 0">Select a conversation or start a new one.</div>
+        </div>
+        <!-- Chat input -->
+        <div id="intel-chat-input-area" style="flex-shrink:0;padding:12px 20px 16px;background:var(--surface);border-top:1.5px solid var(--border)">
+          <div id="intel-chat-role-bar" style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">
+            <span style="font-size:11px;font-weight:600;color:var(--text-muted);align-self:center">Viewing as:</span>
+            <button class="intel-role-btn-sm active" data-role="owner"   onclick="intelChatSetRole('owner')">Owner</button>
+            <button class="intel-role-btn-sm"        data-role="ops"     onclick="intelChatSetRole('ops')">Ops</button>
+            <button class="intel-role-btn-sm"        data-role="finance" onclick="intelChatSetRole('finance')">Finance</button>
+            <button class="intel-role-btn-sm"        data-role="sales"   onclick="intelChatSetRole('sales')">Sales</button>
+            <button class="intel-role-btn-sm"        data-role="yard"    onclick="intelChatSetRole('yard')">Yard</button>
+          </div>
+          <div style="display:flex;gap:8px;align-items:flex-end">
+            <textarea id="intel-chat-input" placeholder="Ask anything about your data…" rows="2"
+              style="flex:1;resize:none;border:1.5px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;color:var(--text);background:var(--surface2);line-height:1.5;outline:none"
+              onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();intelSendMessage();}"
+              oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,120)+'px'"></textarea>
+            <button onclick="intelSendMessage()" id="intel-send-btn"
+              style="flex-shrink:0;width:38px;height:38px;border-radius:8px;background:var(--teal);border:none;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center">
+              <i data-lucide="send" style="width:16px;height:16px"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div><!-- /intelligence-screen -->
 
   </div><!-- /main-content -->
+
+
 </div><!-- /app -->
+
+<!-- Advise Mini Pane -->
+<div id="advise-mini-pane" style="display:none;position:fixed;right:0;top:54px;bottom:0;width:360px;background:var(--surface);border-left:1.5px solid var(--border);z-index:300;flex-direction:column;box-shadow:-4px 0 20px rgba(0,0,0,.12)">
+  <div style="padding:14px 16px 10px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);flex-shrink:0">
+    <div style="font-size:13px;font-weight:700;color:var(--text)" id="advise-pane-title">Recommendations</div>
+    <button onclick="closeAdviseMiniPane()" style="width:26px;height:26px;border-radius:6px;background:var(--surface2);border:1px solid var(--border);cursor:pointer;display:flex;align-items:center;justify-content:center">
+      <i data-lucide="x" style="width:14px;height:14px"></i>
+    </button>
+  </div>
+  <div id="advise-pane-body" style="flex:1;overflow-y:auto;padding:14px 16px"></div>
+  <div style="padding:12px 16px;border-top:1px solid var(--border);flex-shrink:0">
+    <button onclick="intelOpenFromPane()" style="width:100%;padding:9px;background:var(--navy);color:#fff;border:none;border-radius:8px;font-size:12.5px;font-weight:600;cursor:pointer">Open Full Advise Report →</button>
+  </div>
+</div>
+<div id="advise-pane-backdrop" onclick="closeAdviseMiniPane()" style="display:none;position:fixed;inset:0;z-index:299;background:transparent"></div>
+
+<!-- Floating Chat Button -->
+<!-- Chat FAB -->
+<button id="chat-fab" onclick="toggleChatDrawer()" title="AI Chat"
+  style="display:none;position:fixed;bottom:24px;right:24px;width:52px;height:52px;border-radius:50%;background:var(--teal);border:none;color:#fff;cursor:pointer;z-index:400;box-shadow:0 4px 20px rgba(0,191,165,.4);align-items:center;justify-content:center;transition:transform .15s">
+  <i data-lucide="message-circle" style="width:22px;height:22px"></i>
+</button>
+
+<!-- Chat Drawer -->
+<div id="chat-drawer" style="display:none;position:fixed;right:0;top:54px;bottom:0;width:400px;background:var(--surface);border-left:1.5px solid var(--border);z-index:390;flex-direction:column;box-shadow:-4px 0 24px rgba(0,0,0,.15)">
+  <div style="padding:12px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1.5px solid var(--border);flex-shrink:0;background:var(--navy)">
+    <div style="display:flex;align-items:center;gap:8px">
+      <i data-lucide="brain" style="width:16px;height:16px;color:#fff"></i>
+      <span style="font-size:13px;font-weight:700;color:#fff">AI Chat</span>
+      <span id="drawer-conv-title" style="font-size:12px;color:rgba(255,255,255,.55);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px"></span>
+    </div>
+    <div style="display:flex;gap:6px">
+      <button onclick="showView('intelligence');intelSwitchTab('chat')" title="Expand" style="width:26px;height:26px;border-radius:6px;background:rgba(255,255,255,.1);border:none;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center">
+        <i data-lucide="maximize-2" style="width:13px;height:13px"></i>
+      </button>
+      <button onclick="toggleChatDrawer()" style="width:26px;height:26px;border-radius:6px;background:rgba(255,255,255,.1);border:none;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center">
+        <i data-lucide="x" style="width:14px;height:14px"></i>
+      </button>
+    </div>
+  </div>
+  <div id="drawer-messages" style="flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px">
+    <div style="color:var(--text-muted);font-size:13px;text-align:center;padding:30px 0">Ask me anything about your data.</div>
+  </div>
+  <div style="flex-shrink:0;padding:10px 12px 14px;background:var(--surface);border-top:1.5px solid var(--border)">
+    <div style="display:flex;gap:6px;align-items:flex-end">
+      <textarea id="drawer-chat-input" placeholder="Ask a question…" rows="2"
+        style="flex:1;resize:none;border:1.5px solid var(--border);border-radius:8px;padding:8px 10px;font-size:13px;color:var(--text);background:var(--surface2);line-height:1.5;outline:none"
+        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();drawerSendMessage();}"
+        oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,100)+'px'"></textarea>
+      <button onclick="drawerSendMessage()" style="flex-shrink:0;width:36px;height:36px;border-radius:8px;background:var(--teal);border:none;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center">
+        <i data-lucide="send" style="width:15px;height:15px"></i>
+      </button>
+    </div>
+  </div>
+</div>
 
 <!-- Dashboard loading overlay -->
 <div id="dash-loading">
@@ -7036,18 +7230,22 @@ function rbToggleFields() {
 
 /* ── View management ── */
 function showView(view) {
-  ['dashboard','home','builder','saved','myDash','designer','homeDash'].forEach(v=>{
+  ['dashboard','home','builder','saved','myDash','designer','homeDash','intelligence'].forEach(v=>{
     document.getElementById(`nav-${v}`)?.classList.toggle('active',v===view);
   });
   // Fullscreen builder overlays everything
   document.getElementById('rb-screen').classList.toggle('open', view==='builder');
   // Always use cssText so flex:1 is preserved — style.display alone strips it
-  document.getElementById('dashboard-screen').style.cssText  = view==='dashboard' ? 'display:flex;flex-direction:column;flex:1;overflow-y:auto'          : 'display:none';
-  document.getElementById('home-screen').style.cssText       = view==='home'      ? 'display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0' : 'display:none';
-  document.getElementById('saved-screen').style.cssText      = view==='saved'     ? 'display:flex;flex-direction:column;flex:1;overflow-y:auto'              : 'display:none';
-  document.getElementById('my-dash-screen').style.cssText    = view==='myDash'    ? 'display:flex;flex-direction:column;flex:1;overflow-y:auto;padding:28px 32px' : 'display:none';
-  document.getElementById('designer-screen').style.cssText   = view==='designer'  ? 'display:flex;flex-direction:column;flex:1;overflow:hidden'              : 'display:none';
-  document.getElementById('homeDash-screen').style.cssText   = view==='homeDash'  ? 'display:flex;flex-direction:column;flex:1;overflow-y:auto'              : 'display:none';
+  document.getElementById('dashboard-screen').style.cssText     = view==='dashboard'    ? 'display:flex;flex-direction:column;flex:1;overflow-y:auto'          : 'display:none';
+  document.getElementById('home-screen').style.cssText          = view==='home'         ? 'display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0' : 'display:none';
+  document.getElementById('saved-screen').style.cssText         = view==='saved'        ? 'display:flex;flex-direction:column;flex:1;overflow-y:auto'              : 'display:none';
+  document.getElementById('my-dash-screen').style.cssText       = view==='myDash'       ? 'display:flex;flex-direction:column;flex:1;overflow-y:auto;padding:28px 32px' : 'display:none';
+  document.getElementById('designer-screen').style.cssText      = view==='designer'     ? 'display:flex;flex-direction:column;flex:1;overflow:hidden'              : 'display:none';
+  document.getElementById('homeDash-screen').style.cssText      = view==='homeDash'     ? 'display:flex;flex-direction:column;flex:1;overflow-y:auto'              : 'display:none';
+  document.getElementById('intelligence-screen').style.cssText  = view==='intelligence' ? 'display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0' : 'display:none';
+  // Hide chat FAB while on Intelligence screen (it has its own full chat tab)
+  const _fab = document.getElementById('chat-fab');
+  if (_fab) _fab.style.display = (view === 'intelligence' || _chatDrawerOpen) ? 'none' : 'flex';
 
   if(view==='builder') {
     // If navigating to builder directly (not via loadReport), it's a new report
@@ -7065,9 +7263,10 @@ function showView(view) {
   if(view==='home') {
     dexInit();
   }
-  if(view==='myDash')   myDashInit();
-  if(view==='designer') dsgnInit();
-  if(view==='homeDash') homeDashRender();
+  if(view==='myDash')       myDashInit();
+  if(view==='designer')     dsgnInit();
+  if(view==='homeDash')     homeDashRender();
+  if(view==='intelligence') intelligenceInit();
 }
 
 // Report builder close — return to the best available view rather than hardcoding 'dashboard'
@@ -12173,7 +12372,7 @@ function dsgnRenderFieldEditor(main, ds) {
     </div>
 
     <!-- Dataset Settings -->
-    <div style="background:var(--surface);border:1.5px solid var(--border);border-radius:10px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;gap:24px">
+    <div style="background:var(--surface);border:1.5px solid var(--border);border-radius:10px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;gap:24px;flex-wrap:wrap">
       <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);flex-shrink:0">Settings</div>
       <label style="display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none">
         <div style="position:relative;width:36px;height:20px;flex-shrink:0">
@@ -12188,6 +12387,45 @@ function dsgnRenderFieldEditor(main, ds) {
           <div style="font-size:11px;color:var(--text-muted)">When off, this dataset is hidden from the Explorer list</div>
         </div>
       </label>
+      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none">
+        <div style="position:relative;width:36px;height:20px;flex-shrink:0">
+          <input type="checkbox" id="dsgn-toggle-ai" ${ds.visible_to_ai ? 'checked' : ''}
+            style="opacity:0;width:0;height:0;position:absolute"
+            onchange="dsgnToggleAi('${ds.name}', this.checked)">
+          <span id="dsgn-toggle-ai-track" style="position:absolute;inset:0;border-radius:20px;background:${ds.visible_to_ai ? 'var(--teal)' : 'var(--border)'};transition:background .2s"></span>
+          <span style="position:absolute;top:3px;left:${ds.visible_to_ai ? '19' : '3'}px;width:14px;height:14px;border-radius:50%;background:#fff;transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,.2)" id="dsgn-toggle-ai-thumb"></span>
+        </div>
+        <div>
+          <div style="font-size:13px;font-weight:600;color:var(--text)">Visible to AI</div>
+          <div style="font-size:11px;color:var(--text-muted)">Include in AI Chat and Advise analysis</div>
+        </div>
+      </label>
+    </div>
+
+    <!-- Version / Dedup Field -->
+    <div style="background:var(--surface);border:1.5px solid var(--border);border-radius:10px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);flex-shrink:0">Version / Dedup</div>
+      <div style="display:flex;align-items:center;gap:8px;flex:1;flex-wrap:wrap">
+        <div>
+          <div style="font-size:11px;font-weight:600;color:var(--text-muted);margin-bottom:4px">Version Field</div>
+          <select id="dsgn-version-field" class="dsgn-fselect" style="min-width:180px"
+            onchange="dsgnSaveVersionSettings('${ds.name}')">
+            <option value="">— none —</option>
+            ${(ds._fields||[]).map(f => `<option value="${f.name}" ${ds.version_field===f.name?'selected':''}>${f.label||f.name}</option>`).join('')}
+          </select>
+        </div>
+        <div>
+          <div style="font-size:11px;font-weight:600;color:var(--text-muted);margin-bottom:4px">Type</div>
+          <select id="dsgn-version-type" class="dsgn-fselect"
+            onchange="dsgnSaveVersionSettings('${ds.name}')">
+            <option value="timestamp" ${(ds.version_type||'timestamp')==='timestamp'?'selected':''}>Timestamp</option>
+            <option value="integer"   ${ds.version_type==='integer'?'selected':''}>Integer</option>
+          </select>
+        </div>
+        <div style="font-size:11px;color:var(--text-muted);max-width:300px">
+          When set, upserts skip rows whose version value is older than or equal to what&#39;s already stored.
+        </div>
+      </div>
       <button class="dsgn-cancel-btn" style="margin-left:auto;display:flex;align-items:center;gap:6px;padding:6px 14px;font-size:12px;font-weight:600" onclick="dsgnImportData('${ds.name}', '${(ds.description||ds.label||ds.name).replace(/'/g,'\\&apos;')}')"
         title="Import CSV data into this dataset">
         <i data-lucide="upload" style="width:13px;height:13px"></i> Import Data
@@ -14412,6 +14650,781 @@ function tpAddLibTile(jsonStr) {
   closeTilePicker();
   myDashRender();
   ddnlToast(`"${def.title}" added`, 'success', 1800);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ═ INTELLIGENCE MODULE — Advise + AI Chat ═══════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+
+let _intelInited         = false;
+let _intelAdviseRole     = 'owner';
+let _intelAdviseCategory = 'all';
+let _intelChatRole       = 'owner';
+let _intelConvId         = null;
+let _intelConversations  = [];
+let _intelBadges         = {};  // { [metric_key]: { total, critical, watch, opportunity } }
+let _adviseMiniCategory  = null; // currently open mini pane category
+let _chatDrawerOpen      = false;
+let _drawerConvId        = null;  // active conversation in the floating drawer
+let _intelRecsCategory   = 'all';
+
+// ─ Init ───────────────────────────────────────────────────────────────
+
+async function intelligenceInit() {
+  if (!_intelInited) {
+    _intelInited = true;
+    await intelLoadBadges();
+    // Show existing snapshot if available, else prompt user to run
+    await intelLoadSnapshot();
+    await intelLoadConversations();
+  }
+}
+
+// ─ Tab switching ─────────────────────────────────────────────────────
+
+function intelSwitchTab(tab) {
+  const base = 'padding:13px 20px;font-size:13px;font-weight:600;background:none;border:none;margin-bottom:-1.5px;cursor:pointer;';
+  const on   = 'border-bottom:2.5px solid var(--teal);color:var(--teal)';
+  const off  = 'border-bottom:2.5px solid transparent;color:var(--text-muted)';
+  document.getElementById('intel-tab-advise').style.cssText = base + (tab==='advise' ? on : off);
+  document.getElementById('intel-tab-recs').style.cssText   = base + (tab==='recs'   ? on : off);
+  document.getElementById('intel-tab-chat').style.cssText   = base + (tab==='chat'   ? on : off);
+  document.getElementById('intel-advise-panel').style.display = tab==='advise' ? 'flex' : 'none';
+  document.getElementById('intel-recs-panel').style.display   = tab==='recs'   ? 'flex' : 'none';
+  document.getElementById('intel-chat-panel').style.display   = tab==='chat'   ? 'flex' : 'none';
+  if (tab === 'recs') intelRecsLoad();
+}
+
+// ─ Advise: role + category ──────────────────────────────────────────
+
+function intelSetRole(role) {
+  _intelAdviseRole = role;
+  document.querySelectorAll('.intel-role-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.role === role);
+  });
+}
+
+function intelSetCat(cat) {
+  _intelAdviseCategory = cat;
+  document.querySelectorAll('.intel-cat-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.cat === cat);
+  });
+  intelFilterFindings();
+}
+
+function intelFilterFindings() {
+  const cards = document.querySelectorAll('.intel-finding-card[data-category]');
+  cards.forEach(c => {
+    const show = _intelAdviseCategory === 'all' || c.dataset.category === _intelAdviseCategory;
+    c.style.display = show ? '' : 'none';
+  });
+}
+
+// ─ Advise: load snapshot ──────────────────────────────────────────
+
+async function intelLoadSnapshot() {
+  const area = document.getElementById('intel-findings-area');
+  if (!area) return;
+  try {
+    const r = await apiFetch(`${BASE}/advise/snapshot`);
+    if (!r.ok) throw new Error(await r.text());
+    const { snapshot, findings } = await r.json();
+    if (!snapshot) {
+      area.innerHTML = `<div style="text-align:center;padding:80px 40px">
+        <div style="font-size:32px;margin-bottom:16px;opacity:.3">🧠</div>
+        <div style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:8px">No recommendations yet</div>
+        <div style="font-size:13px;color:var(--text-muted);margin-bottom:24px">Click <strong>Run Advise</strong> to analyze your data and generate recommendations.</div>
+        <button onclick="intelRunAdvise()" style="padding:9px 22px;background:var(--teal);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">Run Advise</button>
+      </div>`;
+      return;
+    }
+    intelRenderFindings(findings, snapshot);
+  } catch (e) {
+    area.innerHTML = `<div style="color:var(--red,#ef4444);font-size:13px;padding:20px">Error loading Advise data: ${escHtml(e.message)}</div>`;
+  }
+}
+
+async function intelRunAdvise() {
+  const btn  = document.getElementById('intel-run-btn');
+  const area = document.getElementById('intel-findings-area');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i data-lucide="loader" style="width:13px;height:13px"></i> Running…'; lucide.createIcons(); }
+  area.innerHTML = `<div style="color:var(--text-muted);font-size:13px;text-align:center;padding:60px 0"><div class="spinner" style="margin:0 auto 12px"></div>Analyzing your data…</div>`;
+  try {
+    const r = await apiFetch(`${BASE}/advise/run`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role: _intelAdviseRole })
+    });
+    if (!r.ok) throw new Error(await r.text());
+    const { findingCount, snapshotId } = await r.json();
+    // Reload the snapshot to get full findings
+    await intelLoadSnapshot();
+    await intelLoadBadges();
+    intelUpdateBadgesOnTiles();
+    const ts = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const el = document.getElementById('intel-last-run');
+    if (el) el.textContent = `Last run: ${ts} — ${findingCount} finding${findingCount !== 1 ? 's' : ''}`;
+  } catch (e) {
+    area.innerHTML = `<div style="color:var(--red,#ef4444);font-size:13px;padding:20px">Run failed: ${escHtml(e.message)}</div>`;
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i data-lucide="play" style="width:13px;height:13px"></i> Run Advise'; lucide.createIcons(); }
+  }
+}
+
+function intelRenderFindings(findings, snapshot) {
+  const area = document.getElementById('intel-findings-area');
+  if (!area) return;
+  if (!findings.length) {
+    area.innerHTML = `<div style="text-align:center;padding:80px 40px">
+      <div style="font-size:32px;margin-bottom:16px;opacity:.35">✅</div>
+      <div style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:8px">No findings detected</div>
+      <div style="font-size:13px;color:var(--text-muted)">Your metrics look healthy. Run Advise again after new data comes in.</div>
+    </div>`;
+    return;
+  }
+  const ts = snapshot ? new Date(snapshot.ran_at).toLocaleString() : '';
+  let html = `<div style="font-size:11px;color:var(--text-muted);margin-bottom:16px">Generated ${ts} — ${findings.length} finding${findings.length !== 1 ? 's' : ''}</div>`;
+  for (const f of findings) {
+    const chipCls = f.severity;
+    const catLabel = { equipment:'Equipment', yard:'Yard', customer:'Customer', financial:'Financial' }[f.category] || f.category;
+    const visible = _intelAdviseCategory === 'all' || _intelAdviseCategory === f.category;
+    html += `
+    <div class="intel-finding-card severity-${f.severity}" data-category="${f.category}" data-finding-id="${f.id}" style="${visible ? '' : 'display:none'}">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+        <span class="intel-severity-chip ${chipCls}">${f.severity.toUpperCase()}</span>
+        <span style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em">${catLabel}</span>
+        <span style="font-size:11.5px;font-weight:700;color:var(--text)">${escHtml(f.entity_label || '')}</span>
+        <button onclick="intelTogglePin(${f.id}, this)" data-pinned="${f.pinned ? '1' : '0'}" title="${f.pinned ? 'Remove from Recommendations' : 'Pin to Recommendations'}" style="margin-left:auto;padding:4px 10px;border:1.5px solid ${f.pinned ? 'var(--teal)' : 'var(--border)'};border-radius:6px;background:${f.pinned ? 'rgba(0,191,165,.1)' : 'var(--surface2)'};color:${f.pinned ? 'var(--teal)' : 'var(--text-muted)'};font-size:11px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:4px">
+          <i data-lucide="bookmark" style="width:11px;height:11px"></i>${f.pinned ? 'Pinned' : 'Pin'}
+        </button>
+      </div>
+      ${f.recommendation ? `<div style="font-size:13px;color:var(--text);line-height:1.55;margin-bottom:6px">${escHtml(f.recommendation)}</div>` : ''}
+      <div style="font-size:11px;color:var(--text-muted);margin-top:4px">
+        ${Object.entries(f.data_json || {}).map(([k,v]) => `<span style="margin-right:12px"><strong>${escHtml(k.replace(/_/g,' '))}:</strong> ${escHtml(String(v))}</span>`).join('')}
+      </div>
+    </div>`;
+  }
+  area.innerHTML = html;
+}
+
+// ─ Recommendations tab ──────────────────────────────────────────────
+
+async function intelRecsLoad() {
+  const area = document.getElementById('intel-recs-area');
+  if (!area) return;
+  area.innerHTML = `<div style="color:var(--text-muted);font-size:13px;text-align:center;padding:60px 0"><div class="spinner" style="margin:0 auto 12px"></div>Loading…</div>`;
+  try {
+    const r = await apiFetch(`${BASE}/advise/pinned`);
+    if (!r.ok) throw new Error(await r.text());
+    const { findings } = await r.json();
+    intelRecsRender(findings);
+  } catch (e) {
+    area.innerHTML = `<div style="color:var(--red,#ef4444);font-size:13px;padding:20px">Error loading recommendations: ${escHtml(e.message)}</div>`;
+  }
+}
+
+function intelRecsSetCat(cat) {
+  _intelRecsCategory = cat;
+  document.querySelectorAll('.intel-rec-cat-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.cat === cat);
+  });
+  // Filter rendered cards
+  document.querySelectorAll('.intel-rec-card[data-category]').forEach(c => {
+    c.style.display = (cat === 'all' || c.dataset.category === cat) ? '' : 'none';
+  });
+}
+
+function intelRecsRender(findings) {
+  const area = document.getElementById('intel-recs-area');
+  if (!area) return;
+  if (!findings.length) {
+    area.innerHTML = `<div style="text-align:center;padding:80px 40px">
+      <div style="font-size:32px;margin-bottom:16px;opacity:.3">📌</div>
+      <div style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:8px">No recommendations pinned yet</div>
+      <div style="font-size:13px;color:var(--text-muted)">Run Advise, then click <strong>Pin</strong> on any finding to track it here.</div>
+    </div>`;
+    return;
+  }
+  let html = `<div style="font-size:11px;color:var(--text-muted);margin-bottom:16px">${findings.length} pinned recommendation${findings.length !== 1 ? 's' : ''}</div>`;
+  for (const f of findings) {
+    const catLabel = { equipment:'Equipment', yard:'Yard', customer:'Customer', financial:'Financial' }[f.category] || f.category;
+    const snapshotDate = f.snapshot_ran_at ? new Date(f.snapshot_ran_at).toLocaleDateString() : '';
+    const visible = _intelRecsCategory === 'all' || _intelRecsCategory === f.category;
+    html += `
+    <div class="intel-finding-card intel-rec-card severity-${f.severity}" data-category="${f.category}" data-finding-id="${f.id}" style="${visible ? '' : 'display:none'}">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+        <span class="intel-severity-chip ${f.severity}">${f.severity.toUpperCase()}</span>
+        <span style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em">${catLabel}</span>
+        <span style="font-size:11.5px;font-weight:700;color:var(--text)">${escHtml(f.entity_label || '')}</span>
+        <button onclick="intelUnpinFromRecs(${f.id}, this)" title="Remove from Recommendations" style="margin-left:auto;padding:4px 10px;border:1.5px solid var(--teal);border-radius:6px;background:rgba(0,191,165,.1);color:var(--teal);font-size:11px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:4px">
+          <i data-lucide="bookmark" style="width:11px;height:11px"></i>Pinned
+        </button>
+      </div>
+      ${f.recommendation ? `<div style="font-size:13px;color:var(--text);line-height:1.55;margin-bottom:6px">${escHtml(f.recommendation)}</div>` : ''}
+      ${f.pinned_note ? `<div style="font-size:12px;color:var(--teal);font-style:italic;margin-bottom:6px">“${escHtml(f.pinned_note)}”</div>` : ''}
+      <div style="font-size:11px;color:var(--text-muted);margin-top:4px;display:flex;gap:16px;flex-wrap:wrap">
+        ${Object.entries(f.data_json || {}).map(([k,v]) => `<span><strong>${escHtml(k.replace(/_/g,' '))}:</strong> ${escHtml(String(v))}</span>`).join('')}
+        ${snapshotDate ? `<span style="margin-left:auto">from Advise run ${snapshotDate}</span>` : ''}
+      </div>
+    </div>`;
+  }
+  area.innerHTML = html;
+  lucide.createIcons();
+}
+
+async function intelTogglePin(findingId, btn) {
+  const pinned = btn.dataset.pinned === '1';
+  const url    = `${BASE}/advise/findings/${findingId}/${pinned ? 'unpin' : 'pin'}`;
+  try {
+    btn.disabled = true;
+    const r = await apiFetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    if (!r.ok) throw new Error(await r.text());
+    // Toggle visual state
+    const nowPinned = !pinned;
+    btn.dataset.pinned = nowPinned ? '1' : '0';
+    btn.title = nowPinned ? 'Remove from Recommendations' : 'Pin to Recommendations';
+    btn.style.borderColor  = nowPinned ? 'var(--teal)' : 'var(--border)';
+    btn.style.background   = nowPinned ? 'rgba(0,191,165,.1)' : 'var(--surface2)';
+    btn.style.color        = nowPinned ? 'var(--teal)' : 'var(--text-muted)';
+    btn.innerHTML = `<i data-lucide="bookmark" style="width:11px;height:11px"></i>${nowPinned ? 'Pinned' : 'Pin'}`;
+    lucide.createIcons();
+    ddnlToast(nowPinned ? 'Pinned to Recommendations' : 'Removed from Recommendations', 'success', 2000);
+  } catch (e) {
+    ddnlToast('Failed to update pin: ' + e.message, 'error', 3000);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function intelUnpinFromRecs(findingId, btn) {
+  try {
+    btn.disabled = true;
+    const r = await apiFetch(`${BASE}/advise/findings/${findingId}/unpin`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    if (!r.ok) throw new Error(await r.text());
+    // Remove card from the recs panel
+    const card = document.querySelector(`#intel-recs-area [data-finding-id="${findingId}"]`);
+    if (card) card.remove();
+    // Update pin button in Advise panel if visible
+    const adviseBtn = document.querySelector(`#intel-findings-area [data-finding-id="${findingId}"] button[data-pinned]`);
+    if (adviseBtn) {
+      adviseBtn.dataset.pinned = '0';
+      adviseBtn.title = 'Pin to Recommendations';
+      adviseBtn.style.borderColor = 'var(--border)';
+      adviseBtn.style.background  = 'var(--surface2)';
+      adviseBtn.style.color       = 'var(--text-muted)';
+      adviseBtn.innerHTML = `<i data-lucide="bookmark" style="width:11px;height:11px"></i>Pin`;
+      lucide.createIcons();
+    }
+    // Show empty state if nothing left
+    const remaining = document.querySelectorAll('#intel-recs-area .intel-rec-card');
+    if (!remaining.length) intelRecsRender([]);
+    ddnlToast('Removed from Recommendations', 'success', 2000);
+  } catch (e) {
+    ddnlToast('Failed to unpin: ' + e.message, 'error', 3000);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ─ Advise: badges on KPI tiles ───────────────────────────────────────
+
+async function intelLoadBadges() {
+  try {
+    const r = await apiFetch(`${BASE}/advise/badges`);
+    if (!r.ok) return;
+    const { badges } = await r.json();
+    _intelBadges = badges || {};
+  } catch (e) {
+    _intelBadges = {};
+  }
+}
+
+/**
+ * Place advise badge icons on KPI tiles that have findings.
+ * Called after badges are loaded and after dashboard renders.
+ * Tiles must have data-metric-key attribute set.
+ */
+function intelUpdateBadgesOnTiles() {
+  // Remove all existing advise badges
+  document.querySelectorAll('.advise-badge').forEach(b => b.remove());
+  if (!_intelBadges || !Object.keys(_intelBadges).length) return;
+
+  // Find all KPI tiles with a metric_key
+  document.querySelectorAll('[data-metric-key]').forEach(tile => {
+    const key = tile.dataset.metricKey;
+    const badge = _intelBadges[key];
+    if (!badge || !badge.total) return;
+
+    // Ensure tile has position:relative for badge positioning
+    const pos = window.getComputedStyle(tile).position;
+    if (pos === 'static') tile.style.position = 'relative';
+
+    const severity = badge.critical ? 'critical' : badge.watch ? 'watch' : 'opportunity';
+    const el = document.createElement('div');
+    el.className = `advise-badge ${severity}`;
+    el.title = `${badge.total} Advise finding${badge.total !== 1 ? 's' : ''}`;
+    el.textContent = badge.total > 9 ? '9+' : badge.total;
+    el.onclick = (e) => { e.stopPropagation(); openAdviseMiniPane(key); };
+    tile.appendChild(el);
+  });
+}
+
+// ─ Advise Mini Pane ───────────────────────────────────────────────
+
+async function openAdviseMiniPane(metricKey) {
+  _adviseMiniCategory = metricKey;
+  const pane = document.getElementById('advise-mini-pane');
+  const body = document.getElementById('advise-pane-body');
+  const title = document.getElementById('advise-pane-title');
+  if (!pane || !body) return;
+
+  // Show pane
+  pane.style.display = 'flex';
+  pane.style.flexDirection = 'column';
+  document.getElementById('advise-pane-backdrop').style.display = 'block';
+  body.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:20px">Loading…</div>';
+  if (title) title.textContent = metricKey
+    ? metricKey.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+    : 'All Recommendations';
+
+  try {
+    // null metricKey = fetch all findings, no metric filter
+    const url = metricKey
+      ? `${BASE}/advise/findings?metric_key=${encodeURIComponent(metricKey)}`
+      : `${BASE}/advise/findings`;
+    const r = await apiFetch(url);
+    if (!r.ok) throw new Error(await r.text());
+    const { findings } = await r.json();
+
+    if (!findings.length) {
+      body.innerHTML = `<div style="color:var(--text-muted);font-size:13px;padding:16px 0">No findings for this metric.</div>`;
+      return;
+    }
+
+    let html = '';
+    for (const f of findings.slice(0, 5)) {
+      html += `
+      <div style="border:1.5px solid var(--border);border-left:3px solid ${f.severity === 'critical' ? '#ef4444' : f.severity === 'watch' ? '#f59e0b' : 'var(--teal)'};border-radius:8px;padding:11px 13px;margin-bottom:10px">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+          <span class="intel-severity-chip ${f.severity}">${f.severity.toUpperCase()}</span>
+          <span style="font-size:12px;font-weight:600;color:var(--text)">${escHtml(f.entity_label || '')}</span>
+        </div>
+        ${f.recommendation ? `<div style="font-size:12.5px;color:var(--text);line-height:1.5">${escHtml(f.recommendation)}</div>` : ''}
+      </div>`;
+    }
+    if (findings.length > 5) {
+      html += `<div style="font-size:12px;color:var(--text-muted);text-align:center;padding:4px 0">+ ${findings.length - 5} more in full report</div>`;
+    }
+    body.innerHTML = html;
+  } catch (e) {
+    body.innerHTML = `<div style="color:var(--red,#ef4444);font-size:13px;padding:16px 0">Error: ${escHtml(e.message)}</div>`;
+  }
+}
+
+function closeAdviseMiniPane() {
+  const pane = document.getElementById('advise-mini-pane');
+  if (pane) pane.style.display = 'none';
+  const backdrop = document.getElementById('advise-pane-backdrop');
+  if (backdrop) backdrop.style.display = 'none';
+  _adviseMiniCategory = null;
+}
+
+function intelOpenFromPane() {
+  closeAdviseMiniPane();
+  showView('intelligence');
+  intelSwitchTab('advise');
+  if (_adviseMiniCategory) {
+    // Map metric_key to category for filter
+    const catMap = {
+      idle_days: 'equipment', yard_revenue: 'yard', customer_concentration: 'customer',
+      customer_churn: 'customer', billing_lag: 'financial'
+    };
+    const cat = catMap[_adviseMiniCategory] || 'all';
+    intelSetCat(cat);
+  }
+}
+
+// ─ Chat: conversations ────────────────────────────────────────────────
+
+async function intelLoadConversations() {
+  try {
+    const r = await apiFetch(`${BASE}/ai/conversations`);
+    if (!r.ok) return;
+    const { conversations } = await r.json();
+    _intelConversations = conversations || [];
+    intelRenderConvList();
+  } catch (e) {
+    console.warn('[intel] failed to load conversations:', e.message);
+  }
+}
+
+function intelRenderConvList() {
+  const list = document.getElementById('intel-conv-list');
+  if (!list) return;
+  if (!_intelConversations.length) {
+    list.innerHTML = `<div style="color:var(--text-muted);font-size:12px;padding:12px 4px">No conversations yet.</div>`;
+    return;
+  }
+  list.innerHTML = _intelConversations.map(c => `
+    <div class="intel-conv-item${_intelConvId === c.id ? ' active' : ''}" onclick="intelLoadConversation(${c.id})">
+      <i data-lucide="message-square" style="width:13px;height:13px;flex-shrink:0"></i>
+      <span class="intel-conv-title">${escHtml(c.title)}</span>
+      <button onclick="event.stopPropagation();intelDeleteConversation(${c.id})" style="opacity:0;width:20px;height:20px;border-radius:4px;background:none;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0"
+        onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0">
+        <i data-lucide="trash-2" style="width:12px;height:12px;color:var(--red,#ef4444)"></i>
+      </button>
+    </div>`).join('');
+  lucide.createIcons();
+}
+
+async function intelNewConversation() {
+  try {
+    const r = await apiFetch(`${BASE}/ai/conversations`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: 'New conversation' })
+    });
+    if (!r.ok) throw new Error(await r.text());
+    const { conversation } = await r.json();
+    _intelConversations.unshift(conversation);
+    _intelConvId = conversation.id;
+    intelRenderConvList();
+    intelRenderMessages([]);
+    document.getElementById('intel-chat-input')?.focus();
+  } catch (e) {
+    ddnlToast('Failed to create conversation: ' + e.message, 'error', 3000);
+  }
+}
+
+async function intelLoadConversation(id) {
+  _intelConvId = id;
+  intelRenderConvList();
+  const area = document.getElementById('intel-chat-messages');
+  if (area) area.innerHTML = '<div style="color:var(--text-muted);font-size:13px;text-align:center;padding:40px 0">Loading…</div>';
+  try {
+    const r = await apiFetch(`${BASE}/ai/conversations/${id}`);
+    if (!r.ok) throw new Error(await r.text());
+    const { messages } = await r.json();
+    intelRenderMessages(messages);
+  } catch (e) {
+    if (area) area.innerHTML = `<div style="color:var(--red,#ef4444);font-size:13px;padding:20px">Error: ${escHtml(e.message)}</div>`;
+  }
+}
+
+async function intelDeleteConversation(id) {
+  try {
+    await apiFetch(`${BASE}/ai/conversations/${id}`, { method: 'DELETE' });
+    _intelConversations = _intelConversations.filter(c => c.id !== id);
+    if (_intelConvId === id) {
+      _intelConvId = null;
+      intelRenderMessages([]);
+    }
+    intelRenderConvList();
+  } catch (e) {
+    ddnlToast('Delete failed: ' + e.message, 'error', 3000);
+  }
+}
+
+// ─ Chat: messages ───────────────────────────────────────────────────
+
+function intelRenderMessages(messages) {
+  const area = document.getElementById('intel-chat-messages');
+  if (!area) return;
+  if (!messages.length) {
+    area.innerHTML = `<div style="color:var(--text-muted);font-size:13px;text-align:center;padding:40px 0">Ask me anything about your data.</div>`;
+    return;
+  }
+  area.innerHTML = messages.map(m => intelMessageHtml(m)).join('');
+  area.scrollTop = area.scrollHeight;
+  lucide.createIcons();
+}
+
+function intelMessageHtml(m) {
+  if (m.role === 'tool') return ''; // don't show raw tool messages
+  const isUser = m.role === 'user';
+  let html = `<div class="chat-msg ${m.role}">`;
+  if (m.content) {
+    html += `<div class="chat-bubble">${escHtml(m.content)}</div>`;
+  }
+  // Confirmation card for pending tag actions
+  if (m.action_payload && !m.action_payload.confirmed && !m.action_payload.dismissed) {
+    const p = m.action_payload;
+    const actionLabel = p.action === 'apply' ? 'Apply tag' : 'Remove tag';
+    const countText = p.match_count >= 0 ? `Affects ${p.match_count} record(s).` : '';
+    html += `
+    <div class="chat-action-card">
+      <div class="action-title">${actionLabel}: <span style="color:${p.tag_color || 'var(--teal)'}">${escHtml(p.tag_label)}</span></div>
+      <div class="action-desc">${escHtml(p.reason || '')} ${countText}</div>
+      <div style="display:flex;gap:8px">
+        <button onclick="intelConfirmAction(${m.id}, true)" style="padding:6px 14px;background:var(--teal);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">Confirm</button>
+        <button onclick="intelConfirmAction(${m.id}, false)" style="padding:6px 14px;background:var(--surface2);color:var(--text);border:1.5px solid var(--border);border-radius:6px;font-size:12px;cursor:pointer">Dismiss</button>
+      </div>
+    </div>`;
+  }
+  html += `</div>`;
+  return html;
+}
+
+async function intelSendMessage() {
+  if (!_intelConvId) {
+    // Auto-create a conversation
+    await intelNewConversation();
+  }
+  const input = document.getElementById('intel-chat-input');
+  const content = input?.value?.trim();
+  if (!content) return;
+  input.value = '';
+  input.style.height = '';
+
+  const btn = document.getElementById('intel-send-btn');
+  if (btn) btn.disabled = true;
+
+  // Optimistically append user message
+  const area = document.getElementById('intel-chat-messages');
+  if (area) {
+    if (area.querySelector('[style*="Ask me anything"]')) area.innerHTML = '';
+    area.innerHTML += intelMessageHtml({ id: 0, role: 'user', content });
+    area.innerHTML += `<div class="chat-msg assistant" id="intel-thinking">
+      <div class="chat-bubble" style="color:var(--text-muted)"><i>Thinking…</i></div></div>`;
+    area.scrollTop = area.scrollHeight;
+  }
+
+  try {
+    const r = await apiFetch(`${BASE}/ai/conversations/${_intelConvId}/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content, role: _intelChatRole })
+    });
+    if (!r.ok) throw new Error(await r.text());
+    const { assistant_message } = await r.json();
+
+    // Refresh title in conv list (may have been auto-updated)
+    intelLoadConversations();
+
+    // Replace optimistic messages with real ones
+    await intelLoadConversation(_intelConvId);
+  } catch (e) {
+    const thinking = document.getElementById('intel-thinking');
+    if (thinking) thinking.outerHTML = intelMessageHtml({ role: 'assistant', content: 'Error: ' + e.message });
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function intelConfirmAction(messageId, confirmed) {
+  if (!_intelConvId) return;
+  try {
+    const r = await apiFetch(`${BASE}/ai/conversations/${_intelConvId}/confirm`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message_id: messageId, confirmed })
+    });
+    if (!r.ok) throw new Error(await r.text());
+    await intelLoadConversation(_intelConvId);
+  } catch (e) {
+    ddnlToast('Action failed: ' + e.message, 'error', 3000);
+  }
+}
+
+// ─ Chat: role ──────────────────────────────────────────────────────────
+
+function intelChatSetRole(role) {
+  _intelChatRole = role;
+  document.querySelectorAll('.intel-role-btn-sm').forEach(b => {
+    b.classList.toggle('active', b.dataset.role === role);
+  });
+}
+
+// ─ Floating Chat Drawer ────────────────────────────────────────────
+
+function toggleChatDrawer() {
+  _chatDrawerOpen = !_chatDrawerOpen;
+  const drawer     = document.getElementById('chat-drawer');
+  const chatFab    = document.getElementById('chat-fab');
+  if (!drawer) return;
+  drawer.style.display = _chatDrawerOpen ? 'flex' : 'none';
+  if (_chatDrawerOpen) drawer.style.flexDirection = 'column';
+  // Hide chat FAB while drawer is open
+  if (chatFab) chatFab.style.display = _chatDrawerOpen ? 'none' : 'flex';
+  if (_chatDrawerOpen && !_drawerConvId) {
+    // Auto-create conversation for drawer
+    drawerInitConversation();
+  }
+}
+
+async function drawerInitConversation() {
+  try {
+    const r = await apiFetch(`${BASE}/ai/conversations`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: 'New conversation' })
+    });
+    if (!r.ok) return;
+    const { conversation } = await r.json();
+    _drawerConvId = conversation.id;
+    const titleEl = document.getElementById('drawer-conv-title');
+    if (titleEl) titleEl.textContent = conversation.title;
+  } catch (e) {
+    console.warn('[chat-drawer] init conversation failed:', e.message);
+  }
+}
+
+async function drawerSendMessage() {
+  const input = document.getElementById('drawer-chat-input');
+  const content = input?.value?.trim();
+  if (!content) return;
+
+  if (!_drawerConvId) {
+    await drawerInitConversation();
+  }
+  if (!_drawerConvId) return;
+
+  input.value = '';
+  input.style.height = '';
+
+  const msgs = document.getElementById('drawer-messages');
+  if (msgs) {
+    if (msgs.querySelector('[style*="Ask me anything"]')) msgs.innerHTML = '';
+    msgs.innerHTML += `<div class="chat-msg user"><div class="chat-bubble">${escHtml(content)}</div></div>`;
+    msgs.innerHTML += `<div class="chat-msg assistant" id="drawer-thinking"><div class="chat-bubble" style="color:var(--text-muted)"><i>Thinking…</i></div></div>`;
+    msgs.scrollTop = msgs.scrollHeight;
+  }
+
+  try {
+    const r = await apiFetch(`${BASE}/ai/conversations/${_drawerConvId}/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content, role: _intelChatRole })
+    });
+    if (!r.ok) throw new Error(await r.text());
+    const { assistant_message } = await r.json();
+
+    // Update title if auto-generated
+    if (assistant_message) {
+      const titleEl = document.getElementById('drawer-conv-title');
+      // Refresh conversations in the Intelligence panel if it's loaded
+      if (_intelInited) intelLoadConversations();
+    }
+
+    // Re-render messages from API for accuracy
+    const convR = await apiFetch(`${BASE}/ai/conversations/${_drawerConvId}`);
+    if (convR.ok) {
+      const { messages, conversation } = await convR.json();
+      const titleEl = document.getElementById('drawer-conv-title');
+      if (titleEl && conversation?.title) titleEl.textContent = conversation.title;
+      if (msgs) {
+        msgs.innerHTML = messages
+          .filter(m => m.role !== 'tool')
+          .map(m => `<div class="chat-msg ${m.role}">
+            ${m.content ? `<div class="chat-bubble">${escHtml(m.content)}</div>` : ''}
+            ${m.action_payload && !m.action_payload.confirmed && !m.action_payload.dismissed ? `
+              <div class="chat-action-card">
+                <div class="action-title">${m.action_payload.action === 'apply' ? 'Apply' : 'Remove'} tag: <span style="color:${m.action_payload.tag_color||'var(--teal)'}">${escHtml(m.action_payload.tag_label||'')}</span></div>
+                <div class="action-desc">${escHtml(m.action_payload.reason||'')} ${m.action_payload.match_count >= 0 ? 'Affects ' + m.action_payload.match_count + ' record(s).' : ''}</div>
+                <div style="display:flex;gap:8px">
+                  <button onclick="drawerConfirmAction(${m.id}, true)" style="padding:6px 14px;background:var(--teal);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">Confirm</button>
+                  <button onclick="drawerConfirmAction(${m.id}, false)" style="padding:6px 14px;background:var(--surface2);color:var(--text);border:1.5px solid var(--border);border-radius:6px;font-size:12px;cursor:pointer">Dismiss</button>
+                </div>
+              </div>` : ''}
+          </div>`).join('');
+        msgs.scrollTop = msgs.scrollHeight;
+      }
+    }
+  } catch (e) {
+    const thinking = document.getElementById('drawer-thinking');
+    if (thinking) thinking.outerHTML = `<div class="chat-msg assistant"><div class="chat-bubble" style="color:var(--red,#ef4444)">Error: ${escHtml(e.message)}</div></div>`;
+  }
+}
+
+async function drawerConfirmAction(messageId, confirmed) {
+  if (!_drawerConvId) return;
+  try {
+    const r = await apiFetch(`${BASE}/ai/conversations/${_drawerConvId}/confirm`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message_id: messageId, confirmed })
+    });
+    if (!r.ok) throw new Error(await r.text());
+    // Re-render drawer messages
+    const convR = await apiFetch(`${BASE}/ai/conversations/${_drawerConvId}`);
+    if (convR.ok) {
+      const { messages } = await convR.json();
+      const msgs = document.getElementById('drawer-messages');
+      if (msgs) {
+        msgs.innerHTML = messages.filter(m => m.role !== 'tool').map(m =>
+          `<div class="chat-msg ${m.role}">${m.content ? `<div class="chat-bubble">${escHtml(m.content)}</div>` : ''}</div>`
+        ).join('');
+        msgs.scrollTop = msgs.scrollHeight;
+      }
+    }
+  } catch (e) {
+    ddnlToast('Action failed: ' + e.message, 'error', 3000);
+  }
+}
+
+// Show chat FAB after the app boots
+document.addEventListener('DOMContentLoaded', () => {
+  // Auto-navigate to a view if ?view= param is present (e.g. from Admin sidebar)
+  const _urlView = new URLSearchParams(window.location.search).get('view');
+  if (_urlView) showView(_urlView);
+
+  setTimeout(() => {
+    const chatFab = document.getElementById('chat-fab');
+    if (chatFab) chatFab.style.display = (_urlView === 'intelligence') ? 'none' : 'flex';
+  }, 1000);
+});
+
+// ─ Designer: visible_to_ai toggle ────────────────────────────────────
+
+
+// ─ Designer: version field / type setting ─────────────────────────────────────
+async function dsgnSaveVersionSettings(dsName) {
+  const fieldEl = document.getElementById('dsgn-version-field');
+  const typeEl  = document.getElementById('dsgn-version-type');
+  if (!fieldEl || !typeEl) return;
+
+  const version_field = fieldEl.value || null;
+  const version_type  = typeEl.value  || 'timestamp';
+
+  try {
+    const r = await apiFetch(`${BASE}/bi/datasets/${dsName}/settings`, {
+      method:  'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ version_field, version_type })
+    });
+    if (!r.ok) throw new Error(await r.text());
+    const ds = _dsgnDatasets.find(d => d.name === dsName);
+    if (ds) { ds.version_field = version_field; ds.version_type = version_type; }
+    ddnlToast(version_field
+      ? `Version field set to "${version_field}" (${version_type})`
+      : 'Version field cleared', 'success');
+  } catch (e) {
+    ddnlToast('Failed to save version settings: ' + e.message, 'error');
+  }
+}
+
+async function dsgnToggleAi(dsName, checked) {
+  const track = document.getElementById('dsgn-toggle-ai-track');
+  const thumb = document.getElementById('dsgn-toggle-ai-thumb');
+  if (track) track.style.background = checked ? 'var(--teal)' : 'var(--border)';
+  if (thumb) thumb.style.left = checked ? '19px' : '3px';
+  try {
+    const r = await apiFetch(`${BASE}/bi/datasets/${dsName}/settings`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ visible_to_ai: checked })
+    });
+    if (!r.ok) throw new Error(await r.text());
+    const ds = _dsgnDatasets.find(d => d.name === dsName);
+    if (ds) ds.visible_to_ai = checked;
+    // Reset intelligence init so next visit re-fetches schema context
+    _intelInited = false;
+    ddnlToast(`AI visibility ${checked ? 'enabled' : 'disabled'} for ${dsName}`, 'success', 2500);
+  } catch (e) {
+    if (track) track.style.background = checked ? 'var(--border)' : 'var(--teal)';
+    if (thumb) thumb.style.left = checked ? '3px' : '19px';
+    ddnlToast('Failed to update setting: ' + e.message, 'error', 3000);
+  }
 }
 
 </script>

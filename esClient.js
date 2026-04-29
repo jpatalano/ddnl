@@ -205,8 +205,73 @@ async function bulkIndex(instanceId, datasetName, docs, idField = null) {
 }
 
 /**
- * Production-grade bulk upsert — designed for high-volume ingest where the same
- * record may arrive multiple times (nightly CSV re-sends, webhook retries, etc.).
+ * Build the Painless script source for a bulk upsert operation.
+ *
+ * Base behaviour (always):
+ *   - Merge all incoming fields into _source via putAll
+ *   - Increment __ingest_version atomically
+ *
+ * Version-guard behaviour (when versionField is provided):
+ *   - Compare ctx._source[versionField] vs params.incoming_ver
+ *   - For 'integer'  : skip (ctx.op='none') when stored value >= incoming (numeric compare)
+ *   - For 'timestamp': skip when stored value >= incoming (lexicographic ISO 8601 compare —
+ *                       valid because ISO strings sort correctly without parsing)
+ *   - When the doc is new (no stored value) always write — the upsert path handles that.
+ *
+ * The upsert block (doc-not-found path) always writes regardless of version guard because
+ * there is nothing stored to compare against.
+ */
+function _buildUpsertScript(versionField, versionType) {
+  if (!versionField) {
+    // No version guard — plain merge + counter
+    return [
+      'ctx._source.putAll(params.fields);',
+      'ctx._source.__ingest_version = (ctx._source.__ingest_version != null',
+      '  ? (int)ctx._source.__ingest_version + 1 : 1);'
+    ].join(' ');
+  }
+
+  if (versionType === 'integer') {
+    // Numeric guard: skip if stored int >= incoming int
+    return [
+      'if (ctx._source.containsKey(params.ver_field)) {',
+      '  def stored = ctx._source[params.ver_field];',
+      '  if (stored != null) {',
+      '    long storedVal = (stored instanceof Long || stored instanceof Integer)',
+      '      ? ((Number)stored).longValue() : Long.parseLong(stored.toString());',
+      '    long incomingVal = params.incoming_ver instanceof Long || params.incoming_ver instanceof Integer',
+      '      ? ((Number)params.incoming_ver).longValue() : Long.parseLong(params.incoming_ver.toString());',
+      '    if (storedVal >= incomingVal) { ctx.op = "none"; return; }',
+      '  }',
+      '}',
+      'ctx._source.putAll(params.fields);',
+      'ctx._source.__ingest_version = (ctx._source.__ingest_version != null',
+      '  ? (int)ctx._source.__ingest_version + 1 : 1);'
+    ].join(' ');
+  }
+
+  // Default: timestamp guard — ISO 8601 strings are lexicographically comparable
+  return [
+    'if (ctx._source.containsKey(params.ver_field)) {',
+    '  def stored = ctx._source[params.ver_field];',
+    '  if (stored != null && stored.toString().compareTo(params.incoming_ver.toString()) >= 0) {',
+    '    ctx.op = "none"; return;',
+    '  }',
+    '}',
+    'ctx._source.putAll(params.fields);',
+    'ctx._source.__ingest_version = (ctx._source.__ingest_version != null',
+    '  ? (int)ctx._source.__ingest_version + 1 : 1);'
+  ].join(' ');
+}
+
+/**
+ * Bulk upsert docs into an ES alias using scripted updates.
+ *
+ * Options:
+ *   versionField {string|null} — field name in each doc that carries the version/timestamp.
+ *                                When set, incoming rows are skipped (ctx.op='none') if the
+ *                                stored value is >= the incoming value.
+ *   versionType  {'timestamp'|'integer'} — how to compare version values.
  *
  * Differences from bulkIndex:
  *  - idField is REQUIRED — upsert without an id field is meaningless for dedup.
@@ -216,9 +281,9 @@ async function bulkIndex(instanceId, datasetName, docs, idField = null) {
  *    250K-row nightly CSV doesn't blow the ES request size limit.
  *  - Returns a richer result with per-chunk timing for structured logging.
  *
- * Returns: { indexed, failed, errors[], chunks, durationMs }
+ * Returns: { indexed, skipped, failed, errors[], chunks, durationMs }
  */
-async function bulkUpsert(instanceId, datasetName, docs, idField) {
+async function bulkUpsert(instanceId, datasetName, docs, idField, versionField = null, versionType = 'timestamp') {
   if (!idField) throw new Error('bulkUpsert requires idField — use bulkIndex for append-only ingest');
 
   const es    = getClient();
@@ -226,7 +291,10 @@ async function bulkUpsert(instanceId, datasetName, docs, idField) {
   const now   = new Date().toISOString();
   const t0    = Date.now();
 
+  const scriptSource = _buildUpsertScript(versionField, versionType);
+
   let totalIndexed = 0;
+  let totalSkipped = 0;
   let totalFailed  = 0;
   const allErrors  = [];
   let chunkCount   = 0;
@@ -249,26 +317,24 @@ async function bulkUpsert(instanceId, datasetName, docs, idField) {
         return [{ index: { _index: alias } }, enriched];
       }
 
-      // Scripted update: set all fields, increment __ingest_version
-      // If doc doesn't exist yet (upsert), create with version=1
+      // Scripted update: merge all fields, optionally guard by version, increment __ingest_version.
+      // If doc doesn't exist yet (upsert path) always write — nothing stored to compare against.
       const fields = applyStatusDefault({
         ...doc,
         __instance_id: instanceId,
         __ingested_at: now
       });
 
+      const scriptParams = { fields };
+      if (versionField) {
+        scriptParams.ver_field    = versionField;
+        scriptParams.incoming_ver = doc[versionField] ?? null;
+      }
+
       return [
         { update: { _index: alias, _id: String(docId) } },
         {
-          script: {
-            source: [
-              'ctx._source.putAll(params.fields);',
-              'ctx._source.__ingest_version = (ctx._source.__ingest_version != null',
-              '  ? (int)ctx._source.__ingest_version + 1 : 1);'
-            ].join(' '),
-            lang:   'painless',
-            params: { fields }
-          },
+          script: { source: scriptSource, lang: 'painless', params: scriptParams },
           upsert: { ...fields, __ingest_version: 1 }
         }
       ];
@@ -276,11 +342,17 @@ async function bulkUpsert(instanceId, datasetName, docs, idField) {
 
     const result = await es.bulk({ refresh: false, body });  // refresh:false for throughput
 
-    const failed = (result.items || []).filter(i => (i.update || i.index)?.error);
-    totalIndexed += chunk.length - failed.length;
-    totalFailed  += failed.length;
-    if (failed.length) {
-      allErrors.push(...failed.slice(0, 5).map(i => (i.update || i.index).error));
+    for (const item of (result.items || [])) {
+      const op = item.update || item.index;
+      if (op?.error) {
+        totalFailed++;
+        if (allErrors.length < 20) allErrors.push(op.error);
+      } else if (op?.result === 'noop') {
+        // ES returns result='noop' when ctx.op='none' — this is our version-skipped row
+        totalSkipped++;
+      } else {
+        totalIndexed++;
+      }
     }
   }
 
@@ -291,8 +363,9 @@ async function bulkUpsert(instanceId, datasetName, docs, idField) {
 
   return {
     indexed:    totalIndexed,
+    skipped:    totalSkipped,
     failed:     totalFailed,
-    errors:     allErrors.slice(0, 20),
+    errors:     allErrors,
     chunks:     chunkCount,
     durationMs: Date.now() - t0
   };

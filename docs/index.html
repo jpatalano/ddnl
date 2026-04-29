@@ -217,6 +217,14 @@
       <a class="nav-item" onclick="scrollTo('ep-get-record')"><span class="method-badge get">GET</span>Fetch Record</a>
       <a class="nav-item" onclick="scrollTo('ep-delete')"><span class="method-badge post">POST</span>Soft Delete</a>
 
+      <div class="nav-section">Tags</div>
+      <a class="nav-item" onclick="scrollTo('tags-overview')">Overview</a>
+      <a class="nav-item" onclick="scrollTo('ep-list-tags')"><span class="method-badge get">GET</span>List Tags</a>
+      <a class="nav-item" onclick="scrollTo('ep-create-tag')"><span class="method-badge post">POST</span>Create Tag</a>
+      <a class="nav-item" onclick="scrollTo('ep-tag-rules')"><span class="method-badge post">POST</span>Tag Rules</a>
+      <a class="nav-item" onclick="scrollTo('ep-assign-tag')"><span class="method-badge post">POST</span>Assign Tag</a>
+      <a class="nav-item" onclick="scrollTo('ep-remove-tag')"><span class="method-badge del">DEL</span>Remove Tag</a>
+
       <div class="nav-section">Relations</div>
       <a class="nav-item" onclick="scrollTo('ep-list-relations')"><span class="method-badge get">GET</span>List Relations</a>
       <a class="nav-item" onclick="scrollTo('ep-declare-relation')"><span class="method-badge post">POST</span>Declare Relation</a>
@@ -714,6 +722,177 @@ Content-Type: application/json
   "deleted": 14,
   "noops":   0
 }</pre>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════
+         TAGS
+    ══════════════════════════════════════════════════════════════ -->
+    <span class="section-anchor" id="tags-overview"></span>
+    <h2>Tags</h2>
+    <p>Tags are labels attached to individual records. They are first-class filter and grouping dimensions — <code>__tags</code> appears on every tagged record and works in Explorer, reports, and dashboard filters exactly like any other field.</p>
+
+    <h3>Tag types</h3>
+    <table>
+      <tr><th>Type</th><th>Who manages it</th><th>Lifecycle</th></tr>
+      <tr><td>user</td><td><strong>Humans.</strong> Assigned and removed manually via API or UI.</td><td>Sticky — the system never touches user tags.</td></tr>
+      <tr><td>system</td><td><strong>Rule engine.</strong> Admin-defined rules with apply and remove conditions.</td><td>Automatic — applied on a schedule or triggered by an ingest event.</td></tr>
+    </table>
+
+    <div class="callout">
+      <strong>How system tags work:</strong> A system tag like <em>Lost Tuna</em> has an <em>apply</em> rule (schedule: customer spend &gt; X and no job in Y months) and a <em>remove</em> rule (on_ingest: when a job arrives for that customer). Once declared, the engine handles everything automatically.
+    </div>
+
+    <!-- List Tags -->
+    <span class="section-anchor" id="ep-list-tags"></span>
+    <div class="endpoint">
+      <div class="endpoint-header" onclick="toggle(this)">
+        <span class="method-tag GET">GET</span>
+        <span class="endpoint-path">/api/ingest/admin/tags</span>
+        <span class="endpoint-desc">List all tags, optionally filter by dataset</span>
+      </div>
+      <div class="endpoint-body">
+        <p style="margin-top:16px">Returns all active tags for the client. Pass <code>?dataset=customers</code> to filter by target dataset.</p>
+        <h3>Example</h3>
+        <pre>GET /api/ingest/admin/tags?dataset=customers
+X-Api-Key: ik_your_key</pre>
+        <h3>Response</h3>
+        <pre>{
+  "success": true,
+  "tags": [
+    { "id": 1, "name": "lost_tuna", "label": "Lost Tuna", "color": "#ef4444", "tag_type": "system", "target_dataset": "customers" },
+    { "id": 2, "name": "high_maintenance", "label": "High Maintenance", "color": "#f59e0b", "tag_type": "user", "target_dataset": "customers" }
+  ]
+}</pre>
+      </div>
+    </div>
+
+    <!-- Create Tag -->
+    <span class="section-anchor" id="ep-create-tag"></span>
+    <div class="endpoint">
+      <div class="endpoint-header" onclick="toggle(this)">
+        <span class="method-tag POST">POST</span>
+        <span class="endpoint-path">/api/ingest/admin/tags</span>
+        <span class="endpoint-desc">Create a tag</span>
+      </div>
+      <div class="endpoint-body">
+        <p style="margin-top:16px">Creates a tag in the registry. For <code>system</code> tags, add rules separately after creation.</p>
+        <h3>Request body</h3>
+        <table>
+          <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+          <tr><td>name <span class="label required">required</span></td><td>string</td><td>Machine key. e.g. <code>"lost_tuna"</code></td></tr>
+          <tr><td>label <span class="label required">required</span></td><td>string</td><td>Display name. e.g. <code>"Lost Tuna"</code></td></tr>
+          <tr><td>target_dataset <span class="label required">required</span></td><td>string</td><td>Dataset this tag applies to. e.g. <code>"customers"</code></td></tr>
+          <tr><td>tag_type</td><td>string</td><td><code>user</code> (default) or <code>system</code></td></tr>
+          <tr><td>color</td><td>string</td><td>Hex color for UI pills. Default <code>#6366f1</code></td></tr>
+          <tr><td>description</td><td>string</td><td>Optional description shown in admin UI</td></tr>
+        </table>
+        <h3>Example</h3>
+        <pre>POST /api/ingest/admin/tags
+X-Api-Key: ik_your_key
+
+{
+  "name":           "lost_tuna",
+  "label":          "Lost Tuna",
+  "target_dataset": "customers",
+  "tag_type":       "system",
+  "color":          "#ef4444",
+  "description":    "High-spend customer with no recent jobs"
+}</pre>
+      </div>
+    </div>
+
+    <!-- Tag Rules -->
+    <span class="section-anchor" id="ep-tag-rules"></span>
+    <div class="endpoint">
+      <div class="endpoint-header" onclick="toggle(this)">
+        <span class="method-tag POST">POST</span>
+        <span class="endpoint-path">/api/ingest/admin/tags/<span class="param">:tagId</span>/rules</span>
+        <span class="endpoint-desc">Add an apply or remove rule to a system tag</span>
+      </div>
+      <div class="endpoint-body">
+        <p style="margin-top:16px">Rules define when the system tag engine applies or removes a tag. A tag can have multiple rules. Rules use the same <code>{ segmentName, operator, value }</code> filter shape used everywhere else in the platform.</p>
+        <h3>Request body</h3>
+        <table>
+          <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+          <tr><td>rule_action <span class="label required">required</span></td><td>string</td><td><code>apply</code> or <code>remove</code></td></tr>
+          <tr><td>trigger_type <span class="label required">required</span></td><td>string</td><td><code>schedule</code> (nightly) or <code>on_ingest</code> (fires after a dataset ingest)</td></tr>
+          <tr><td>trigger_dataset</td><td>string</td><td>Required for <code>on_ingest</code>. The dataset whose ingest fires this rule. e.g. <code>"jobs"</code></td></tr>
+          <tr><td>conditions</td><td>array</td><td>Filter conditions evaluated against the <strong>target dataset</strong> records. See Filter Syntax. Pre-computed fields expected on the record.</td></tr>
+        </table>
+        <h3>Example — Lost Tuna apply rule (nightly)</h3>
+        <pre>POST /api/ingest/admin/tags/1/rules
+X-Api-Key: ik_your_key
+
+{
+  "rule_action":  "apply",
+  "trigger_type": "schedule",
+  "conditions": [
+    { "segmentName": "TotalSpend",   "operator": "gte", "value": 50000 },
+    { "segmentName": "LastJobDate",  "operator": "lte", "value": "2025-10-29" }
+  ]
+}</pre>
+        <h3>Example — Lost Tuna remove rule (on job ingest)</h3>
+        <pre>{
+  "rule_action":    "remove",
+  "trigger_type":   "on_ingest",
+  "trigger_dataset":"jobs",
+  "conditions":     []
+}</pre>
+        <p>Empty conditions means: remove the tag from any customer record that has it whenever a jobs ingest fires. The engine only processes records currently holding the tag.</p>
+        <h3>Other endpoints</h3>
+        <table>
+          <tr><th>Method</th><th>Path</th><th>Description</th></tr>
+          <tr><td><span class="ftype">GET</span></td><td><code>/admin/tags/:tagId/rules</code></td><td>List all rules for a tag</td></tr>
+          <tr><td><span class="ftype">PATCH</span></td><td><code>/admin/tags/:tagId/rules/:ruleId</code></td><td>Update conditions or toggle active</td></tr>
+          <tr><td><span class="ftype">DELETE</span></td><td><code>/admin/tags/:tagId/rules/:ruleId</code></td><td>Remove a rule</td></tr>
+          <tr><td><span class="ftype">POST</span></td><td><code>/admin/tags/:tagId/run</code></td><td>Manually trigger all rules for a tag (testing)</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <!-- Assign Tag -->
+    <span class="section-anchor" id="ep-assign-tag"></span>
+    <div class="endpoint">
+      <div class="endpoint-header" onclick="toggle(this)">
+        <span class="method-tag POST">POST</span>
+        <span class="endpoint-path">/api/ingest/<span class="param">:dataset</span>/records/<span class="param">:recordId</span>/tags</span>
+        <span class="endpoint-desc">Assign a user tag to a record</span>
+      </div>
+      <div class="endpoint-body">
+        <p style="margin-top:16px">Manually assigns a <code>user</code> tag to a record. The system never modifies user tags.</p>
+        <div class="callout warn"><strong>User tags only.</strong> System tags are managed exclusively by the rule engine and cannot be assigned via this endpoint.</div>
+        <h3>Request body</h3>
+        <table>
+          <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+          <tr><td>tagId <span class="label required">required</span></td><td>integer</td><td>ID of the user tag to assign</td></tr>
+          <tr><td>assignedBy</td><td>string</td><td>Identifier of the person assigning the tag. e.g. user ID or email. Defaults to <code>"user"</code></td></tr>
+        </table>
+        <h3>Example</h3>
+        <pre>POST /api/ingest/customers/records/a3f9c12e.../tags
+X-Api-Key: ik_your_key
+
+{ "tagId": 2, "assignedBy": "jane@example.com" }</pre>
+        <h3>List tags on a record</h3>
+        <pre>GET /api/ingest/customers/records/a3f9c12e.../tags
+X-Api-Key: ik_your_key</pre>
+      </div>
+    </div>
+
+    <!-- Remove Tag -->
+    <span class="section-anchor" id="ep-remove-tag"></span>
+    <div class="endpoint">
+      <div class="endpoint-header" onclick="toggle(this)">
+        <span class="method-tag DELETE">DELETE</span>
+        <span class="endpoint-path">/api/ingest/<span class="param">:dataset</span>/records/<span class="param">:recordId</span>/tags/<span class="param">:tagId</span></span>
+        <span class="endpoint-desc">Remove a user tag from a record</span>
+      </div>
+      <div class="endpoint-body">
+        <p style="margin-top:16px">Removes a user-assigned tag. The <code>__tags</code> field on the ES record is updated immediately.</p>
+        <h3>Example</h3>
+        <pre>DELETE /api/ingest/customers/records/a3f9c12e.../tags/2
+X-Api-Key: ik_your_key</pre>
+        <pre>{ "success": true }</pre>
       </div>
     </div>
 

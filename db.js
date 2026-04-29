@@ -630,6 +630,152 @@ const MIGRATIONS = [
   `CREATE INDEX IF NOT EXISTS idx_system_tag_rules_tag     ON system_tag_rules(tag_id)`,
   `CREATE INDEX IF NOT EXISTS idx_system_tag_rules_client  ON system_tag_rules(client_id)`,
   `CREATE INDEX IF NOT EXISTS idx_system_tag_rules_trigger ON system_tag_rules(trigger_type, trigger_dataset)`,
+
+  // 021 — visible_to_ai flag on dataset_definitions
+  // Controls whether a dataset is included in the AI Chat schema context + Advise queries.
+  `ALTER TABLE dataset_definitions ADD COLUMN IF NOT EXISTS visible_to_ai BOOLEAN NOT NULL DEFAULT FALSE`,
+  // 021 backfill — enable AI visibility for all existing datasets
+  `UPDATE dataset_definitions SET visible_to_ai = TRUE WHERE visible_to_ai = FALSE`,
+
+  // 021a — advise_snapshots: one row per scheduled advise run per client
+  // Stores the full findings array as JSONB so the UI reads from cache, not live ES.
+  `CREATE TABLE IF NOT EXISTS advise_snapshots (
+    id            SERIAL PRIMARY KEY,
+    client_id     VARCHAR(255) NOT NULL REFERENCES clients(client_id) ON DELETE CASCADE,
+    ran_at        TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    finding_count INTEGER      NOT NULL DEFAULT 0,
+    duration_ms   INTEGER,
+    status        VARCHAR(32)  NOT NULL DEFAULT 'ok'  -- 'ok' | 'partial' | 'error'
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_advise_snapshots_client ON advise_snapshots(client_id, ran_at DESC)`,
+
+  // 021b — advise_findings: individual finding rows linked to a snapshot
+  //
+  // category   : 'equipment' | 'yard' | 'customer' | 'financial'
+  // severity   : 'critical' | 'watch' | 'opportunity'
+  // metric_key : machine key matching a KPI tile type (e.g. 'utilization_rate', 'idle_days')
+  //              Used by the UI to show badge icons on matching tiles.
+  // entity_type: what the finding is about (e.g. 'equipment', 'yard', 'customer')
+  // entity_id  : the ES _id or record identifier
+  // entity_label: human-readable name (e.g. 'Crane #4412', 'Denver Yard')
+  // data_json  : raw numbers/context used to generate the recommendation
+  // recommendation: LLM-generated text
+  `CREATE TABLE IF NOT EXISTS advise_findings (
+    id              SERIAL PRIMARY KEY,
+    snapshot_id     INTEGER      NOT NULL REFERENCES advise_snapshots(id) ON DELETE CASCADE,
+    client_id       VARCHAR(255) NOT NULL REFERENCES clients(client_id) ON DELETE CASCADE,
+    category        VARCHAR(32)  NOT NULL,
+    severity        VARCHAR(16)  NOT NULL DEFAULT 'watch'
+      CHECK (severity IN ('critical', 'watch', 'opportunity')),
+    metric_key      VARCHAR(128) NOT NULL,
+    entity_type     VARCHAR(64),
+    entity_id       VARCHAR(255),
+    entity_label    VARCHAR(255),
+    data_json       JSONB        NOT NULL DEFAULT '{}',
+    recommendation  TEXT,
+    created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_advise_findings_snapshot  ON advise_findings(snapshot_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_advise_findings_client    ON advise_findings(client_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_advise_findings_category  ON advise_findings(client_id, category)`,
+  `CREATE INDEX IF NOT EXISTS idx_advise_findings_metric    ON advise_findings(client_id, metric_key)`,
+
+  // 022 — ai_conversations: saved chat sessions per client/user
+  `CREATE TABLE IF NOT EXISTS ai_conversations (
+    id          SERIAL PRIMARY KEY,
+    client_id   VARCHAR(255) NOT NULL REFERENCES clients(client_id) ON DELETE CASCADE,
+    created_by  VARCHAR(255),           -- username or entra_oid
+    title       VARCHAR(255) NOT NULL DEFAULT 'New conversation',
+    created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    updated_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_ai_conversations_client ON ai_conversations(client_id, updated_at DESC)`,
+
+  // 022b — ai_messages: individual messages within a conversation
+  //
+  // role       : 'user' | 'assistant' | 'tool'
+  // content    : message text (nullable for pure tool-call messages)
+  // tool_calls : JSONB — AI-emitted tool calls (query intent, tag actions, etc.)
+  // tool_result: JSONB — result of executing a tool call
+  // action_payload: JSONB — staged confirmation card data (tag apply/remove pending user confirm)
+  `CREATE TABLE IF NOT EXISTS ai_messages (
+    id              SERIAL PRIMARY KEY,
+    conversation_id INTEGER      NOT NULL REFERENCES ai_conversations(id) ON DELETE CASCADE,
+    role            VARCHAR(16)  NOT NULL CHECK (role IN ('user', 'assistant', 'tool')),
+    content         TEXT,
+    tool_calls      JSONB        DEFAULT NULL,
+    tool_result     JSONB        DEFAULT NULL,
+    action_payload  JSONB        DEFAULT NULL,
+    created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_ai_messages_conversation ON ai_messages(conversation_id, created_at ASC)`,
+
+  // 023b — instance_settings: key/value store for per-instance config (LLM keys, etc.)
+  //         key   = namespaced string, e.g. 'ai.provider', 'ai.api_key', 'ai.model'
+  //         value = TEXT (encrypted at app layer for sensitive values)
+  `CREATE TABLE IF NOT EXISTS instance_settings (
+    id           SERIAL PRIMARY KEY,
+    client_id    VARCHAR(255) NOT NULL REFERENCES clients(client_id) ON DELETE CASCADE,
+    key          VARCHAR(255) NOT NULL,
+    value        TEXT,
+    updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(client_id, key)
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_instance_settings_client ON instance_settings(client_id)`,
+
+  // 023a — version_field: optional column name in each doc that carries a version/timestamp
+  //         version_type: 'timestamp' (ISO 8601 string comparison) or 'integer'
+  //         At upsert time, incoming row is skipped (ctx.op='none') if stored value >= incoming.
+  `ALTER TABLE dataset_definitions ADD COLUMN IF NOT EXISTS version_field VARCHAR(255) DEFAULT NULL`,
+  `ALTER TABLE dataset_definitions ADD COLUMN IF NOT EXISTS version_type  VARCHAR(20)  NOT NULL DEFAULT 'timestamp'`,
+
+  // 024 — pinned findings: users can pin individual Advise findings to the
+  //        Recommendations tab so they persist across snapshot runs.
+  `ALTER TABLE advise_findings ADD COLUMN IF NOT EXISTS pinned BOOLEAN NOT NULL DEFAULT FALSE`,
+  `ALTER TABLE advise_findings ADD COLUMN IF NOT EXISTS pinned_at TIMESTAMPTZ DEFAULT NULL`,
+  `ALTER TABLE advise_findings ADD COLUMN IF NOT EXISTS pinned_note TEXT DEFAULT NULL`,
+  `CREATE INDEX IF NOT EXISTS idx_advise_findings_pinned ON advise_findings(client_id, pinned) WHERE pinned = TRUE`,
+
+  // 025a — advise_rule_templates: global canned rule definitions (read-only to instances).
+  //   rule_type    : machine key matching an engine handler (idle_days, compliance_expiry, etc.)
+  //   dataset_hint : which dataset name the rule prefers (engine looks for it in client datasets)
+  //   config_schema: JSON Schema describing configurable params (thresholds, field mappings)
+  //   default_config: default param values used when no instance override exists
+  //   is_active    : soft-disable a global rule without deleting it
+  `CREATE TABLE IF NOT EXISTS advise_rule_templates (
+    id             SERIAL PRIMARY KEY,
+    rule_type      VARCHAR(64)  NOT NULL UNIQUE,
+    label          VARCHAR(255) NOT NULL,
+    description    TEXT,
+    category       VARCHAR(32)  NOT NULL,
+    dataset_hint   VARCHAR(255),
+    config_schema  JSONB        NOT NULL DEFAULT '{}',
+    default_config JSONB        NOT NULL DEFAULT '{}',
+    is_active      BOOLEAN      NOT NULL DEFAULT TRUE,
+    sort_order     INTEGER      NOT NULL DEFAULT 0,
+    created_at     TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+  )`,
+
+  // 025b — advise_rules: per-instance rule overrides + custom rules.
+  //   global_template_id: NULL = custom rule, non-null = override of a global template
+  //   enabled           : instance can disable a global template or their own rules
+  //   config            : merged on top of template default_config at run time
+  `CREATE TABLE IF NOT EXISTS advise_rules (
+    id                  SERIAL PRIMARY KEY,
+    client_id           VARCHAR(255) NOT NULL REFERENCES clients(client_id) ON DELETE CASCADE,
+    global_template_id  INTEGER      REFERENCES advise_rule_templates(id) ON DELETE SET NULL,
+    rule_type           VARCHAR(64)  NOT NULL,
+    label               VARCHAR(255) NOT NULL,
+    description         TEXT,
+    category            VARCHAR(32)  NOT NULL,
+    dataset_hint        VARCHAR(255),
+    config              JSONB        NOT NULL DEFAULT '{}',
+    enabled             BOOLEAN      NOT NULL DEFAULT TRUE,
+    created_at          TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    updated_at          TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    UNIQUE(client_id, rule_type)
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_advise_rules_client ON advise_rules(client_id)`,
 ];
 
 async function initDb() {
