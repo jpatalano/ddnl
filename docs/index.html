@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DDNL Dataset API — Documentation</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --navy:   #0f1e2e;
+      --navy2:  #162436;
+      --teal:   #00bfa5;
+      --teal-dim: #00bfa520;
+      --text:   #e2e8f0;
+      --muted:  #94a3b8;
+      --border: #1e3048;
+      --surface: #162436;
+      --surface2: #1a2d42;
+      --code-bg: #0d1825;
+      --tag-get:    #22c55e;
+      --tag-post:   #3b82f6;
+      --tag-delete: #ef4444;
+      --sidebar-w:  260px;
+      --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      --mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+    }
+
+    html, body { height: 100%; background: var(--navy); color: var(--text); font-family: var(--font); font-size: 15px; line-height: 1.6; }
+
+    /* ── Layout ── */
+    .layout { display: flex; height: 100vh; }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      width: var(--sidebar-w);
+      min-width: var(--sidebar-w);
+      background: var(--navy2);
+      border-right: 1px solid var(--border);
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+    }
+    .sidebar-brand {
+      padding: 20px 20px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .sidebar-brand .logo { font-size: 13px; font-weight: 700; color: var(--teal); letter-spacing: .08em; text-transform: uppercase; }
+    .sidebar-brand .subtitle { font-size: 11px; color: var(--muted); margin-top: 2px; }
+    .sidebar-brand .version { display: inline-block; font-size: 10px; background: var(--teal-dim); color: var(--teal); border-radius: 4px; padding: 1px 7px; margin-top: 6px; }
+
+    .sidebar nav { flex: 1; padding: 12px 0; }
+    .nav-section { padding: 14px 20px 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
+    .nav-item {
+      display: block; padding: 7px 20px; font-size: 13px; color: var(--muted);
+      text-decoration: none; cursor: pointer; transition: color .15s, background .15s;
+      border-left: 2px solid transparent;
+    }
+    .nav-item:hover { color: var(--text); background: #ffffff08; }
+    .nav-item.active { color: var(--teal); border-left-color: var(--teal); background: var(--teal-dim); }
+    .nav-item .method-badge {
+      display: inline-block; font-size: 9px; font-weight: 700; padding: 1px 5px;
+      border-radius: 3px; margin-right: 6px; font-family: var(--mono);
+      vertical-align: middle;
+    }
+    .get { background: #22c55e22; color: var(--tag-get); }
+    .post { background: #3b82f622; color: var(--tag-post); }
+    .del  { background: #ef444422; color: var(--tag-delete); }
+
+    /* ── Main content ── */
+    .main {
+      flex: 1;
+      overflow-y: auto;
+      padding: 40px 48px 80px;
+      max-width: 880px;
+    }
+
+    h1 { font-size: 28px; font-weight: 700; color: var(--text); margin-bottom: 8px; }
+    h2 { font-size: 20px; font-weight: 700; color: var(--text); margin: 48px 0 16px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+    h3 { font-size: 15px; font-weight: 600; color: var(--text); margin: 28px 0 10px; }
+    p  { color: var(--muted); margin-bottom: 12px; }
+    a  { color: var(--teal); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* ── Endpoint card ── */
+    .endpoint {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      margin-bottom: 20px;
+      overflow: hidden;
+    }
+    .endpoint-header {
+      display: flex; align-items: center; gap: 12px;
+      padding: 14px 20px; cursor: pointer; user-select: none;
+      transition: background .15s;
+    }
+    .endpoint-header:hover { background: var(--surface2); }
+    .method-tag {
+      font-size: 11px; font-weight: 700; font-family: var(--mono);
+      padding: 3px 8px; border-radius: 5px; min-width: 52px; text-align: center;
+    }
+    .method-tag.GET    { background: #22c55e22; color: var(--tag-get); }
+    .method-tag.POST   { background: #3b82f622; color: var(--tag-post); }
+    .method-tag.DELETE { background: #ef444422; color: var(--tag-delete); }
+    .endpoint-path { font-family: var(--mono); font-size: 14px; color: var(--text); flex: 1; }
+    .endpoint-path .param { color: var(--teal); }
+    .endpoint-desc { font-size: 12px; color: var(--muted); }
+    .endpoint-body { padding: 0 20px 20px; border-top: 1px solid var(--border); }
+    .endpoint-body.hidden { display: none; }
+
+    /* ── Tables ── */
+    table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px; }
+    th { text-align: left; padding: 8px 12px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); border-bottom: 1px solid var(--border); }
+    td { padding: 9px 12px; border-bottom: 1px solid #1e304860; vertical-align: top; color: var(--muted); }
+    td:first-child { font-family: var(--mono); font-size: 12px; color: var(--teal); white-space: nowrap; }
+    td strong { color: var(--text); font-weight: 500; }
+    tr:last-child td { border-bottom: none; }
+
+    /* ── Code blocks ── */
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      overflow-x: auto;
+      font-family: var(--mono);
+      font-size: 12.5px;
+      line-height: 1.6;
+      color: #cdd9e5;
+      margin: 12px 0;
+    }
+    code { font-family: var(--mono); font-size: 12.5px; }
+    :not(pre) > code {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 1px 6px;
+      color: var(--teal);
+    }
+
+    /* ── Labels ── */
+    .label {
+      display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 7px;
+      border-radius: 4px; margin-left: 6px; vertical-align: middle;
+    }
+    .label.required { background: #ef444422; color: #ef4444; }
+    .label.optional { background: #94a3b822; color: #94a3b8; }
+    .label.new { background: #a78bfa22; color: #a78bfa; }
+
+    /* ── Callout ── */
+    .callout {
+      border-left: 3px solid var(--teal);
+      background: var(--teal-dim);
+      border-radius: 0 8px 8px 0;
+      padding: 12px 16px;
+      margin: 16px 0;
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .callout.warn { border-color: #f59e0b; background: #f59e0b18; }
+    .callout strong { color: var(--text); }
+
+    /* ── Field type pills ── */
+    .ftype {
+      display: inline-block; font-size: 10px; font-family: var(--mono);
+      padding: 1px 6px; border-radius: 4px; background: #ffffff10; color: var(--muted);
+    }
+
+    /* ── Hero ── */
+    .hero { margin-bottom: 32px; }
+    .hero p { font-size: 16px; color: var(--muted); margin-top: 8px; }
+    .base-url {
+      display: flex; align-items: center; gap: 10px;
+      background: var(--code-bg); border: 1px solid var(--border);
+      border-radius: 8px; padding: 12px 16px; margin: 20px 0;
+    }
+    .base-url .label-text { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); min-width: 70px; }
+    .base-url code { font-size: 13px; }
+
+    /* ── Section anchor scroll ── */
+    .section-anchor { display: block; position: relative; top: -24px; visibility: hidden; }
+  </style>
+</head>
+<body>
+<div class="layout">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="logo">DDNL</div>
+      <div class="subtitle">Dataset API Reference</div>
+      <span class="version">v1</span>
+    </div>
+    <nav>
+      <div class="nav-section">Overview</div>
+      <a class="nav-item" onclick="scrollTo('overview')">Authentication</a>
+      <a class="nav-item" onclick="scrollTo('field-types')">Field Types</a>
+      <a class="nav-item" onclick="scrollTo('filter-syntax')">Filter Syntax</a>
+
+      <div class="nav-section">Datasets</div>
+      <a class="nav-item" onclick="scrollTo('ep-create-dataset')"><span class="method-badge post">POST</span>Create Dataset</a>
+      <a class="nav-item" onclick="scrollTo('ep-list-datasets')"><span class="method-badge get">GET</span>List Datasets</a>
+      <a class="nav-item" onclick="scrollTo('ep-get-dataset')"><span class="method-badge get">GET</span>Get Dataset</a>
+      <a class="nav-item" onclick="scrollTo('ep-get-fields')"><span class="method-badge get">GET</span>Get Fields</a>
+      <a class="nav-item" onclick="scrollTo('ep-publish-schema')"><span class="method-badge post">POST</span>Publish Schema</a>
+
+      <div class="nav-section">Data Ingest</div>
+      <a class="nav-item" onclick="scrollTo('ep-bulk')"><span class="method-badge post">POST</span>Bulk Upsert</a>
+      <a class="nav-item" onclick="scrollTo('ep-single')"><span class="method-badge post">POST</span>Single Upsert</a>
+      <a class="nav-item" onclick="scrollTo('ep-status')"><span class="method-badge get">GET</span>Dataset Status</a>
+
+      <div class="nav-section">Records</div>
+      <a class="nav-item" onclick="scrollTo('ep-get-record')"><span class="method-badge get">GET</span>Fetch Record</a>
+      <a class="nav-item" onclick="scrollTo('ep-delete')"><span class="method-badge post">POST</span>Soft Delete</a>
+
+      <div class="nav-section">API Keys</div>
+      <a class="nav-item" onclick="scrollTo('ep-create-key')"><span class="method-badge post">POST</span>Create Key</a>
+      <a class="nav-item" onclick="scrollTo('ep-list-keys')"><span class="method-badge get">GET</span>List Keys</a>
+      <a class="nav-item" onclick="scrollTo('ep-revoke-key')"><span class="method-badge del">DEL</span>Revoke Key</a>
+    </nav>
+  </aside>
+
+  <!-- Main -->
+  <main class="main" id="main-content">
+
+    <!-- Overview -->
+    <span class="section-anchor" id="overview"></span>
+    <div class="hero">
+      <h1>Dataset API</h1>
+      <p>Build and populate datasets that power dashboards, reports, and analytics in DDNL. All operations are scoped to your instance — your API key determines which tenant's data you access.</p>
+    </div>
+
+    <div class="base-url">
+      <span class="label-text">Base URL</span>
+      <code>https://fcc-bi.staturedev.com</code>
+    </div>
+
+    <h3>Authentication</h3>
+    <p>Every request must include your API key in the <code>X-Api-Key</code> header. The key encodes your tenant identity — no additional tenant ID is needed.</p>
+    <pre>X-Api-Key: ik_your_api_key_here</pre>
+    <div class="callout">
+      <strong>Key scoping:</strong> Each API key is bound to a single client (tenant). All reads and writes through a key are automatically isolated to that client's data.
+    </div>
+
+    <!-- Field Types -->
+    <span class="section-anchor" id="field-types"></span>
+    <h2>Field Types</h2>
+    <p>Used when defining schema fields in <code>POST /admin/datasets</code> and <code>POST /admin/datasets/:name/publish</code>.</p>
+    <table>
+      <tr><th>Type</th><th>Description</th><th>Example values</th></tr>
+      <tr><td>keyword</td><td><strong>Exact-match string.</strong> Use for IDs, status codes, categories, names.</td><td><code>"Active"</code>, <code>"INV-001"</code></td></tr>
+      <tr><td>text</td><td><strong>Full-text string.</strong> Use for free-form notes or descriptions.</td><td><code>"Delivered on time"</code></td></tr>
+      <tr><td>number</td><td><strong>Numeric value.</strong> Integers and decimals. Used for metrics and aggregations.</td><td><code>1250.00</code>, <code>42</code></td></tr>
+      <tr><td>date</td><td><strong>ISO 8601 date/datetime.</strong> Used as the primary time axis for charts.</td><td><code>"2026-04-01"</code>, <code>"2026-04-01T08:00:00Z"</code></td></tr>
+      <tr><td>boolean</td><td><strong>True/false flag.</strong></td><td><code>true</code>, <code>false</code></td></tr>
+    </table>
+
+    <!-- Filter Syntax -->
+    <span class="section-anchor" id="filter-syntax"></span>
+    <h2>Filter Syntax</h2>
+    <p>Filters are used in the soft-delete endpoint. Each filter is an object with three fields:</p>
+    <pre>{
+  "segmentName": "Status",   // field name (case-sensitive, matches your schema)
+  "operator":    "eq",       // see operators below
+  "value":       "Inactive"  // scalar or array depending on operator
+}</pre>
+    <table>
+      <tr><th>Operator</th><th>Meaning</th><th>Value type</th></tr>
+      <tr><td>eq</td><td><strong>Equals</strong></td><td>scalar</td></tr>
+      <tr><td>neq</td><td><strong>Not equals</strong></td><td>scalar</td></tr>
+      <tr><td>in</td><td><strong>In list</strong></td><td>array</td></tr>
+      <tr><td>not_in</td><td><strong>Not in list</strong></td><td>array</td></tr>
+      <tr><td>gt</td><td><strong>Greater than</strong></td><td>scalar</td></tr>
+      <tr><td>gte</td><td><strong>Greater than or equal</strong></td><td>scalar</td></tr>
+      <tr><td>lt</td><td><strong>Less than</strong></td><td>scalar</td></tr>
+      <tr><td>lte</td><td><strong>Less than or equal</strong></td><td>scalar</td></tr>
+    </table>
+
+    <!-- ══════════════════════════════════════════════════════════════
+         DATASET MANAGEMENT
+    ══════════════════════════════════════════════════════════════ -->
+    <h2>Datasets</h2>
+
+    <!-- Create Dataset -->
+    <span class="section-anchor" id="ep-create-dataset"></span>
+    <div class="endpoint">
+      <div class="endpoint-header" onclick="toggle(this)">
+        <span class="method-tag POST">POST</span>
+        <span class="endpoint-path">/api/ingest/admin/datasets</span>
+        <span class="endpoint-desc">Create a dataset and its initial schema</span>
+      </div>
+      <div class="endpoint-body">
+        <p style="margin-top:16px">Creates the dataset definition, publishes schema version 1, and provisions the underlying search index. This is the first step before you can push any data.</p>
+
+        <h3>Request body</h3>
+        <table>
+          <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+          <tr><td>name <span class="label required">required</span></td><td>string</td><td><strong>Immutable key.</strong> Lowercase, underscores only. Used in all subsequent API calls. Cannot be changed after creation.</td></tr>
+          <tr><td>label <span class="label required">required</span></td><td>string</td><td><strong>Display name.</strong> Shown in the UI. Can be updated later.</td></tr>
+          <tr><td>description</td><td>string</td><td>Optional longer description shown in Designer.</td></tr>
+          <tr><td>fields <span class="label required">required</span></td><td>array</td><td>Initial schema. At least one field required. See field object below.</td></tr>
+          <tr><td>dataset_type</td><td>string</td><td><code>client</code> (default) or <code>provided</code>. Use <code>client</code> for data you own and push. <code>provided</code> is reserved for platform-managed datasets.</td></tr>
+        </table>
+
+        <h3>Field object</h3>
+        <table>
+          <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+          <tr><td>name <span class="label required">required</span></td><td>string</td><td>Field key. Must be unique within the schema. Used in all filter and grouping references.</td></tr>
+          <tr><td>type <span class="label required">required</span></td><td>string</td><td>One of: <code>keyword</code>, <code>text</code>, <code>number</code>, <code>date</code>, <code>boolean</code>. See Field Types above.</td></tr>
+          <tr><td>primary_key</td><td>boolean</td><td>Mark <code>true</code> on one or more fields to enable upsert mode. Records with matching PK values are updated in place rather than duplicated.</td></tr>
+          <tr><td>date_field</td><td>boolean</td><td>Mark <code>true</code> on the primary date field. Used as the time axis for all charts and date-range filters. Only one field should carry this flag.</td></tr>
+        </table>
+
+        <h3>Example</h3>
+        <pre>POST /api/ingest/admin/datasets
+X-Api-Key: ik_your_key
+
+{
+  "name":  "work_orders",
+  "label": "Work Orders",
+  "description": "Equipment work order records",
+  "fields": [
+    { "name": "WorkOrderId",  "type": "keyword", "primary_key": true },
+    { "name": "YardId",       "type": "keyword" },
+    { "name": "Status",       "type": "keyword" },
+    { "name": "EquipmentId",  "type": "keyword" },
+    { "name": "OpenDate",     "type": "date",    "date_field": true },
+    { "name": "CloseDate",    "type": "date" },
+    { "name": "LaborHours",   "type": "number" },
+    { "name": "PartsCost",    "type": "number" },
+    { "name": "Notes",        "type": "text" }
+  ]
+}</pre>
+
+        <h3>Response</h3>
+        <pre>{
+  "success": true,
+  "dataset": {
+    "id": 7,
+    "name": "work_orders",
+    "label": "Work Orders",
+    "current_version": 1,
+    "esAlias": "fcc__work_orders",
+    "esIndex": "fcc__work_orders_v1"
+  }
+}</pre>
+      </div>
+    </div>
+
+    <!-- List Datasets -->
+    <span class="section-anchor" id="ep-list-datasets"></span>
+    <div class="endpoint">
+      <div class="endpoint-header" onclick="toggle(this)">
+        <span class="method-tag GET">GET</span>
+        <span class="endpoint-path">/api/ingest/admin/datasets</span>
+        <span class="endpoint-desc">List all datasets for your instance</span>
+      </div>
+      <div class="endpoint-body">
+        <p style="margin-top:16px">Returns all active dataset definitions for the authenticated tenant.</p>
+        <h3>Example</h3>
+        <pre>GET /api/ingest/admin/datasets
+X-Api-Key: ik_your_key</pre>
+        <h3>Response</h3>
+        <pre>{
+  "success": true,
+  "datasets": [
+    { "name": "work_orders", "label": "Work Orders", "current_version": 2, ... },
+    { "name": "invoices",    "label": "Invoices",    "current_version": 1, ... }
+  ]
+}</pre>
+      </div>
+    </div>
+
+    <!-- Get Dataset -->
+    <span class="section-anchor" id="ep-get-dataset"></span>
+    <div class="endpoint">
+      <div class="endpoint-header" onclick="toggle(this)">
+        <span class="method-tag GET">GET</span>
+        <span class="endpoint-path">/api/ingest/admin/datasets/<span class="param">:name</span></span>
+        <span class="endpoint-desc">Get dataset definition + all schema versions</span>
+      </div>
+      <div class="endpoint-body">
+        <p style="margin-top:16px">Returns the full dataset definition including all schema versions, any pending invalidations, and current index stats.</p>
+        <h3>Example</h3>
+        <pre>GET /api/ingest/admin/datasets/work_orders
+X-Api-Key: ik_your_key</pre>
+        <h3>Response</h3>
+        <pre>{
+  "success": true,
+  "dataset": { "name": "work_orders", "label": "Work Orders", "current_version": 2, ... },
+  "versions": [
+    { "version": 2, "fields": [...], "compat_status": "ok", "published_at": "2026-04-01T..." },
+    { "version": 1, "fields": [...], "compat_status": "ok", "published_at": "2026-03-15T..." }
+  ],
+  "invalidations": [],
+  "stats": { "docCount": 14823, "sizeBytes": 3145728 }
+}</pre>
+      </div>
+    </div>
+
+    <!-- Get Fields -->
+    <span class="section-anchor" id="ep-get-fields"></span>
+    <div class="endpoint">
+      <div class="endpoint-header" onclick="toggle(this)">
+        <span class="method-tag GET">GET</span>
+        <span class="endpoint-path">/api/ingest/admin/datasets/<span class="param">:name</span>/fields</span>
+        <span class="endpoint-desc">Get current field list with display metadata <span class="label new">new</span></span>
+      </div>
+      <div class="endpoint-body">
+        <p style="margin-top:16px">Returns the current schema fields merged with any display metadata configured in Designer (labels, number formats, prefixes, suffixes). Useful for building integration UIs or validating field names before ingesting.</p>
+        <h3>Example</h3>
+        <pre>GET /api/ingest/admin/datasets/work_orders/fields
+X-Api-Key: ik_your_key</pre>
+        <h3>Response</h3>
+        <pre>{
+  "success":          true,
+  "dataset":          "work_orders",
+  "label":            "Work Orders",
+  "primaryKeyFields": ["WorkOrderId"],
+  "dateField":        "OpenDate",
+  "currentVersion":   2,
+  "fields": [
+    {
+      "name":          "WorkOrderId",
+      "type":          "keyword",
+      "label":         "Work Order ID",
+      "displayFormat": null,
+      "prefix":        null,
+      "suffix":        null,
+      "decimalPlaces": null
+    },
+    {
+      "name":          "PartsCost",
+      "type":          "number",
+      "label":         "Parts Cost",
+      "displayFormat": "currency",
+      "prefix":        "$",
+      "suffix":        null,
+      "decimalPlaces": 2
+    }
+  ]
+}</pre>
+      </div>
+    </div>
+
+    <!-- Publish Schema -->
+    <span class="section-anchor" id="ep-publish-schema"></span>
+    <div class="endpoint">
+      <div class="endpoint-header" onclick="toggle(this)">
+        <span class="method-tag POST">POST</span>
+        <span class="endpoint-path">/api/ingest/admin/datasets/<span class="param">:name</span>/publish</span>
+        <span class="endpoint-desc">Publish a new schema version</span>
+      </div>
+      <div class="endpoint-body">
+        <p style="margin-top:16px">Adds fields or changes types by publishing a new schema version. The API runs a compatibility check — additive changes (new fields) are non-breaking. Removing or retyping fields is flagged as breaking and blocked unless <code>force: true</code> is passed.</p>
+        <div class="callout warn"><strong>Breaking changes:</strong> Removing a field or changing its type from <code>number</code> to <code>keyword</code> (or vice versa) will be rejected without <code>"force": true</code>. Existing data is never modified by a schema publish.</div>
+        <h3>Request body</h3>
+        <table>
+          <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+          <tr><td>fields <span class="label required">required</span></td><td>array</td><td>Complete new field list (same format as create). Must include all existing fields plus any additions.</td></tr>
+          <tr><td>force</td><td>boolean</td><td>Set <code>true</code> to override breaking-change rejection. Use with caution.</td></tr>
+        </table>
+        <h3>Example — add a field</h3>
+        <pre>POST /api/ingest/admin/datasets/work_orders/publish
+X-Api-Key: ik_your_key
+
+{
+  "fields": [
+    { "name": "WorkOrderId", "type": "keyword", "primary_key": true },
+    { "name": "YardId",      "type": "keyword" },
+    { "name": "Status",      "type": "keyword" },
+    { "name": "EquipmentId", "type": "keyword" },
+    { "name": "OpenDate",    "type": "date", "date_field": true },
+    { "name": "CloseDate",   "type": "date" },
+    { "name": "LaborHours",  "type": "number" },
+    { "name": "PartsCost",   "type": "number" },
+    { "name": "Notes",       "type": "text" },
+    { "name": "TechnicianId","type": "keyword" }
+  ]
+}</pre>
+        <h3>Response</h3>
+        <pre>{
+  "success": true,
+  "version": 2,
+  "compat":  "ok",
+  "notes":   ["Added field: TechnicianId (keyword)"]
+}</pre>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════
+         DATA INGEST
+    ══════════════════════════════════════════════════════════════ -->
+    <h2>Data Ingest</h2>
+    <div class="callout">
+      <strong>Upsert vs. append:</strong> If your dataset has one or more <code>primary_key</code> fields defined, all bulk and single pushes run in <strong>upsert mode</strong> — a deterministic ID is derived from the PK values, so re-sending the same record updates it in place. Without a PK, records are always appended.
+    </div>
+    <div class="callout warn">
+      <strong>Preferred format: JSON.</strong> Use <code>/bulk</code> or <code>/single</code> for all integrations. CSV upload exists as a fallback but is not recommended — it requires file handling, offers no upsert guarantees, and is harder to automate reliably at scale.
+    </div>
+
+    <!-- Bulk -->
+    <span class="section-anchor" id="ep-bulk"></span>
+    <div class="endpoint">
+      <div class="endpoint-header" onclick="toggle(this)">
+        <span class="method-tag POST">POST</span>
+        <span class="endpoint-path">/api/ingest/<span class="param">:dataset</span>/bulk</span>
+        <span class="endpoint-desc">Push multiple records — upsert or replace</span>
+      </div>
+      <div class="endpoint-body">
+        <p style="margin-top:16px">The primary ingest endpoint. Designed for high volume — send thousands of records per call. Uses upsert mode when the dataset has a primary key defined.</p>
+        <h3>Request body</h3>
+        <table>
+          <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+          <tr><td>docs <span class="label required">required</span></td><td>array</td><td>Array of record objects. Field names must match your schema exactly.</td></tr>
+          <tr><td>replace</td><td>boolean</td><td>Default <code>false</code>. Set <code>true</code> to <strong>wipe the entire index</strong> and replace with this payload. Use for full daily loads.</td></tr>
+        </table>
+        <h3>Example</h3>
+        <pre>POST /api/ingest/work_orders/bulk
+X-Api-Key: ik_your_key
+Content-Type: application/json
+
+{
+  "docs": [
+    {
+      "WorkOrderId":  "WO-2026-001",
+      "YardId":       "YARD-ATL",
+      "Status":       "Closed",
+      "EquipmentId":  "EQ-1042",
+      "OpenDate":     "2026-03-10",
+      "CloseDate":    "2026-03-14",
+      "LaborHours":   12.5,
+      "PartsCost":    340.00
+    },
+    {
+      "WorkOrderId":  "WO-2026-002",
+      "YardId":       "YARD-MIA",
+      "Status":       "Open",
+      "EquipmentId":  "EQ-0887",
+      "OpenDate":     "2026-04-01",
+      "LaborHours":   0,
+      "PartsCost":    0
+    }
+  ]
+}</pre>
+        <h3>Response</h3>
+        <pre>{
+  "success":    true,
+  "indexed":    2,
+  "failed":     0,
+  "errors":     [],
+  "durationMs": 84,
+  "mode":       "upsert"
+}</pre>
+        <table>
+          <tr><th>mode</th><th>Meaning</th></tr>
+          <tr><td>upsert</td><td>PK-based — re-sending the same WorkOrderId updates in place</td></tr>
+          <tr><td>replace</td><td>Full index swap — all prior records removed</td></tr>
+          <tr><td>append</td><td>No PK defined — every call adds new records</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <!-- Single -->
+    <span class="section-anchor" id="ep-single"></span>
+    <div class="endpoint">
+      <div class="endpoint-header" onclick="toggle(this)">
+        <span class="method-tag POST">POST</span>
+        <span class="endpoint-path">/api/ingest/<span class="param">:dataset</span>/single</span>
+        <span class="endpoint-desc">Push one record</span>
+      </div>
+      <div class="endpoint-body">
+        <p style="margin-top:16px">Same upsert logic as bulk, but accepts a single record object as the body (not wrapped in <code>docs</code>).</p>
+        <h3>Example</h3>
+        <pre>POST /api/ingest/work_orders/single
+X-Api-Key: ik_your_key
+Content-Type: application/json
+
+{
+  "WorkOrderId": "WO-2026-003",
+  "YardId":      "YARD-SEA",
+  "Status":      "Open",
+  "OpenDate":    "2026-04-29",
+  "LaborHours":  0,
+  "PartsCost":   0
+}</pre>
+        <h3>Response</h3>
+        <pre>{
+  "success":    true,
+  "indexed":    1,
+  "failed":     0,
+  "id":         "a3f9c12e...",
+  "durationMs": 22,
+  "mode":       "upsert"
+}</pre>
+      </div>
+    </div>
+
+    <!-- Status -->
+    <span class="section-anchor" id="ep-status"></span>
+    <div class="endpoint">
+      <div class="endpoint-header" onclick="toggle(this)">
+        <span class="method-tag GET">GET</span>
+        <span class="endpoint-path">/api/ingest/<span class="param">:dataset</span>/status</span>
+        <span class="endpoint-desc">Index health, doc count, and recent ingest log</span>
+      </div>
+      <div class="endpoint-body">
+        <p style="margin-top:16px">Returns current document count, index size, schema version, and the 5 most recent ingest log entries. Useful for monitoring integration pipelines.</p>
+        <h3>Example</h3>
+        <pre>GET /api/ingest/work_orders/status
+X-Api-Key: ik_your_key</pre>
+        <h3>Response</h3>
+        <pre>{
+  "success": true,
+  "dataset": "work_orders",
+  "version": 2,
+  "esAlias": "fcc__work_orders",
+  "stats":   { "docCount": 14823, "sizeBytes": 3145728 },
+  "recentLogs": [
+    {
+      "operation":  "upsert",
+      "doc_count":  500,
+      "failed_count": 0,
+      "duration_ms": 342,
+      "triggered_by": "pipeline-key",
+      "created_at": "2026-04-29T02:01:14Z"
+    }
+  ]
+}</pre>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════
+         RECORDS
+    ══════════════════════════════════════════════════════════════ -->
+    <h2>Records</h2>
+
+    <!-- Fetch Record -->
+    <span class="section-anchor" id="ep-get-record"></span>
+    <div class="endpoint">
+      <div class="endpoint-header" onclick="toggle(this)">
+        <span class="method-tag GET">GET</span>
+        <span class="endpoint-path">/api/ingest/<span class="param">:dataset</span>/records/<span class="param">:id</span></span>
+        <span class="endpoint-desc">Fetch a single record by its internal ID <span class="label new">new</span></span>
+      </div>
+      <div class="endpoint-body">
+        <p style="margin-top:16px">Fetches a single document by its deterministic internal ID (the SHA-256 derived from your primary key values). Soft-deleted records return 404.</p>
+        <div class="callout">
+          <strong>Getting the ID:</strong> The ID is returned as <code>id</code> in the single-upsert response. For bulk upserts, derive it the same way the API does: <code>SHA-256( clientId + "|" + datasetName + "|" + pkValue1 + "|" + pkValue2 )</code> — hex encoded.
+        </div>
+        <h3>Example</h3>
+        <pre>GET /api/ingest/work_orders/records/a3f9c12e4b...
+X-Api-Key: ik_your_key</pre>
+        <h3>Response</h3>
+        <pre>{
+  "success": true,
+  "id": "a3f9c12e4b...",
+  "doc": {
+    "WorkOrderId": "WO-2026-003",
+    "YardId":      "YARD-SEA",
+    "Status":      "Open",
+    "OpenDate":    "2026-04-29",
+    "_status":     "active",
+    "__ingested_at": "2026-04-29T07:15:00Z"
+  }
+}</pre>
+      </div>
+    </div>
+
+    <!-- Soft Delete -->
+    <span class="section-anchor" id="ep-delete"></span>
+    <div class="endpoint">
+      <div class="endpoint-header" onclick="toggle(this)">
+        <span class="method-tag POST">POST</span>
+        <span class="endpoint-path">/api/ingest/<span class="param">:dataset</span>/delete</span>
+        <span class="endpoint-desc">Soft-delete records by filter or ID list <span class="label new">new</span></span>
+      </div>
+      <div class="endpoint-body">
+        <p style="margin-top:16px">Marks matching records as deleted by setting <code>_status = "deleted"</code>. Records are never physically removed — they are excluded from all queries, charts, and reports automatically.</p>
+        <div class="callout warn"><strong>This is irreversible via the API.</strong> Deleted records can be restored directly in the database if needed, but there is no API-level undelete today.</div>
+        <h3>Request body</h3>
+        <table>
+          <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+          <tr><td>filters</td><td>array</td><td>One or more filter objects (see Filter Syntax above). At least one of <code>filters</code> or <code>ids</code> is required.</td></tr>
+          <tr><td>ids</td><td>array</td><td>Array of internal record IDs (SHA-256 hex strings) to delete directly.</td></tr>
+        </table>
+        <h3>Example — delete by filter</h3>
+        <pre>POST /api/ingest/work_orders/delete
+X-Api-Key: ik_your_key
+Content-Type: application/json
+
+{
+  "filters": [
+    { "segmentName": "Status",  "operator": "eq",  "value": "Cancelled" },
+    { "segmentName": "OpenDate","operator": "lt",  "value": "2024-01-01" }
+  ]
+}</pre>
+        <h3>Example — delete by IDs</h3>
+        <pre>{
+  "ids": ["a3f9c12e...", "b7d4a091..."]
+}</pre>
+        <h3>Response</h3>
+        <pre>{
+  "success": true,
+  "deleted": 14,
+  "noops":   0
+}</pre>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════
+         API KEYS
+    ══════════════════════════════════════════════════════════════ -->
+    <h2>API Keys</h2>
+
+    <!-- Create Key -->
+    <span class="section-anchor" id="ep-create-key"></span>
+    <div class="endpoint">
+      <div class="endpoint-header" onclick="toggle(this)">
+        <span class="method-tag POST">POST</span>
+        <span class="endpoint-path">/api/ingest/admin/api-keys</span>
+        <span class="endpoint-desc">Generate a new API key</span>
+      </div>
+      <div class="endpoint-body">
+        <p style="margin-top:16px">Generates a new API key for the authenticated tenant. The raw key is returned <strong>once only</strong> — store it securely. Subsequent calls to list keys return only the last 8 characters for identification.</p>
+        <h3>Request body</h3>
+        <table>
+          <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+          <tr><td>label <span class="label required">required</span></td><td>string</td><td>A descriptive name for this key, e.g. <code>"nightly-etl-pipeline"</code></td></tr>
+        </table>
+        <h3>Example</h3>
+        <pre>POST /api/ingest/admin/api-keys
+X-Api-Key: ik_your_key
+Content-Type: application/json
+
+{ "label": "nightly-etl-pipeline" }</pre>
+        <h3>Response</h3>
+        <pre>{
+  "success":  true,
+  "id":       42,
+  "label":    "nightly-etl-pipeline",
+  "rawKey":   "ik_a1b2c3d4..."   // store this — shown only once
+}</pre>
+      </div>
+    </div>
+
+    <!-- List Keys -->
+    <span class="section-anchor" id="ep-list-keys"></span>
+    <div class="endpoint">
+      <div class="endpoint-header" onclick="toggle(this)">
+        <span class="method-tag GET">GET</span>
+        <span class="endpoint-path">/api/ingest/admin/api-keys</span>
+        <span class="endpoint-desc">List all active API keys</span>
+      </div>
+      <div class="endpoint-body">
+        <p style="margin-top:16px">Returns all non-revoked keys for the tenant. Raw key values are never returned — only the label, ID, and last-used timestamp.</p>
+        <h3>Example</h3>
+        <pre>GET /api/ingest/admin/api-keys
+X-Api-Key: ik_your_key</pre>
+        <h3>Response</h3>
+        <pre>{
+  "success": true,
+  "keys": [
+    { "id": 42, "label": "nightly-etl-pipeline", "last_used_at": "2026-04-29T02:01:14Z" },
+    { "id": 38, "label": "crm-sync",             "last_used_at": "2026-04-28T18:30:00Z" }
+  ]
+}</pre>
+      </div>
+    </div>
+
+    <!-- Revoke Key -->
+    <span class="section-anchor" id="ep-revoke-key"></span>
+    <div class="endpoint">
+      <div class="endpoint-header" onclick="toggle(this)">
+        <span class="method-tag DELETE">DELETE</span>
+        <span class="endpoint-path">/api/ingest/admin/api-keys/<span class="param">:id</span></span>
+        <span class="endpoint-desc">Revoke an API key</span>
+      </div>
+      <div class="endpoint-body">
+        <p style="margin-top:16px">Permanently revokes a key. Any subsequent requests using the revoked key will receive <code>401 Unauthorized</code>.</p>
+        <h3>Example</h3>
+        <pre>DELETE /api/ingest/admin/api-keys/42
+X-Api-Key: ik_your_key</pre>
+        <h3>Response</h3>
+        <pre>{ "success": true }</pre>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+  function toggle(header) {
+    const body = header.nextElementSibling;
+    body.classList.toggle('hidden');
+  }
+
+  function scrollTo(id) {
+    const el = document.getElementById(id);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // Update active nav
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    event.currentTarget.classList.add('active');
+  }
+
+  // Highlight nav on scroll
+  const main = document.getElementById('main-content');
+  const anchors = [...document.querySelectorAll('.section-anchor')];
+  main.addEventListener('scroll', () => {
+    const scrollTop = main.scrollTop + 80;
+    let current = null;
+    for (const a of anchors) {
+      if (a.offsetTop <= scrollTop) current = a.id;
+    }
+    if (current) {
+      document.querySelectorAll('.nav-item').forEach(n => {
+        n.classList.toggle('active', n.getAttribute('onclick')?.includes(current));
+      });
+    }
+  });
+</script>
+</body>
+</html>

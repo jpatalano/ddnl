@@ -1855,6 +1855,7 @@ app.get('/api/bi/fiscal/compare-range', async (req, res) => {
 app.get('/debug', (req, res) => res.sendFile(path.join(__dirname, 'debug.html')));
 app.get('/admin', requireBasicAuth, (req, res) => res.sendFile(path.join(__dirname, 'admin', 'index.html')));
 app.get('/admin/*', requireBasicAuth, (req, res) => res.sendFile(path.join(__dirname, 'admin', 'index.html')));
+app.get('/docs', (req, res) => res.sendFile(path.join(__dirname, 'docs', 'index.html')));
 app.get('*', (req, res) => {
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
   res.sendFile(path.join(__dirname, 'index.html'));
