@@ -22,6 +22,10 @@ const { pool } = require('./db');
 const es        = require('./esClient');
 const llm       = require('./llmProvider');
 
+// Max concurrent LLM recommendation calls per advise run.
+// Balances throughput against provider rate limits.
+const LLM_CONCURRENCY = parseInt(process.env.ADVISE_LLM_CONCURRENCY || '4', 10);
+
 // ── Global template seed data ─────────────────────────────────────────────────
 // These are upserted into advise_rule_templates at boot.
 // Instances see all of these by default; they can disable or override via advise_rules.
