@@ -396,8 +396,13 @@ async function replaceAll(instanceId, datasetName, docs) {
 /**
  * Build an ES aggregation query from the BI API query shape.
  * Supports: groupBySegments, metrics (SUM/AVG/COUNT/MIN/MAX/COUNT_DISTINCT), filters, orderBy, pagination.
+ *
+ * fieldTypes: optional { fieldName: 'date' | 'keyword' | 'double' | ... } map.
+ *   When provided, single-segment groupBy on a date field swaps composite
+ *   aggregation for date_histogram so all buckets fit in one response
+ *   (one bucket per day) regardless of underlying row count.
  */
-function buildEsQuery(instanceId, { groupBySegments = [], metrics = [], filters = [], orderBy = [], pagination = {} }) {
+function buildEsQuery(instanceId, { groupBySegments = [], metrics = [], filters = [], orderBy = [], pagination = {} }, fieldTypes = {}) {
   const { page = 1, pageSize = 1000 } = pagination;
 
   // ── Filters → ES query ──
@@ -436,31 +441,61 @@ function buildEsQuery(instanceId, { groupBySegments = [], metrics = [], filters 
   if (groupBySegments.length === 0) {
     const aggs = {};
     for (const m of metrics) {
-      const aggType = _esAggType(m.aggregation || 'SUM');
-      aggs[m.alias || m.metricName] = { [aggType]: { field: m.metricName } };
+      const key = m.alias || m.metricName;
+      aggs[key] = _buildMetricAgg(m);
     }
     return { noGroup: true, esBody: { query: esQuery, aggs, size: 0 }, metrics };
   }
 
-  // ── GroupBy → composite aggregation (handles pagination) ──
-  const sources = groupBySegments.map(seg => ({
-    [seg]: { terms: { field: seg, missing_bucket: true } }
-  }));
-
+  // ── Build per-metric aggs (shared between histogram + composite paths) ──
   const aggs = {};
   for (const m of metrics) {
-    const aggType = _esAggType(m.aggregation || 'SUM');
-    if (aggType === 'value_count') {
-      aggs[m.alias || m.metricName] = { value_count: { field: m.metricName } };
-    } else if (aggType === 'cardinality') {
-      aggs[m.alias || m.metricName] = { cardinality: { field: m.metricName } };
-    } else {
-      aggs[m.alias || m.metricName] = { [aggType]: { field: m.metricName } };
-    }
+    const key = m.alias || m.metricName;
+    aggs[key] = _buildMetricAgg(m);
   }
+
+  // ── Date histogram path ──
+  // Single date-typed groupBy field → use date_histogram so bucket count
+  // is bounded by the date range (one bucket per day), not the row count.
+  if (groupBySegments.length === 1 && fieldTypes[groupBySegments[0]] === 'date') {
+    const dateField = groupBySegments[0];
+    return {
+      noGroup: false,
+      isDateHistogram: true,
+      dateField,
+      esBody: {
+        query: esQuery,
+        size: 0,
+        aggs: {
+          results: {
+            date_histogram: {
+              field: dateField,
+              calendar_interval: 'day',
+              min_doc_count: 1
+            },
+            aggs
+          }
+        }
+      },
+      groupBySegments,
+      metrics,
+      orderBy
+    };
+  }
+
+  // ── GroupBy → composite aggregation (paginated via after_key in query()) ──
+  const sources = groupBySegments.map(seg => {
+    if (fieldTypes[seg] === 'date') {
+      // Mixed groupBy with a date → use date_histogram source so we still
+      // bucket per day instead of per timestamp.
+      return { [seg]: { date_histogram: { field: seg, calendar_interval: 'day' } } };
+    }
+    return { [seg]: { terms: { field: seg, missing_bucket: true } } };
+  });
 
   return {
     noGroup: false,
+    isComposite: true,
     esBody: {
       query: esQuery,
       size: 0,
@@ -477,6 +512,62 @@ function buildEsQuery(instanceId, { groupBySegments = [], metrics = [], filters 
     page,
     pageSize
   };
+}
+
+// In-memory mapping cache to avoid hitting ES on every query.
+// Keyed by alias; values: { properties, fetchedAt }. TTL is short because
+// schema changes are rare and a stale cache only fails open (composite path).
+const _mappingCache = new Map();
+const _MAPPING_TTL_MS = 60_000;
+
+async function _getFieldTypes(esInst, alias) {
+  const cached = _mappingCache.get(alias);
+  if (cached && (Date.now() - cached.fetchedAt) < _MAPPING_TTL_MS) {
+    return cached.fieldTypes;
+  }
+  try {
+    const resp = await esInst.indices.getMapping({ index: alias });
+    // resp shape: { <indexName>: { mappings: { properties: {...} } } }
+    const fieldTypes = {};
+    for (const idxName of Object.keys(resp || {})) {
+      const props = resp[idxName]?.mappings?.properties || {};
+      for (const fieldName of Object.keys(props)) {
+        if (props[fieldName]?.type) fieldTypes[fieldName] = props[fieldName].type;
+      }
+    }
+    _mappingCache.set(alias, { fieldTypes, fetchedAt: Date.now() });
+    return fieldTypes;
+  } catch (err) {
+    // If mapping lookup fails, fall through with empty types — we'll use
+    // composite agg as before. Don't kill the query.
+    console.warn(`[esClient] getMapping failed for ${alias}:`, err.message);
+    return {};
+  }
+}
+
+/**
+ * Build a single ES sub-aggregation from a metric spec.
+ * Supports standard aggs (SUM/AVG/MIN/MAX/COUNT/COUNT_DISTINCT) plus:
+ *  - SUM_PRODUCT: m.fields = ['a','b',...] → SUM(a * b * ...) via scripted sum.
+ *    Useful for derived totals like labor_cost = hours * hourly_rate.
+ */
+function _buildMetricAgg(m) {
+  const upper = String(m.aggregation || 'SUM').toUpperCase();
+  if (upper === 'SUM_PRODUCT') {
+    const fields = Array.isArray(m.fields) ? m.fields.filter(Boolean) : [];
+    if (!fields.length) {
+      // Fall back to plain SUM on metricName so we don't blow up the query
+      return { sum: { field: m.metricName } };
+    }
+    // Build expression: doc['a'].value * doc['b'].value * ...
+    // Each factor is null-coalesced to 0 so missing fields don't toss the bucket.
+    const expr = fields.map(f => `(doc['${f}'].size()==0 ? 0 : doc['${f}'].value)`).join(' * ');
+    return { sum: { script: { source: expr, lang: 'painless' } } };
+  }
+  const aggType = _esAggType(upper);
+  if (aggType === 'value_count')   return { value_count: { field: m.metricName } };
+  if (aggType === 'cardinality')   return { cardinality: { field: m.metricName } };
+  return { [aggType]: { field: m.metricName } };
 }
 
 function _esAggType(agg) {
@@ -496,19 +587,18 @@ function _esAggType(agg) {
  * Returns: { data: [...rows], metadata: { totalRows, executionTimeMs } }
  */
 async function query(instanceId, datasetName, queryParams) {
-  const es    = getClient();
-  const alias = aliasName(instanceId, datasetName);
-  const t0    = Date.now();
+  const esInst = getClient();
+  const alias  = aliasName(instanceId, datasetName);
+  const t0     = Date.now();
 
-  const plan  = buildEsQuery(instanceId, queryParams);
-
-  const result = await es.search({ index: alias, body: plan.esBody });
-  const took   = Date.now() - t0;
+  // Look up field types so buildEsQuery can pick date_histogram for date groupBys.
+  const fieldTypes = await _getFieldTypes(esInst, alias);
+  const plan       = buildEsQuery(instanceId, queryParams, fieldTypes);
 
   let rows = [];
 
   if (plan.rawScan) {
-    // Raw record scan — return source docs directly, strip internal fields
+    const result = await esInst.search({ index: alias, body: plan.esBody });
     rows = (result.hits?.hits || []).map(h => {
       const src = { ...h._source };
       delete src.__instance_id;
@@ -518,23 +608,59 @@ async function query(instanceId, datasetName, queryParams) {
       return src;
     });
   } else if (plan.noGroup) {
-    // Single row of aggregated metrics
+    const result = await esInst.search({ index: alias, body: plan.esBody });
     const row = {};
     for (const m of plan.metrics) {
       const key = m.alias || m.metricName;
       row[key]  = result.aggregations?.[key]?.value ?? 0;
     }
     rows = [row];
-  } else {
+  } else if (plan.isDateHistogram) {
+    // Single date_histogram — one shot, all buckets returned (bounded by
+    // calendar_interval=day across the filter range).
+    const result  = await esInst.search({ index: alias, body: plan.esBody });
     const buckets = result.aggregations?.results?.buckets || [];
     rows = buckets.map(b => {
-      const row = { ...b.key };
+      const row = { [plan.dateField]: b.key };
       for (const m of plan.metrics) {
         const key = m.alias || m.metricName;
         row[key]  = b[key]?.value ?? 0;
       }
       return row;
     });
+  } else {
+    // Composite agg — paginate via after_key until all buckets retrieved.
+    // Hard safety cap to avoid runaway memory if a query is misconfigured.
+    const MAX_BUCKETS = 200_000;
+    let afterKey = null;
+    let safety   = 0;
+
+    while (true) {
+      const body = JSON.parse(JSON.stringify(plan.esBody));
+      if (afterKey) body.aggs.results.composite.after = afterKey;
+      const result = await esInst.search({ index: alias, body });
+
+      const buckets = result.aggregations?.results?.buckets || [];
+      for (const b of buckets) {
+        const row = { ...b.key };
+        for (const m of plan.metrics) {
+          const key = m.alias || m.metricName;
+          row[key]  = b[key]?.value ?? 0;
+        }
+        rows.push(row);
+      }
+
+      afterKey = result.aggregations?.results?.after_key;
+      if (!afterKey || buckets.length === 0) break;
+      if (rows.length >= MAX_BUCKETS) {
+        console.warn(`[esClient] composite agg hit safety cap of ${MAX_BUCKETS} buckets for ${alias} groupBy=${plan.groupBySegments.join(',')}`);
+        break;
+      }
+      if (++safety > 1000) {
+        console.warn(`[esClient] composite agg exceeded 1000 pages for ${alias} — bailing`);
+        break;
+      }
+    }
 
     // Client-side sort (composite agg doesn't support arbitrary sort)
     if (plan.orderBy?.length) {
@@ -550,6 +676,7 @@ async function query(instanceId, datasetName, queryParams) {
     }
   }
 
+  const took = Date.now() - t0;
   return { data: rows, metadata: { totalRows: rows.length, executionTimeMs: took } };
 }
 
