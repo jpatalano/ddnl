@@ -776,6 +776,64 @@ const MIGRATIONS = [
     UNIQUE(client_id, rule_type)
   )`,
   `CREATE INDEX IF NOT EXISTS idx_advise_rules_client ON advise_rules(client_id)`,
+
+  // ─── Reference Data (rf) ────────────────────────────────────────────────────────
+  // Per-instance enrichment dimensions (locations, employees, roles, etc).
+  // Metadata lives in rf_tables/rf_fields. Each declared rf table gets its own
+  // physical Postgres table named rf_<name> with (client_id, <pk>) compound PK.
+  // Multi-select rf_ref fields use a link table named rf_<owner>_<field>_link.
+
+  `CREATE TABLE IF NOT EXISTS rf_tables (
+    id                   SERIAL PRIMARY KEY,
+    client_id            VARCHAR(255) NOT NULL REFERENCES clients(client_id) ON DELETE CASCADE,
+    name                 VARCHAR(64)  NOT NULL,        -- e.g. 'locations'
+    storage_table_name   VARCHAR(80)  NOT NULL,        -- e.g. 'rf_locations'
+    label                VARCHAR(128) NOT NULL,
+    label_singular       VARCHAR(128),                 -- 'Location'
+    icon                 VARCHAR(64),                  -- lucide name
+    group_label          VARCHAR(64),                  -- sidebar grouping (e.g. 'Company')
+    pk_field             VARCHAR(64)  NOT NULL,        -- e.g. 'internal_id'
+    pk_field_label       VARCHAR(128),                 -- 'Internal ID'
+    pk_locked_message    TEXT,                         -- shown under PK input in edit panel
+    auto_discover        BOOLEAN      NOT NULL DEFAULT FALSE,
+    show_in_admin_nav    BOOLEAN      NOT NULL DEFAULT TRUE,
+    sort_order           INTEGER      NOT NULL DEFAULT 100,
+    created_at           TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    updated_at           TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    UNIQUE(client_id, name)
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_rf_tables_client ON rf_tables(client_id)`,
+
+  `CREATE TABLE IF NOT EXISTS rf_fields (
+    id                SERIAL PRIMARY KEY,
+    rf_table_id       INTEGER     NOT NULL REFERENCES rf_tables(id) ON DELETE CASCADE,
+    field_name        VARCHAR(64) NOT NULL,
+    field_label       VARCHAR(128),
+    field_type        VARCHAR(32) NOT NULL,            -- text|longtext|number|dropdown|boolean|date|datetime|rf_ref|multi_select_rf
+    options           JSONB       NOT NULL DEFAULT '{}',  -- {choices:[...]}, {target:'roles', select_style:'dropdown'}, etc.
+    source            VARCHAR(64) NOT NULL DEFAULT 'manual',  -- 'manual', 'pos', 'payroll', ...
+    is_pk             BOOLEAN     NOT NULL DEFAULT FALSE,
+    is_required       BOOLEAN     NOT NULL DEFAULT FALSE,
+    is_segment        BOOLEAN     NOT NULL DEFAULT FALSE,
+    is_metric         BOOLEAN     NOT NULL DEFAULT FALSE,
+    sort_order        INTEGER     NOT NULL DEFAULT 100,
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(rf_table_id, field_name)
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_rf_fields_table ON rf_fields(rf_table_id)`,
+
+  // Wires a fact dataset to an rf table for auto-discovery + read-time enrichment.
+  `CREATE TABLE IF NOT EXISTS dataset_rf_joins (
+    id              SERIAL PRIMARY KEY,
+    client_id       VARCHAR(255) NOT NULL REFERENCES clients(client_id) ON DELETE CASCADE,
+    dataset_name    VARCHAR(128) NOT NULL,                  -- e.g. 'orders_20260418_004516'
+    rf_table_id     INTEGER      NOT NULL REFERENCES rf_tables(id) ON DELETE CASCADE,
+    source_field    VARCHAR(64)  NOT NULL,                  -- field on the fact (e.g. 'location_id')
+    name_hint_field VARCHAR(64),                            -- copy this into rf 'name' on auto-discover
+    created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    UNIQUE(client_id, dataset_name, rf_table_id, source_field)
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_dataset_rf_joins_client_dataset ON dataset_rf_joins(client_id, dataset_name)`,
 ];
 
 async function initDb() {

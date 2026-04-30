@@ -13,6 +13,7 @@ const adminRouter               = require('./adminRoutes');
 const adviseRouter              = require('./adviseRouter');
 const aiChatRouter              = require('./aiChatRouter');
 const adviseEngine              = require('./adviseEngine');
+const rfEngine                  = require('./rfEngine');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -2014,6 +2015,23 @@ initDb()
   .then(() => {
     // Expose INSTANCE to routers that need clientId resolution
     app.locals.INSTANCE = INSTANCE;
+
+    // ─── RF (Reference Data) seed loader ────────────────────────────────────
+    // Looks for seeds/<INSTANCE.id>/rf.json. Declares tables + dictionary rows.
+    // Idempotent — safe on every boot. Never crashes boot on failure.
+    try {
+      const rfSeedPath = path.join(__dirname, 'seeds', INSTANCE.id, 'rf.json');
+      if (fs.existsSync(rfSeedPath)) {
+        const seed = JSON.parse(fs.readFileSync(rfSeedPath, 'utf8'));
+        rfEngine.loadSeed(INSTANCE.clientId, seed)
+          .then(r => console.log(`[rf] Seed loaded for ${INSTANCE.id}: ${JSON.stringify(r)}`))
+          .catch(err => console.error('[rf] Seed load error:', err.message));
+      } else {
+        console.log(`[rf] No seed file at ${rfSeedPath} — skipping`);
+      }
+    } catch (err) {
+      console.error('[rf] Seed loader error:', err.message);
+    }
 
     app.listen(PORT, () => {
       console.log(`[${INSTANCE.id}] running on port ${PORT}`);

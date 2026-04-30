@@ -1,0 +1,129 @@
+{
+  "_doc": "Reference data declarations for the acuity (drycleaning) instance. Loaded at boot by rfEngine.loadSeed(). Idempotent — re-running merges new fields without dropping data. PKs use single-field convention. field_type values: text|longtext|number|dropdown|boolean|date|datetime|rf_ref|multi_select_rf",
+
+  "tables": [
+
+    {
+      "name": "employee_status",
+      "label": "Employee Status",
+      "label_singular": "Status",
+      "icon": "circle-check",
+      "group_label": "Dictionaries",
+      "pk_field": "value",
+      "pk_field_label": "Code",
+      "pk_locked_message": "Maps the raw value sent by the POS to a human-readable label. Do not change.",
+      "auto_discover": false,
+      "show_in_admin_nav": true,
+      "sort_order": 10,
+      "fields": [
+        { "field_name": "value",  "field_label": "Code",  "field_type": "text", "source": "manual", "is_pk": true,  "is_required": true,  "sort_order": 10 },
+        { "field_name": "label",  "field_label": "Label", "field_type": "text", "source": "manual", "is_required": true, "sort_order": 20 }
+      ],
+      "seed_rows": [
+        { "value": "0", "label": "Active" },
+        { "value": "1", "label": "Inactive" }
+      ]
+    },
+
+    {
+      "name": "roles",
+      "label": "Roles",
+      "label_singular": "Role",
+      "icon": "tag",
+      "group_label": "Dictionaries",
+      "pk_field": "role_id",
+      "pk_field_label": "Role ID",
+      "pk_locked_message": "This cannot be changed as it relates to configured data imports.",
+      "auto_discover": true,
+      "show_in_admin_nav": true,
+      "sort_order": 20,
+      "fields": [
+        { "field_name": "role_id",     "field_label": "Role ID",     "field_type": "text",     "source": "pos",    "is_pk": true,    "sort_order": 10 },
+        { "field_name": "name",        "field_label": "Name",        "field_type": "text",     "source": "pos",    "sort_order": 20 },
+        { "field_name": "description", "field_label": "Description", "field_type": "longtext", "source": "manual", "sort_order": 30 }
+      ]
+    },
+
+    {
+      "name": "locations",
+      "label": "Locations",
+      "label_singular": "Location",
+      "icon": "map-pin",
+      "group_label": "Company",
+      "pk_field": "internal_id",
+      "pk_field_label": "Internal ID",
+      "pk_locked_message": "This cannot be changed as it relates to configured data imports.",
+      "auto_discover": true,
+      "show_in_admin_nav": true,
+      "sort_order": 10,
+      "fields": [
+        { "field_name": "internal_id",          "field_label": "Internal ID",          "field_type": "text",     "source": "manual", "is_pk": true, "sort_order": 10 },
+        { "field_name": "name",                  "field_label": "Name",                 "field_type": "text",     "source": "manual", "sort_order": 20 },
+        { "field_name": "type",                  "field_label": "Type",                 "field_type": "dropdown", "source": "manual", "options": { "choices": ["Store", "Warehouse", "Route Operations", "Other"] }, "sort_order": 30 },
+        { "field_name": "barcode_abbreviation",  "field_label": "Barcode Abbreviation", "field_type": "text",     "source": "manual", "sort_order": 40 },
+        { "field_name": "birdeye_id",            "field_label": "Birdeye ID",           "field_type": "text",     "source": "manual", "sort_order": 50 },
+        { "field_name": "manager",               "field_label": "Manager",              "field_type": "text",     "source": "manual", "sort_order": 60 },
+        { "field_name": "location_hours",        "field_label": "Location Hours",       "field_type": "longtext", "source": "manual", "sort_order": 70 },
+        { "field_name": "latitude",              "field_label": "Latitude",             "field_type": "number",   "source": "manual", "sort_order": 80 },
+        { "field_name": "longitude",             "field_label": "Longitude",            "field_type": "number",   "source": "manual", "sort_order": 90 }
+      ]
+    },
+
+    {
+      "name": "employees",
+      "label": "Employees",
+      "label_singular": "Employee",
+      "icon": "users",
+      "group_label": "Company",
+      "pk_field": "employee_id",
+      "pk_field_label": "Employee ID",
+      "pk_locked_message": "This cannot be changed as it relates to configured data imports.",
+      "auto_discover": true,
+      "show_in_admin_nav": true,
+      "sort_order": 20,
+      "fields": [
+        { "field_name": "employee_id",        "field_label": "Employee ID",       "field_type": "text",            "source": "pos",     "is_pk": true, "sort_order": 10 },
+        { "field_name": "first_name",         "field_label": "First Name",        "field_type": "text",            "source": "pos",     "sort_order": 20 },
+        { "field_name": "last_name",          "field_label": "Last Name",         "field_type": "text",            "source": "pos",     "sort_order": 30 },
+        { "field_name": "initials",           "field_label": "Initials",          "field_type": "text",            "source": "pos",     "sort_order": 40 },
+        { "field_name": "location_id",        "field_label": "Location",          "field_type": "rf_ref",          "source": "pos",     "options": { "target": "locations", "select_style": "autocomplete" }, "sort_order": 50 },
+        { "field_name": "status",             "field_label": "Status",            "field_type": "rf_ref",          "source": "pos",     "options": { "target": "employee_status", "select_style": "dropdown" }, "sort_order": 60 },
+        { "field_name": "pin",                "field_label": "PIN",               "field_type": "text",            "source": "pos",     "sort_order": 70 },
+        { "field_name": "hourly_rate",        "field_label": "Hourly Rate",       "field_type": "number",          "source": "payroll", "sort_order": 80 },
+        { "field_name": "overtime_rate",      "field_label": "Overtime Rate",     "field_type": "number",          "source": "payroll", "sort_order": 90 },
+        { "field_name": "primary_language",   "field_label": "Primary Language",  "field_type": "text",            "source": "pos",     "sort_order": 100 },
+        { "field_name": "secondary_language", "field_label": "Secondary Language","field_type": "text",            "source": "pos",     "sort_order": 110 },
+        { "field_name": "phone_number",       "field_label": "Phone",             "field_type": "text",            "source": "manual",  "sort_order": 120 },
+        { "field_name": "hire_date",          "field_label": "Hire Date",         "field_type": "date",            "source": "pos",     "sort_order": 130 },
+        { "field_name": "termination_date",   "field_label": "Termination Date",  "field_type": "date",            "source": "pos",     "sort_order": 140 },
+        { "field_name": "roles",              "field_label": "Roles",             "field_type": "multi_select_rf", "source": "pos",     "options": { "target": "roles" }, "sort_order": 150 }
+      ]
+    },
+
+    {
+      "name": "routes",
+      "label": "Routes",
+      "label_singular": "Route",
+      "icon": "route",
+      "group_label": "Company",
+      "pk_field": "internal_id",
+      "pk_field_label": "Internal ID",
+      "pk_locked_message": "This cannot be changed as it relates to configured data imports.",
+      "auto_discover": true,
+      "show_in_admin_nav": true,
+      "sort_order": 30,
+      "fields": [
+        { "field_name": "internal_id",     "field_label": "Internal ID",   "field_type": "text",     "source": "manual", "is_pk": true, "sort_order": 10 },
+        { "field_name": "name",            "field_label": "Name",          "field_type": "text",     "source": "manual", "sort_order": 20 },
+        { "field_name": "display_name",    "field_label": "Display Name",  "field_type": "text",     "source": "manual", "sort_order": 30 },
+        { "field_name": "birdeye_id",      "field_label": "Birdeye ID",    "field_type": "text",     "source": "manual", "sort_order": 40 },
+        { "field_name": "manager",         "field_label": "Manager",       "field_type": "text",     "source": "manual", "sort_order": 50 },
+        { "field_name": "assigned_zones",  "field_label": "Assigned Zones","field_type": "longtext", "source": "manual", "sort_order": 60 },
+        { "field_name": "days",            "field_label": "Days",          "field_type": "text",     "source": "manual", "options": { "ui": "day_picker" }, "sort_order": 70 }
+      ]
+    }
+  ],
+
+  "_dataset_joins_doc": "Wires fact datasets to rf tables for auto-discovery + read-time enrichment. dataset_name uses the immutable ES key (e.g. 'orders_20260418_004516'). Re-add with the new dataset name when datasets are versioned.",
+  "dataset_joins": []
+}
