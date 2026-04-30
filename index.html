@@ -946,6 +946,11 @@
     .kpi-tile .kpi-delta { display: inline-flex; margin-top: 4px; }
     /* inside .dash-kpi-tile (dashboard) */
     .dash-kpi-tile .kpi-delta { display: inline-flex; margin-top: 4px; }
+    /* dual-delta row */
+    .kpi-delta-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+    .kpi-delta-row .kpi-delta { margin-top: 0; }
+    .kpi-delta-prefix { color: var(--text-muted); font-weight: 600; opacity: .85; margin-right: 4px;
+      letter-spacing: .02em; text-transform: none; font-size: 10px; }
 
     /* Chart grid */
     .dash-chart-row { display: grid; gap: 16px; }
@@ -4480,7 +4485,42 @@ async function runQuery() {
 
 // Returns HTML for a delta pill. priorVal may be null (no comparison available).
 // goodDir: 'up' (higher=green) | 'down' (lower=green) | 'neutral'
-function _kpiDeltaHtml(curVal, priorVal, metaM, goodDir) {
+// Currency Max Precision — admin setting (default 4 — i.e. .0001).
+// Caps unformatted numeric tails like "-0.04995339185" to a sane display.
+// Applied to delta pills and to the unformatted fallback in formatCell.
+function _getCurrencyMaxPrecision() {
+  const inst = window._INST || window.__INSTANCE_CONFIG__ || {};
+  const v = inst.display && inst.display.currencyMaxPrecision;
+  const n = parseInt(v, 10);
+  return (!isNaN(n) && n >= 0 && n <= 10) ? n : 4;
+}
+
+// Given an already-formatted string and the underlying numeric value, if the
+// formatter passed through a raw number with too many decimals, truncate it to
+// the configured max precision. Preserves any prefix/suffix the formatter added.
+function _capPrecisionForDisplay(formatted, rawNumber) {
+  if (formatted == null) return formatted;
+  // Match leading non-numeric prefix, the number body, and trailing non-numeric suffix.
+  // Numbers may include sign, thousands separators, decimal point. Uses [-+]?[\d.,]+ with
+  // an optional exponent. We only act when the number body has more decimals than allowed.
+  const m = String(formatted).match(/^([^0-9\-+]*)([\-+]?[\d.,]+(?:[eE][\-+]?\d+)?)(.*)$/);
+  if (!m) return formatted;
+  const [, pre, body, suf] = m;
+  // If body has K/M/B suffix already, formatter handled it — leave alone
+  if (/[KMB]/.test(suf)) return formatted;
+  const dotIdx = body.indexOf('.');
+  if (dotIdx === -1) return formatted;
+  const decimals = body.length - dotIdx - 1;
+  const cap = _getCurrencyMaxPrecision();
+  if (decimals <= cap) return formatted;
+  const n = parseFloat(rawNumber != null ? rawNumber : body.replace(/,/g,''));
+  if (isNaN(n)) return formatted;
+  // Trim trailing zeros for cleaner read (e.g. 0.0500 → 0.05)
+  let s = n.toFixed(cap).replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
+  return pre + s + suf;
+}
+
+function _kpiDeltaHtml(curVal, priorVal, metaM, goodDir, prefix) {
   if (priorVal == null || priorVal === '' || isNaN(parseFloat(priorVal))) return '';
   const cur  = parseFloat(curVal)  || 0;
   const pri  = parseFloat(priorVal) || 0;
@@ -4490,7 +4530,10 @@ function _kpiDeltaHtml(curVal, priorVal, metaM, goodDir) {
   const pct     = pri !== 0 ? (absDiff / Math.abs(pri)) * 100 : null;
 
   // Format absolute delta same as the metric
-  const fmtAbs = formatCell(Math.abs(absDiff), metaM?.displayFormat, metaM?.prefix, metaM?.suffix, metaM?.decimalPlaces);
+  const fmtAbs = _capPrecisionForDisplay(
+    formatCell(Math.abs(absDiff), metaM?.displayFormat, metaM?.prefix, metaM?.suffix, metaM?.decimalPlaces),
+    Math.abs(absDiff)
+  );
   const pctStr  = pct != null ? Math.abs(pct).toFixed(1) + '%' : null;
   const priorFmt = formatCell(priorVal, metaM?.displayFormat, metaM?.prefix, metaM?.suffix, metaM?.decimalPlaces);
 
@@ -4506,52 +4549,63 @@ function _kpiDeltaHtml(curVal, priorVal, metaM, goodDir) {
     cls = isGood ? 'up' : 'down';   // up=green, down=red in CSS
   }
 
-  const label = [pctStr, (absDiff > 0 ? '+' : absDiff < 0 ? '-' : '') + fmtAbs].filter(Boolean).join(' · ');
+  const labelInner = [pctStr, (absDiff > 0 ? '+' : absDiff < 0 ? '-' : '') + fmtAbs].filter(Boolean).join(' · ');
+  const fullLabel  = prefix ? `<span class="kpi-delta-prefix">${escHtml(prefix)}</span>${labelInner}` : labelInner;
   const tip   = `Prior: ${priorFmt}`;
 
-  return `<span class="kpi-delta ${cls}">${arrow}${label}<span class="kpi-delta-tip">${tip}</span></span>`;
+  return `<span class="kpi-delta ${cls}">${arrow}${fullLabel}<span class="kpi-delta-tip">${tip}</span></span>`;
 }
 
 // Fetch compare-period KPI values. Returns map { metricName -> priorValue } or null.
-// Requires _fiscalCalendar to be loaded and dateFrom/dateTo to be set.
+// Single-period (legacy) API — returns one map keyed off priorPeriod.
 async function _kpiCompareFetch(body, dateFrom, dateTo, hintDateSeg) {
+  const both = await _kpiCompareFetchBoth(body, dateFrom, dateTo, hintDateSeg);
+  return both?.priorMap || null;
+}
+
+// Dual-compare fetch — returns { priorMap, lyMap } where:
+//   priorMap = same metric values for the prior period (vs DOW / vs prior month / etc.)
+//   lyMap    = same metric values for the same fiscal period one year ago (vs LY)
+// Either side can be null if the fiscal calendar can't resolve it.
+async function _kpiCompareFetchBoth(body, dateFrom, dateTo, hintDateSeg) {
   if (!dateFrom || !dateTo) return null;
-  // No fiscal calendar = no compare (server will return null data, handled below)
   try {
-    // Get prior period dates from fiscal calendar endpoint
     const cr = await apiFetch(`${BASE}/bi/fiscal/compare-range?from=${dateFrom}&to=${dateTo}`);
     const cj = await cr.json();
     const pp = cj.data?.priorPeriod;
-    if (!pp?.from || !pp?.to) return null;
+    const ly = cj.data?.samePeriodLastYear;
+    if (!pp?.from && !ly?.from) return null;
 
-    // Resolve date segment: prefer explicit hint, then look for gte/lt operators in filters
-    // (filters use operator:'gte'/'lt', not type:'date_range', so we can't use .find(f=>f.type==='date_range'))
     const dateSeg = hintDateSeg
       || (body.filters || []).find(f => f.operator === 'gte' || f.operator === 'gt')?.segmentName
       || null;
 
-    const compareBody = {
-      ...body,
-      compareFrom: pp.from,
-      compareTo:   pp.to,
-      dateSegment: dateSeg
+    const fetchOne = async (range) => {
+      if (!range?.from || !range?.to) return null;
+      try {
+        const compareBody = { ...body, compareFrom: range.from, compareTo: range.to, dateSegment: dateSeg };
+        const r = await apiFetch(`${BASE}/bi/kpis/compare`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(compareBody)
+        });
+        const j = await r.json();
+        if (!j.success || !j.data?.prior) return null;
+        const map = {};
+        (j.data.prior || []).forEach(k => { map[k.name] = k.value; });
+        map.__compareFrom = range.from;
+        map.__compareTo   = range.to;
+        return map;
+      } catch(e) {
+        console.warn('[kpi-compare] fetch error:', e.message);
+        return null;
+      }
     };
-    const r = await apiFetch(`${BASE}/bi/kpis/compare`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(compareBody)
-    });
-    const j = await r.json();
-    if (!j.success || !j.data?.prior) return null;
 
-    // Build map name->value from prior array + stash period for tooltip label
-    const map = {};
-    (j.data.prior || []).forEach(k => { map[k.name] = k.value; });
-    map.__compareFrom = pp.from;
-    map.__compareTo   = pp.to;
-    return map;
+    const [priorMap, lyMap] = await Promise.all([fetchOne(pp), fetchOne(ly)]);
+    return { priorMap, lyMap };
   } catch(e) {
-    console.warn('[kpi-compare] fetch error:', e.message);
+    console.warn('[kpi-compare-both] error:', e.message);
     return null;
   }
 }
@@ -5463,6 +5517,13 @@ function formatCell(val,format,prefix,suffix,decimalPlaces) {
     else if(abs>=1e3) s=(n/1e3).toFixed(dec<1?dec:1)+'K';
     else              s=n.toLocaleString('en-US',{minimumFractionDigits:dec,maximumFractionDigits:dec});
     return (prefix||'')+s+(suffix||'');
+  }
+  // Unformatted fallback — cap precision per Currency Max Precision admin setting
+  // so noisy floating-point tails don't leak into the UI.
+  if (typeof _getCurrencyMaxPrecision === 'function') {
+    const cap = _getCurrencyMaxPrecision();
+    const s = n.toFixed(cap).replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
+    return (prefix||'') + s + (suffix||'');
   }
   return String(val)+(suffix||'');
 }
@@ -7445,10 +7506,11 @@ function isNumericColumn(col, rows, dsName) {
 
 // ── Grid panel ──
 // ── Explorer AG Grid state ──
-let _explAGApi       = null;   // AG Grid GridApi instance
-let _explGridDs      = null;   // active dataset name
-let _explGridRows    = [];     // raw rows from API (full set)
-let _rdSelectedIdx   = -1;     // row index highlighted in the detail pane (-1 = none)
+let _explAGApi         = null;   // AG Grid GridApi instance
+let _explGridDs        = null;   // active dataset name
+let _explGridRows      = [];     // raw rows from API (full set, streamed in pages)
+let _explGridLoadToken = 0;      // monotonically incremented per load — in-flight pages bail when stale
+let _rdSelectedIdx     = -1;     // row index highlighted in the detail pane (-1 = none)
 
 /* ── Custom checklist filter (used when a column has ≤10 distinct values) ── */
 class ChecklistFilter {
@@ -7805,12 +7867,18 @@ async function explGridLoad(dsName) {
   // Prime field metadata in parallel with data fetch
   const _metaPromise = loadFieldMeta(dsName);
 
+  // Token to invalidate in-flight streaming pages when the user switches dataset
+  const loadToken = (_explGridLoadToken = (_explGridLoadToken || 0) + 1);
+
   try {
     const t0 = Date.now();
+    // Fetch the FIRST page to bootstrap columns + meta. Subsequent pages stream in.
+    const PAGE_SIZE = 1000;
     const [r] = await Promise.all([
-      apiFetch(`${BASE}/bi/datasets/${encodeURIComponent(dsName)}/search?size=500`),
+      apiFetch(`${BASE}/bi/datasets/${encodeURIComponent(dsName)}/search?size=${PAGE_SIZE}`),
       _metaPromise
     ]);
+    if (loadToken !== _explGridLoadToken) return;  // user moved on
     const j = await r.json();
 
     if (j.success === false) {
@@ -7831,6 +7899,7 @@ async function explGridLoad(dsName) {
 
     _explGridRows = j.data?.records || [];
     const total   = j.data?.total ?? _explGridRows.length;
+    let nextAfter = j.data?.nextAfter || null;
     const elapsed = Date.now() - t0;
 
     if (!_explGridRows.length) {
@@ -7934,8 +8003,44 @@ async function explGridLoad(dsName) {
     // Create the AG Grid
     agGrid.createGrid(wrap, gridOptions);
 
-    meta.textContent = `${total.toLocaleString()} rows · ${elapsed}ms`;
+    const fmtMeta = (loaded, isStreaming) => {
+      const head = `${loaded.toLocaleString()} of ${total.toLocaleString()} rows · ${elapsed}ms`;
+      return isStreaming ? `${head} · loading…` : head;
+    };
+    meta.textContent = fmtMeta(_explGridRows.length, !!nextAfter);
     if (exp) exp.style.display = '';
+
+    // Stream remaining pages in the background, appending to the grid as they arrive.
+    // No row cap — we keep going until the server stops returning a cursor or the user moves on.
+    if (nextAfter) {
+      (async () => {
+        try {
+          while (nextAfter && loadToken === _explGridLoadToken) {
+            const url = `${BASE}/bi/datasets/${encodeURIComponent(dsName)}/search?size=${PAGE_SIZE}&after=${encodeURIComponent(nextAfter)}`;
+            const rr  = await apiFetch(url);
+            if (loadToken !== _explGridLoadToken) return;
+            const jj  = await rr.json();
+            if (jj.success === false) break;
+            const recs = jj.data?.records || [];
+            if (!recs.length) { nextAfter = null; break; }
+            _explGridRows.push(...recs);
+            if (_explAGApi) {
+              try { _explAGApi.applyTransaction({ add: recs }); } catch(_) {}
+            }
+            nextAfter = jj.data?.nextAfter || null;
+            meta.textContent = fmtMeta(_explGridRows.length, !!nextAfter);
+          }
+          if (loadToken === _explGridLoadToken) {
+            meta.textContent = fmtMeta(_explGridRows.length, false);
+          }
+        } catch(err) {
+          console.warn('[explGridLoad] streaming halted:', err.message);
+          if (loadToken === _explGridLoadToken) {
+            meta.textContent = fmtMeta(_explGridRows.length, false) + ' (partial)';
+          }
+        }
+      })();
+    }
 
   } catch(e) {
     wrap.innerHTML = `<div class="dex-no-data" style="color:var(--red)">Error: ${e.message}</div>`;
@@ -10996,13 +11101,17 @@ async function myDashFetchTile(tile, pi, ti) {
         const desc = met.description ? `<span class="dkt-info-btn">i<span class="dkt-info-tip">${escHtml(met.description)}</span></span>` : '';
         return `<div class="dkt-label" style="display:flex;align-items:center;gap:0">${lbl}${desc}</div>`;
       };
-      const renderDashKpis = (priorMap) => {
+      const renderDashKpis = (priorMap, lyMap) => {
         const kpiMap = {};
         kpis.forEach(k => { kpiMap[k.name] = k.value; });
 
-        // Iterate the pre-rendered slots (one per tile.metrics entry)
+        // Iterate the pre-rendered slots (one per tile.metrics entry).
+        // Mixed-panel fallback: when this kpi tile lives inside a chart panel
+        // (not all-kpi), the slot was rendered as `myd-tile-chart-pi-ti` (no -mi).
+        // Use that single slot for the first metric.
         (tile.metrics || []).forEach((met, mi) => {
-          const metEl = document.getElementById(`myd-tile-chart-${pi}-${ti}-${mi}`);
+          const metEl = document.getElementById(`myd-tile-chart-${pi}-${ti}-${mi}`)
+                     || (mi === 0 ? document.getElementById(`myd-tile-chart-${pi}-${ti}`) : null);
           if (!metEl) return;
           const color  = PAL[mi % PAL.length];
           const icon   = (met.displayFormat === 'currency' || met.prefix === '$') ? 'dollar-sign' : 'hash';
@@ -11026,8 +11135,17 @@ async function myDashFetchTile(tile, pi, ti) {
           }
 
           const prior  = priorMap ? (priorMap[met.name] ?? null) : null;
+          const lyVal  = lyMap    ? (lyMap[met.name]    ?? null) : null;
           const metaM  = { displayFormat: met.displayFormat, prefix: met.prefix, suffix: met.suffix, decimalPlaces: met.decimalPlaces };
-          const delta  = _kpiDeltaHtml(rawVal, prior, metaM, goodDir);
+          const dualMode = !!(tile.dualDelta || met.dualDelta);
+          let deltaHtml = '';
+          if (dualMode) {
+            const lyHtml  = _kpiDeltaHtml(rawVal, lyVal,  metaM, goodDir, 'vs LY');
+            const ppHtml  = _kpiDeltaHtml(rawVal, prior,  metaM, goodDir, 'vs DOW');
+            deltaHtml = (lyHtml || ppHtml) ? `<div class="kpi-delta-row">${lyHtml}${ppHtml}</div>` : '';
+          } else {
+            deltaHtml = _kpiDeltaHtml(rawVal, prior, metaM, goodDir);
+          }
           metEl.innerHTML = `
             <div class="dash-kpi-tile" style="height:100%;box-sizing:border-box">
               <div class="dkt-icon" style="background:${color}22;color:${color}">
@@ -11036,7 +11154,7 @@ async function myDashFetchTile(tile, pi, ti) {
               <div style="min-width:0;overflow:hidden;flex:1">
                 ${_dktLabel(met)}
                 <div class="dkt-value" style="color:${color}">${fmtKpi(rawVal, met.name)}</div>
-                ${delta}
+                ${deltaHtml}
               </div>
             </div>`;
           const slot = metEl.closest('.myd-kpi-slot') || metEl.parentElement;
@@ -11044,14 +11162,16 @@ async function myDashFetchTile(tile, pi, ti) {
         });
       };
 
-      renderDashKpis(null); // immediate render
-      // Async compare fetch — re-render tiles with delta pills once data arrives
-      _kpiCompareFetch(body, dateFrom, dateTo, tile.dateSegment || tile.dateField || null).then(priorMap => {
-        if (priorMap) {
-          renderDashKpis(priorMap);
+      renderDashKpis(null, null); // immediate render
+      // Async dual-compare fetch — re-render tiles with delta pills once data arrives
+      _kpiCompareFetchBoth(body, dateFrom, dateTo, tile.dateSegment || tile.dateField || null).then(both => {
+        if (both) {
+          const { priorMap, lyMap } = both;
+          renderDashKpis(priorMap, lyMap);
           // Update caption with compare range (only once, first KPI tile wins)
-          if (!_myDashCompareRange && priorMap.__compareFrom) {
-            _myDashCompareRange = { from: priorMap.__compareFrom, to: priorMap.__compareTo };
+          const refMap = priorMap || lyMap;
+          if (!_myDashCompareRange && refMap?.__compareFrom) {
+            _myDashCompareRange = { from: refMap.__compareFrom, to: refMap.__compareTo };
             const lbl = document.querySelector('.df-group .df-date-label');
             if (lbl) {
               const { presetId } = _myDashFilterState.dateRange;
@@ -11232,13 +11352,78 @@ async function myDashFetchTile(tile, pi, ti) {
     const skipTopN = sc.chartType === 'donut2';
     let rows = (!skipTopN && maxN) ? _applyTopN(slicedRows, labelCol, valueCol, maxN) : slicedRows;
 
-    // ── Auto-granularity re-query ──────────────────────────────────────────
-    // If this is a time-series tile (labelCol is YYYY-MM) and we got <7 buckets,
-    // re-query grouped by the raw date field at day level then bucket client-side.
-    const isTimeSeries = /^\d{4}-\d{2}$/.test(String(rows[0]?.[labelCol] ?? ''));
+    // ── Auto-granularity re-query / re-bucket ─────────────────────────────
+    // Two cases:
+    //  (a) labelCol is YYYY-MM (FiscalMonthLabel) — periodCount is months.
+    //      If <7 months, re-query at day level and bucket to days/weeks.
+    //  (b) labelCol IS the raw dateField (no fiscal computed field) —
+    //      values are epoch ms numbers or ISO date strings. Bucket the rows
+    //      we already have by an appropriate granularity based on date span.
+    const _firstLabel = rows[0]?.[labelCol];
+    const isTimeSeries = /^\d{4}-\d{2}$/.test(String(_firstLabel ?? ''));
+    const isRawDateLabel = !isTimeSeries
+      && tile.dateField
+      && labelCol === tile.dateField
+      && rows.length > 0
+      && (typeof _firstLabel === 'number' || (typeof _firstLabel === 'string' && /^\d{4}-\d{2}-\d{2}/.test(_firstLabel)));
     const periodCount  = isTimeSeries ? new Set(rows.map(r => String(r[labelCol] ?? ''))).size : Infinity;
     let drawSc = sc; // sc passed to myDashDrawChart (may be swapped for day-level)
     let _resolvedGran = null; // set once granularity is known
+
+    // Helper: parse epoch ms or ISO date string to Date
+    const _toDate = (v) => {
+      if (v === null || v === undefined) return null;
+      if (typeof v === 'number') return new Date(v);
+      const s = String(v);
+      // Try YYYY-MM-DD prefix first (handles ISO datetimes)
+      const m = s.match(/^(\d{4}-\d{2}-\d{2})/);
+      if (m) return new Date(m[1]);
+      const d = new Date(s);
+      return isNaN(d) ? null : d;
+    };
+
+    // Bucket rows by granularity (used by both cases below)
+    const _bucketRows = (srcRows, gran) => {
+      const bucketed = {};
+      srcRows.forEach(r => {
+        const d = _toDate(r[tile.dateField]);
+        if (!d || isNaN(d)) return;
+        let key, label;
+        if (gran === 'Monthly') {
+          const y = d.getUTCFullYear(), mo = d.getUTCMonth();
+          key = `${y}-${String(mo+1).padStart(2,'0')}-01`;
+          label = new Date(Date.UTC(y, mo, 1)).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+        } else if (gran === 'Quarterly') {
+          const y = d.getUTCFullYear(), q = Math.floor(d.getUTCMonth()/3);
+          key = `${y}-Q${q+1}`;
+          label = `Q${q+1} ${y}`;
+        } else if (gran === 'Weekly') {
+          // ISO week start (Monday) in UTC
+          const day = d.getUTCDay();
+          const diff = (day === 0 ? -6 : 1 - day);
+          const mon = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + diff));
+          key = mon.toISOString().slice(0, 10);
+          label = mon.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        } else { // Daily
+          key = d.toISOString().slice(0, 10);
+          label = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        }
+        if (!bucketed[key]) bucketed[key] = { __dateKey: key, __label: label, [valueCol]: 0 };
+        bucketed[key][valueCol] += parseFloat(r[valueCol] ?? 0);
+      });
+      const out = Object.values(bucketed).sort((a, b) => a.__dateKey < b.__dateKey ? -1 : 1);
+      out.forEach(r => { r[tile.dateField] = r.__label; });
+      return out;
+    };
+
+    // Pick granularity from a date span (in days)
+    const _granForSpan = (spanDays) => {
+      if (spanDays < 2)    return 'Daily';
+      if (spanDays <= 49)  return 'Daily';
+      if (spanDays <= 180) return 'Weekly';
+      if (spanDays <= 730) return 'Monthly';
+      return 'Quarterly';
+    };
 
     if (isTimeSeries && periodCount < 7 && tile.dateField) {
       // periodCount is months here; always go to day level then bucket
@@ -11260,35 +11445,17 @@ async function myDashFetchTile(tile, pi, ti) {
           const dj = await dr.json();
           const dayRows = dj.data?.data || [];
           if (dayRows.length) {
-            // Granularity rule:
-            //   <49 day rows (<7 weeks) → show days
-            //   49–180 day rows         → group to weeks
-            //   >180 day rows           → stay at months (shouldn't reach here)
-            const spanDays = dayRows.length;
-            const useWeeks = spanDays >= 49 && spanDays <= 180;
-            _resolvedGran = spanDays < 2 ? 'Daily' : useWeeks ? 'Weekly' : 'Daily';
-            const bucketed = {};
-            dayRows.forEach(r => {
-              const d = new Date(String(r[tile.dateField] ?? '').slice(0, 10));
-              if (isNaN(d)) return;
-              let key, label;
-              if (useWeeks) {
-                // ISO week start (Monday)
-                const day = d.getDay();
-                const diff = (day === 0 ? -6 : 1 - day);
-                const mon = new Date(d); mon.setDate(d.getDate() + diff);
-                key = mon.toISOString().slice(0, 10);
-                label = mon.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-              } else {
-                key = d.toISOString().slice(0, 10);
-                label = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-              }
-              if (!bucketed[key]) bucketed[key] = { __dateKey: key, __label: label, [valueCol]: 0 };
-              bucketed[key][valueCol] += parseFloat(r[valueCol] ?? 0);
-            });
-            const newRows = Object.values(bucketed).sort((a, b) => a.__dateKey < b.__dateKey ? -1 : 1);
-            newRows.forEach(r => { r[tile.dateField] = r.__label; });
-            rows = newRows;
+            // Compute span from min/max actual dates (not row count)
+            let minD = null, maxD = null;
+            for (const r of dayRows) {
+              const d = _toDate(r[tile.dateField]);
+              if (!d) continue;
+              if (!minD || d < minD) minD = d;
+              if (!maxD || d > maxD) maxD = d;
+            }
+            const spanDays = (minD && maxD) ? Math.max(1, Math.round((maxD - minD) / 86400000) + 1) : dayRows.length;
+            _resolvedGran = _granForSpan(spanDays);
+            rows = _bucketRows(dayRows, _resolvedGran);
             drawSc = { ...sc, labelCol: tile.dateField, groupBySegments: [tile.dateField] };
           }
         }
@@ -11299,6 +11466,28 @@ async function myDashFetchTile(tile, pi, ti) {
     } else if (isTimeSeries) {
       // Standard month-level rows — detect quarterly collapse via periodCount
       _resolvedGran = periodCount > 49 ? 'Quarterly' : 'Monthly';
+    } else if (isRawDateLabel) {
+      // Raw date field as labelCol — bucket existing rows by date span.
+      try {
+        let minD = null, maxD = null;
+        for (const r of rows) {
+          const d = _toDate(r[labelCol]);
+          if (!d) continue;
+          if (!minD || d < minD) minD = d;
+          if (!maxD || d > maxD) maxD = d;
+        }
+        if (minD && maxD) {
+          const spanDays = Math.max(1, Math.round((maxD - minD) / 86400000) + 1);
+          _resolvedGran = _granForSpan(spanDays);
+          const newRows = _bucketRows(rows, _resolvedGran);
+          if (newRows.length) {
+            rows = newRows;
+            drawSc = { ...sc, labelCol: tile.dateField, groupBySegments: [tile.dateField] };
+          }
+        }
+      } catch(rawBucketErr) {
+        console.warn('[autoGran raw-date]', rawBucketErr);
+      }
     }
     // ──────────────────────────────────────────────────────────────────────
 
