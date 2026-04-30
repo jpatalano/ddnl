@@ -1,5 +1,6 @@
 const express = require('express');
 const path = require('path');
+const llm = require('./llmProvider');
 const https = require('https');
 const http  = require('http');
 const { URL } = require('url');
@@ -226,7 +227,16 @@ app.get('/', async (req, res) => {
     // is applied before the first paint — eliminates flash of light/wrong theme.
     // Build a synchronous theme bootstrap: set data-theme + critical CSS vars
     // before the browser paints a single pixel, eliminating all FOUC.
-    const inst = INSTANCE;
+    // Hydrate display settings from instance_settings (per-instance, DB-backed).
+    let display = { currencyMaxPrecision: 4 };
+    try {
+      const v = await llm.getInstanceSetting(INSTANCE.clientId, 'display.currency_max_precision', null);
+      if (v != null) {
+        const n = parseInt(v, 10);
+        if (!isNaN(n) && n >= 0 && n <= 10) display.currencyMaxPrecision = n;
+      }
+    } catch(_) {}
+    const inst = { ...INSTANCE, display };
     const t = inst.theme || {};
     const savedModeKey = `ddnl-theme-mode-${inst.id}`;
     const injection = `<script>
@@ -1308,8 +1318,12 @@ app.post('/api/bi/datasets/:name/records', async (req, res) => {
 // ─── Generic dataset search endpoint ─────────────────────────────────────────
 // GET /api/bi/datasets/:name/search
 // Works for any dataset — no instance-specific field names.
-// Supports: ?q=text  ?page=1  ?size=50  ?sort=field  ?dir=asc|desc
-// Full-text: query_string across all fields; falls back to match_all when q is empty.
+// Supports two pagination modes:
+//   1) ?page=1&size=50              — classic from/size (capped by ES max_result_window, ~10k)
+//   2) ?size=500&after=<cursor>     — search_after cursor pagination (no upper bound;
+//                                     `cursor` is a base64-encoded JSON of last hit's sort values)
+// Common: ?q=text ?sort=field ?dir=asc|desc
+// Returns exact totals (track_total_hits=true) so the UI never sees a synthetic 10k cap.
 
 app.get('/api/bi/datasets/:name/search', async (req, res) => {
   const inst     = resolveInstance(req);
@@ -1318,11 +1332,22 @@ app.get('/api/bi/datasets/:name/search', async (req, res) => {
   const es       = esClient.getClient();
   const alias    = esClient.aliasName(inst.clientId, dsName);
   const page     = Math.max(1, parseInt(req.query.page || '1',  10));
-  const pageSize = Math.min(500, Math.max(1, parseInt(req.query.size || '50', 10)));
+  const pageSize = Math.min(2000, Math.max(1, parseInt(req.query.size || '50', 10)));
   const q        = (req.query.q    || '').trim();
   const sortKey  = req.query.sort  || '_score';
   const sortDir  = (req.query.dir  || 'desc') === 'asc' ? 'asc' : 'desc';
-  const from     = (page - 1) * pageSize;
+
+  // Decode search_after cursor (base64 JSON array of sort values)
+  let searchAfter = null;
+  if (req.query.after) {
+    try {
+      searchAfter = JSON.parse(Buffer.from(String(req.query.after), 'base64').toString('utf8'));
+      if (!Array.isArray(searchAfter)) searchAfter = null;
+    } catch (_) { searchAfter = null; }
+  }
+  // search_after requires a deterministic sort; from must not be set when after is used
+  const useCursor = searchAfter !== null;
+  const from      = useCursor ? undefined : (page - 1) * pageSize;
 
   const must = [
     { term: { __instance_id: inst.clientId } },
@@ -1334,25 +1359,44 @@ app.get('/api/bi/datasets/:name/search', async (req, res) => {
     : { bool: { must } };
 
   // Only allow keyword/numeric sort fields — prevent mapping errors
-  const sortSpec = sortKey === '_score'
+  // For search_after we need a tie-breaker on _id so paging is stable across equal sort values.
+  const baseSort = sortKey === '_score'
     ? [{ _score: { order: sortDir } }]
     : [{ [sortKey]: { order: sortDir, missing: '_last', unmapped_type: 'keyword' } }];
+  const sortSpec = useCursor
+    ? [...baseSort, { _id: { order: 'asc', unmapped_type: 'keyword' } }]
+    : baseSort;
 
   try {
-    const result = await es.search({
-      index: alias,
-      body: {
-        query: esQuery,
-        from,
-        size:  pageSize,
-        sort:  sortSpec,
-        _source: { excludes: ['__instance_id', '__ingested_at', '__ingest_version', '_status', 'address_hash'] }
-      }
-    });
+    const body = {
+      query: esQuery,
+      size:  pageSize,
+      sort:  sortSpec,
+      track_total_hits: true,   // exact total — no implicit 10k cap
+      _source: { excludes: ['__instance_id', '__ingested_at', '__ingest_version', '_status', 'address_hash'] }
+    };
+    if (useCursor) body.search_after = searchAfter;
+    else           body.from         = from;
+
+    const result  = await es.search({ index: alias, body });
     const hits    = result.hits?.hits || [];
     const total   = result.hits?.total?.value ?? 0;
     const records = hits.map(h => h._source);
-    return res.json({ success: true, data: { records, total, page, pageSize, pages: Math.ceil(total / pageSize) } });
+
+    // Build cursor for next page (omit when we returned fewer than pageSize hits)
+    let nextAfter = null;
+    if (hits.length === pageSize) {
+      const last = hits[hits.length - 1];
+      if (last && Array.isArray(last.sort)) {
+        nextAfter = Buffer.from(JSON.stringify(last.sort)).toString('base64');
+      }
+    }
+
+    return res.json({ success: true, data: {
+      records, total, page, pageSize,
+      pages: Math.ceil(total / pageSize),
+      nextAfter
+    }});
   } catch (e) {
     const isNotFound = e.message?.includes('index_not_found') || e.meta?.statusCode === 404;
     if (isNotFound) return res.status(404).json({ success: false, error: 'not_published' });
@@ -1865,8 +1909,6 @@ app.get('/api/bi/fiscal/compare-range', async (req, res) => {
 // Key is stored as-is in instance_settings — DB is the security boundary.
 // The GET route never echoes the key back; it only returns a masked hint.
 
-const llm = require('./llmProvider');
-
 // GET /api/admin/settings/ai — returns current config (never echoes raw key)
 app.get('/api/admin/settings/ai', requireBasicAuth, async (req, res) => {
   const inst = resolveInstance(req);
@@ -1918,6 +1960,42 @@ app.post('/api/admin/settings/ai/test', requireBasicAuth, async (req, res) => {
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
   }
+});
+
+// ─── Admin: Display Settings ────────────────────────────────────
+// Per-instance display preferences (number formatting, etc.). Stored in
+// instance_settings keyed by client_id. Defaults are applied server-side.
+
+const DISPLAY_DEFAULTS = { currencyMaxPrecision: 4 };
+
+app.get('/api/admin/settings/display', requireBasicAuth, async (req, res) => {
+  const inst = resolveInstance(req);
+  try {
+    const raw = await llm.getInstanceSetting(inst.clientId, 'display.currency_max_precision', null);
+    let currencyMaxPrecision = DISPLAY_DEFAULTS.currencyMaxPrecision;
+    if (raw != null) {
+      const n = parseInt(raw, 10);
+      if (!isNaN(n) && n >= 0 && n <= 10) currencyMaxPrecision = n;
+    }
+    res.json({ success: true, currencyMaxPrecision });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/admin/settings/display', requireBasicAuth, async (req, res) => {
+  const inst = resolveInstance(req);
+  const { currencyMaxPrecision } = req.body || {};
+  if (currencyMaxPrecision != null) {
+    const n = parseInt(currencyMaxPrecision, 10);
+    if (isNaN(n) || n < 0 || n > 10) {
+      return res.status(400).json({ error: 'currencyMaxPrecision must be an integer between 0 and 10' });
+    }
+    try {
+      await llm.setInstanceSetting(inst.clientId, 'display.currency_max_precision', String(n));
+      console.log(`[admin/display-settings] client=${inst.clientId} currencyMaxPrecision=${n}`);
+      return res.json({ success: true, currencyMaxPrecision: n });
+    } catch (e) { return res.status(500).json({ error: e.message }); }
+  }
+  res.status(400).json({ error: 'No settings provided' });
 });
 
 // ─── Fallback ─────────────────────────────────────────────────────────────────
