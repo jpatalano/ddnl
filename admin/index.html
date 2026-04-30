@@ -616,6 +616,39 @@
       </div>
     </div>
 
+    <!-- ══ DISPLAY SETTINGS ═══════════════════════════════════════ -->
+    <div class="page" id="page-display-settings">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Display Settings</div>
+          <div class="page-sub">Number formatting and other display preferences — applied across dashboards, KPIs, and tables.</div>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn-primary" onclick="saveDisplaySettings()">
+            <i data-lucide="save" style="width:13px;height:13px"></i> Save
+          </button>
+        </div>
+      </div>
+      <div class="page-body">
+        <div class="card" style="max-width:560px">
+          <div class="card-header"><span class="card-title">Number Formatting</span></div>
+          <div class="card-body" style="padding:20px 22px;display:flex;flex-direction:column;gap:18px">
+
+            <div>
+              <label style="display:block;font-size:12px;font-weight:700;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em">Currency Max Precision</label>
+              <input id="display-currency-max-precision" type="number" min="0" max="10" step="1"
+                style="width:120px;padding:7px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;font-family:DM Mono,monospace;background:var(--surface);color:var(--text);outline:none"
+                onfocus="this.style.borderColor='var(--navy)'" onblur="this.style.borderColor='var(--border)'">
+              <div style="font-size:11px;color:var(--text-muted);margin-top:5px">
+                Maximum number of decimal places shown when an amount has no explicit format. Defaults to 4 (e.g. <code>.000X</code>). Trailing zeros are trimmed.
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- ══ ADVISE RULES ═══════════════════════════════════════════ -->
     <div class="page" id="page-advise-rules">
       <div class="page-header">
@@ -1397,6 +1430,45 @@ async function testAiConnection() {
     }
   } finally {
     if (btn) { btn.disabled = false; btn.innerHTML = '<i data-lucide="zap" style="width:13px;height:13px"></i> Test Connection'; lucide.createIcons(); }
+  }
+}
+
+// ─── DISPLAY SETTINGS ───────────────────────────────────────────────────────
+
+async function loadDisplaySettings() {
+  try {
+    const d = await apiFetch(`/api/admin/settings/display`);
+    const el = document.getElementById('display-currency-max-precision');
+    if (el) el.value = (d.currencyMaxPrecision != null) ? d.currencyMaxPrecision : 4;
+  } catch(e) {
+    console.warn('Failed to load display settings:', e);
+  }
+  lucide.createIcons();
+}
+
+async function saveDisplaySettings() {
+  const valStr = document.getElementById('display-currency-max-precision')?.value;
+  const currencyMaxPrecision = parseInt(valStr, 10);
+  if (isNaN(currencyMaxPrecision) || currencyMaxPrecision < 0 || currencyMaxPrecision > 10) {
+    showToast('Currency Max Precision must be 0–10', 'error');
+    return;
+  }
+  const btn = document.querySelector('[onclick="saveDisplaySettings()"]');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+  try {
+    const r = await fetch('/api/admin/settings/display', {
+      method:      'POST',
+      credentials: 'include',
+      headers:     { 'Content-Type': 'application/json' },
+      body:         JSON.stringify({ currencyMaxPrecision })
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || 'Save failed');
+    showToast('Display settings saved — refresh dashboards to apply', 'success');
+  } catch(e) {
+    showToast('Save failed: ' + e.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i data-lucide="save" style="width:13px;height:13px"></i> Save'; lucide.createIcons(); }
   }
 }
 
